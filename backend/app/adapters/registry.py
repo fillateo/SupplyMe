@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..config import Mode, Settings
+from ..domain.cost import CostMeter
 from .demo_world import DISCLAIMER
 from .local_bus import LocalBus
 from .memory_store import MemoryStore
@@ -39,6 +40,7 @@ class Providers:
     bus: Any
     scheduler: Any
     llm: Any
+    meter: CostMeter
     search: Any
     maps: Any
     video: Any
@@ -69,6 +71,10 @@ def build(
     duplicate_rate: float = 0.0,
 ) -> Providers:
     notes: list[str] = []
+    meter = CostMeter(
+        max_calls_per_mission=settings.max_model_calls_per_mission,
+        max_usd_per_mission=settings.max_usd_per_mission,
+    )
 
     bus = LocalBus(duplicate_rate=duplicate_rate)
     scheduler = LocalScheduler(bus, speedup=demo_speedup)
@@ -107,7 +113,7 @@ def build(
         elif settings.mode is Mode.LIVE or settings.project_id or settings.gemini_api_key:
             from .gemini_llm import GeminiLLM
 
-            llm = GeminiLLM(settings)
+            llm = GeminiLLM(settings, meter=meter)
         else:
             raise RuntimeError(
                 "No model configured. Either set VDS_PROJECT_ID (Vertex AI) or "
@@ -121,6 +127,7 @@ def build(
         mail.bind(bus, scheduler)
         return Providers(
             settings=settings, store=store, bus=bus, scheduler=scheduler, llm=llm,
+            meter=meter,
             search=MockSearchProvider(), maps=MockMapsProvider(), video=MockVideoProvider(),
             mail=mail, voice=MockVoiceProvider(), notes=notes,
         )
@@ -148,8 +155,8 @@ def build(
 
     return Providers(
         settings=settings, store=store, bus=bus, scheduler=scheduler, llm=llm,
-        search=search, maps=maps, video=video, mail=mail_provider, voice=voice_provider,
-        notes=notes,
+        meter=meter, search=search, maps=maps, video=video, mail=mail_provider,
+        voice=voice_provider, notes=notes,
     )
 
 

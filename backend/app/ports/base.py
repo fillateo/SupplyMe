@@ -228,4 +228,5 @@ class LLM(Protocol):
         schema: type,
         untrusted: str | None = None,
         fast: bool = False,
+        mission_id: str = "",
     ) -> Any: ...

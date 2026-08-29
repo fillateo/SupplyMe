@@ -88,6 +88,29 @@ class Settings(BaseSettings):
     #: dozens of concurrent requests and rate-limits itself. Parallelism is still
     #: the point — this caps it at a width the quota can actually serve.
     max_concurrent_research: int = Field(default=3, ge=1, le=32)
+
+    # --- spend guards ---------------------------------------------------
+    #: Hard caps per mission. Reaching either fails the mission with a reason
+    #: rather than continuing to spend. A healthy perfume mission uses roughly
+    #: 40-60 model calls; the defaults leave headroom without leaving a runaway
+    #: room to matter.
+    max_model_calls_per_mission: int = Field(default=120, ge=1, le=5000)
+    max_usd_per_mission: float = Field(default=0.50, gt=0.0, le=1000.0)
+
+    #: Ceiling on one ADK research agent's tool-use loop. ADK's own default is
+    #: 500, which is three orders of magnitude more than this agent needs and is
+    #: the single largest runaway risk in the system.
+    max_research_llm_calls: int = Field(default=12, ge=1, le=200)
+
+    #: Thinking tokens are billed as output, and on 2.5-flash they were roughly
+    #: 60% of a measured mission's output spend. Extraction and classification —
+    #: reading a price out of an email, deciding whether a search result is a
+    #: manufacturer — do not benefit from it, so the fast tier gets none.
+    #: Planning and adjudication do benefit, so the reasoning tier keeps a
+    #: bounded allowance. -1 means "let the model decide", which is the default
+    #: and the expensive option.
+    fast_thinking_budget: int = Field(default=0, ge=-1, le=32768)
+    reasoning_thinking_budget: int = Field(default=2048, ge=-1, le=32768)
     llm_timeout_seconds: float = 90.0
 
     #: Compresses scheduled delays in DEMO mode. A 48-hour follow-up timer is

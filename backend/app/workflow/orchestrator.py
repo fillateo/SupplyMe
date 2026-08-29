@@ -28,6 +28,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from ..config import Settings
+from ..domain.cost import BudgetExceeded
 from ..domain.events import EXTERNAL_ACTION_EVENTS, Event, EventType
 from ..domain.models import Mission, MissionStatus
 from .context import MissionNotFound, Repo, VendorNotFound
@@ -68,6 +69,7 @@ class Orchestrator:
         self.bus = providers.bus
         self.scheduler = providers.scheduler
         self.repo = Repo(providers.store)
+        self.meter = getattr(providers, "meter", None)
         self.agents = agents
         self.stats: dict[str, int] = {}
         #: Bounds the widest fan-out in the system. See Settings.max_concurrent_research.
@@ -100,6 +102,13 @@ class Orchestrator:
         started = time.perf_counter()
         try:
             next_events = await handler(self, event)
+        except BudgetExceeded as exc:
+            # Not retryable: retrying is exactly the thing the cap exists to stop.
+            await self.store.complete(f"evt:{event.key}", {"budget": str(exc)})
+            await self._record(event, status="over_budget", error=str(exc))
+            await self._fail_mission(event.mission_id, f"stopped on cost: {exc}")
+            self._count("over_budget")
+            return
         except (MissionNotFound, VendorNotFound) as exc:
             # Nothing to retry against; retrying cannot make the record reappear.
             await self.store.complete(f"evt:{event.key}", {"dropped": str(exc)})
@@ -120,9 +129,26 @@ class Orchestrator:
             emitted=[e.type.value for e in next_events],
         )
         self._count(event.type.value)
+        await self._persist_spend(event.mission_id)
 
         for next_event in next_events:
             await self.emit(next_event)
+
+    async def _persist_spend(self, mission_id: str) -> None:
+        """Write the mission's model spend onto its record."""
+        if self.meter is None or not mission_id:
+            return
+        usage = self.meter.usage(mission_id)
+        if usage.calls == 0:
+            return
+
+        def _apply(mission: Mission) -> None:
+            mission.model_calls = usage.calls
+            mission.input_tokens = usage.input_tokens
+            mission.output_tokens = usage.output_tokens
+            mission.estimated_cost_usd = round(usage.usd, 6)
+
+        await self.repo.mutate(Mission, mission_id, _apply)
 
     async def emit(self, event: Event) -> None:
         if not event.mission_id:

@@ -90,6 +90,7 @@ class Agent:
                 schema=schema,
                 untrusted=untrusted,
                 fast=fast,
+                mission_id=mission_id,
             )
         except Exception as exc:
             run.status = "error"

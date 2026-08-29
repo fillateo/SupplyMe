@@ -192,6 +192,13 @@ class Mission(Base):
     calls_made: int = 0
     failure_reason: str | None = None
 
+    #: What this mission has actually spent on model calls, from the API's own
+    #: token counts. Persisted so a restart does not reset the budget guard.
+    model_calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+
 
 class NodeStatus(StrEnum):
     PENDING = "pending"

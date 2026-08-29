@@ -32,6 +32,7 @@ class ScriptedLLM:
         schema: type,
         untrusted: str | None = None,
         fast: bool = False,
+        mission_id: str = "",
     ) -> Any:
         self.calls.append((agent, prompt[:120]))
         if untrusted:

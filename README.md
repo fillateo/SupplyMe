@@ -253,6 +253,24 @@ Cloud Run (scale to zero), Firestore, Pub/Sub with dead-lettering, Cloud Tasks,
 Vertex AI, Secret Manager, Cloud Logging. All provisioned by OpenTofu in
 `terraform/` — `plan` is the review surface, nothing is created by hand.
 
+## Cost
+
+A mission is **40–60 model calls, roughly $0.05–$0.08** (about Rp 800–1,300) on
+`gemini-2.5-flash`, measured from the API's own token counts and readable per
+mission at `/api/missions/{id}` → `spend`.
+
+Every mission carries a hard stop: reaching `VDS_MAX_USD_PER_MISSION` or
+`VDS_MAX_MODEL_CALLS_PER_MISSION` fails it with a reason rather than spending
+more, and that failure is deliberately **not retried**. The ADK research loop is
+capped at 12 calls against ADK's default of 500 — that gap was the largest
+unattended-spend risk in the system.
+
+Thinking tokens are billed as output, so the fast tier runs with a thinking
+budget of zero; on a measured mission that cut cost per call by about 60%.
+
+`VDS_USE_SCRIPTED_MODEL=true` runs everything with zero spend.
+**[docs/COST.md](docs/COST.md)** has the measurements and every guard.
+
 ## Security
 
 - Untrusted content is delimited, labelled as data, and injection phrasings are
@@ -320,6 +338,10 @@ Everything is `VDS_`-prefixed and read only in `app/config.py`.
 | `VDS_TWILIO_*` | — | telephony; unset means calls run against the mock |
 | `VDS_MAX_CALLS_PER_MISSION` | `3` | cost guard |
 | `VDS_MAX_CONCURRENT_RESEARCH` | `3` | caps the widest fan-out so a mission cannot rate-limit itself |
+| `VDS_MAX_USD_PER_MISSION` | `0.50` | hard stop — the mission fails with a reason rather than spending more |
+| `VDS_MAX_MODEL_CALLS_PER_MISSION` | `120` | hard stop |
+| `VDS_MAX_RESEARCH_LLM_CALLS` | `12` | ceiling on one ADK tool loop (ADK's own default is 500) |
+| `VDS_FAST_THINKING_BUDGET` | `0` | thinking is billed as output and buys nothing on extraction |
 | `VDS_MAX_OUTREACH_PER_MISSION` | `12` | cost guard |
 | `VDS_DEMO_SPEEDUP` | `1.0` | compresses scheduled delays in demo mode only |
 | `VDS_USE_ADK_RESEARCH` | `true` | research as an ADK tool loop; off falls back to pre-fetching |

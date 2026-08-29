@@ -30,6 +30,7 @@ import logging
 from typing import Any
 
 from google.adk.agents import LlmAgent
+from google.adk.agents.run_config import RunConfig
 from google.adk.models.google_llm import Gemini
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
@@ -194,6 +195,12 @@ class AdkResearchAgent:
     def __init__(self, providers: Any, model: str, store: Any = None, llm: Any = None) -> None:
         self._llm = llm or providers.llm
         self._store = store
+        # ADK defaults this to 500. A research agent that needs more than a
+        # dozen calls is looping, not investigating, and 500 of them is the
+        # largest single way this system could waste money unattended.
+        self._run_config = RunConfig(
+            max_llm_calls=providers.settings.max_research_llm_calls
+        )
         # Hand ADK the client the rest of the system already uses, rather than
         # letting it build its own from environment variables — otherwise a
         # Vertex deployment silently looks for a Gemini API key it does not have.
@@ -216,7 +223,17 @@ class AdkResearchAgent:
             description="Investigates one supplier and reports what its sources state.",
             tools=build_tools(providers),
             before_tool_callback=_guard,
-            generate_content_config=types.GenerateContentConfig(temperature=0.3),
+            generate_content_config=types.GenerateContentConfig(
+                temperature=0.3,
+                # The loop's job is choosing the next tool, which is a short
+                # decision. Thinking on every turn of a multi-turn loop is where
+                # this agent's cost would otherwise go.
+                thinking_config=types.ThinkingConfig(
+                    thinking_budget=providers.settings.fast_thinking_budget
+                )
+                if providers.settings.fast_thinking_budget >= 0
+                else None,
+            ),
         )
         self._sessions = InMemorySessionService()
         self._runner = Runner(
@@ -255,6 +272,7 @@ class AdkResearchAgent:
             user_id=user_id,
             session_id=session.id,
             new_message=types.Content(role="user", parts=[types.Part(text=prompt)]),
+            run_config=self._run_config,
         ):
             for call in event.get_function_calls() or []:
                 if call.name in TOOL_PERMISSIONS:
@@ -277,6 +295,7 @@ class AdkResearchAgent:
             schema=VendorResearch,
             untrusted="\n\n".join(notes),
             fast=True,
+            mission_id=mission_id,
         )
 
         log.info(

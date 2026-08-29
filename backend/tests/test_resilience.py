@@ -431,3 +431,72 @@ class TestConcurrencyBounds:
         finally:
             await scheduler.cancel_all()
             await bus.stop()
+
+
+class TestSpendGuard:
+    """A runaway mission must stop, not drain the credit balance."""
+
+    async def test_a_mission_over_its_call_budget_fails_with_a_reason(self):
+        from app.domain.cost import CostMeter
+
+        settings = Settings(
+            mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS,
+            max_model_calls_per_mission=3,
+        )
+        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
+
+        # The scripted model does not meter itself, so drive the meter directly
+        # through the same path a real model call takes.
+        meter = CostMeter(max_calls_per_mission=3)
+        runtime.orchestrator.meter = meter
+        original = runtime.providers.llm.structured
+
+        async def metered(**kwargs):
+            meter.check(kwargs.get("mission_id", ""))
+            result = await original(**kwargs)
+            meter.record(kwargs.get("mission_id", ""), "gemini-2.5-flash", 1000, 100)
+            return result
+
+        runtime.providers.llm.structured = metered
+        await runtime.start(concurrency=8)
+        try:
+            mission = await run_to_completion(runtime, OBJECTIVE, max_polls=200)
+            assert mission.status.value == "failed"
+            assert "cost" in (mission.failure_reason or "").lower()
+            assert runtime.orchestrator.stats.get("over_budget", 0) > 0
+        finally:
+            await runtime.stop()
+
+    async def test_a_budget_stop_is_not_retried(self):
+        """Retrying is precisely what the cap exists to prevent."""
+        from app.domain.cost import BudgetExceeded
+
+        runtime = build()
+        await runtime.start(concurrency=4)
+        try:
+            mission = await runtime.create_mission(OBJECTIVE)
+            await runtime.drain(timeout=60)
+            before = runtime.orchestrator.stats.get("failed", 0)
+
+            async def over_budget(orc, event):
+                raise BudgetExceeded("mission reached its cap")
+
+            from app.domain.events import EventType as ET
+            from app.workflow.orchestrator import HANDLERS
+
+            original = HANDLERS[ET.VENDOR_UPDATED]
+            HANDLERS[ET.VENDOR_UPDATED] = over_budget
+            try:
+                await runtime.handle(
+                    Event(type=ET.VENDOR_UPDATED, mission_id=mission.id,
+                          payload={"vendor_id": "v", "stage": "budget-test"})
+                )
+                await runtime.drain(timeout=60)
+            finally:
+                HANDLERS[ET.VENDOR_UPDATED] = original
+
+            # Counted as over_budget, never as a retryable failure.
+            assert runtime.orchestrator.stats.get("over_budget", 0) >= 1
+            assert runtime.orchestrator.stats.get("failed", 0) == before
+        finally:
+            await runtime.stop()

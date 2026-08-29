@@ -70,6 +70,16 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "VDS_TASKS_QUEUE"
         value = google_cloud_tasks_queue.followups.name
       }
+      # Spend guards. These are hard stops in the application, not alerts.
+      env {
+        name  = "VDS_MAX_USD_PER_MISSION"
+        value = tostring(var.max_usd_per_mission)
+      }
+      env {
+        name  = "VDS_MAX_CALLS_PER_MISSION"
+        value = tostring(var.max_calls_per_mission)
+      }
+
       env {
         name = "VDS_PUBSUB_PUSH_TOKEN"
         value_source {

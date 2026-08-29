@@ -54,9 +54,29 @@ variable "max_instances" {
 }
 
 variable "budget_amount_usd" {
+  type    = number
+  default = 20
+
+  description = <<-EOT
+    Monthly budget that triggers alerts. Set to 0 to skip creating one.
+
+    A budget alert does NOT stop spending — it emails you. The hard stops live in
+    the application (VDS_MAX_USD_PER_MISSION, VDS_MAX_MODEL_CALLS_PER_MISSION)
+    and in the caps below. Set this well under your remaining credit so the
+    warning arrives while you can still act on it.
+  EOT
+}
+
+variable "max_calls_per_mission" {
   type        = number
-  default     = 50
-  description = "Monthly budget that triggers the alert. Set to 0 to skip the budget."
+  default     = 3
+  description = "Telephony is the one line item that can cost real money per unit."
+}
+
+variable "max_usd_per_mission" {
+  type        = number
+  default     = 0.50
+  description = "Hard stop. A mission that reaches this fails with a reason instead of spending more."
 }
 
 variable "billing_account" {

@@ -13,7 +13,12 @@ fast_model      = ""
 
 max_instances = 4
 
-# Optional, but do set them.
-budget_amount_usd = 50
+# Set these. A budget alert emails you; it does not stop spending — the hard
+# stops are max_usd_per_mission below and the app's own caps.
+budget_amount_usd = 20
 billing_account   = ""
 alert_email       = ""
+
+# Hard stops, applied per mission inside the application.
+max_usd_per_mission   = 0.50
+max_calls_per_mission = 3

@@ -52,12 +52,26 @@ class Weights(BaseModel):
 
 @router.get("/health")
 async def health(rt: Runtime = Depends(runtime)) -> dict[str, Any]:
+    meter = getattr(rt.providers, "meter", None)
     return {
         "status": "ok",
         "mode": rt.settings.mode.value,
         "approval_policy": rt.settings.approval_policy.value,
         "providers": rt.providers.describe(),
         "notes": rt.providers.notes,
+        "spend": {
+            # Since this process started. The authoritative figure is Cloud
+            # Billing; this is the guard rail, and it is deliberately pessimistic
+            # about models it does not have a price for.
+            "since_startup": meter.total.as_dict() if meter else None,
+            "caps_per_mission": {
+                "model_calls": rt.settings.max_model_calls_per_mission,
+                "usd": rt.settings.max_usd_per_mission,
+                "outreach_emails": rt.settings.max_outreach_per_mission,
+                "calls": rt.settings.max_calls_per_mission,
+                "research_llm_calls": rt.settings.max_research_llm_calls,
+            },
+        },
     }
 
 
@@ -101,6 +115,14 @@ async def get_mission(mission_id: str, rt: Runtime = Depends(runtime)) -> dict[s
             "emails_awaiting": sum(1 for t in threads if t.status.value == "sent"),
             "calls_completed": sum(1 for c in calls if c.status.value == "completed"),
             "pending_approvals": sum(1 for a in approvals if a.status.value == "pending"),
+        },
+        "spend": {
+            "model_calls": mission.model_calls,
+            "input_tokens": mission.input_tokens,
+            "output_tokens": mission.output_tokens,
+            "estimated_cost_usd": mission.estimated_cost_usd,
+            "cap_model_calls": rt.settings.max_model_calls_per_mission,
+            "cap_usd": rt.settings.max_usd_per_mission,
         },
     }
 

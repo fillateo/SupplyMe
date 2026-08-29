@@ -17,9 +17,10 @@ resource "google_billing_budget" "monthly" {
     }
   }
 
-  # 50% is a heads-up, 90% is act now, 100% is stop.
+  # On a fixed credit balance the useful alert is the early one: 25% is "this is
+  # costing more than you thought", by 100% the money is already gone.
   dynamic "threshold_rules" {
-    for_each = [0.5, 0.9, 1.0]
+    for_each = [0.25, 0.5, 0.9, 1.0]
     content {
       threshold_percent = threshold_rules.value
     }

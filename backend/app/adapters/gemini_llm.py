@@ -94,10 +94,12 @@ async def resolve_model(settings: Settings, *, prefer_fast: bool = False) -> str
 
 
 class GeminiLLM:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, meter: Any = None) -> None:
         self._settings = settings
         self._client = _client(settings)
         self.calls = 0
+        #: Records what each call actually cost, from the API's own token counts.
+        self.meter = meter
 
     async def structured(
         self,
@@ -108,8 +110,13 @@ class GeminiLLM:
         schema: type[T],
         untrusted: str | None = None,
         fast: bool = False,
+        mission_id: str = "",
     ) -> T:
         """One model call, returning `schema`. Untrusted text is isolated, not inlined."""
+        if self.meter is not None:
+            # Checked before the call, so a mission that is already over budget
+            # does not spend one more request finding that out.
+            self.meter.check(mission_id)
         model = await resolve_model(self._settings, prefer_fast=fast)
 
         parts = [prompt]
@@ -117,19 +124,33 @@ class GeminiLLM:
             parts.append(sanitize.wrap(untrusted, origin=f"an external source ({agent})"))
         contents = "\n\n".join(parts)
 
+        budget = (
+            self._settings.fast_thinking_budget
+            if fast
+            else self._settings.reasoning_thinking_budget
+        )
         config = types.GenerateContentConfig(
             system_instruction=instruction,
             response_mime_type="application/json",
             response_schema=schema,
             temperature=0.2 if fast else 0.4,
             max_output_tokens=8192,
+            # Billed as output. See Settings.fast_thinking_budget.
+            thinking_config=(
+                types.ThinkingConfig(thinking_budget=budget) if budget >= 0 else None
+            ),
         )
 
         started = time.perf_counter()
         response = await self._generate_with_backoff(agent, model, contents, config)
         elapsed_ms = int((time.perf_counter() - started) * 1000)
+        usage = _record_usage(self.meter, mission_id, model, response)
         log.info(
-            "llm_call", extra={"agent": agent, "model": model, "latency_ms": elapsed_ms}
+            "llm_call",
+            extra={
+                "agent": agent, "model": model, "latency_ms": elapsed_ms,
+                "mission_id": mission_id, **usage,
+            },
         )
 
         parsed: Any = getattr(response, "parsed", None)
@@ -180,6 +201,18 @@ class GeminiLLM:
             await asyncio.sleep(delay)
 
         raise LLMError(f"{agent}: {model} exhausted retries: {last}")
+
+
+def _record_usage(meter: Any, mission_id: str, model: str, response: Any) -> dict[str, int]:
+    """Read the API's own token counts. Absent metadata records zero, not a guess."""
+    metadata = getattr(response, "usage_metadata", None)
+    input_tokens = int(getattr(metadata, "prompt_token_count", 0) or 0)
+    output_tokens = int(getattr(metadata, "candidates_token_count", 0) or 0)
+    # Thinking tokens are billed as output and are not always in the candidate count.
+    output_tokens += int(getattr(metadata, "thoughts_token_count", 0) or 0)
+    if meter is not None:
+        meter.record(mission_id, model, input_tokens, output_tokens)
+    return {"input_tokens": input_tokens, "output_tokens": output_tokens}
 
 
 class LLMError(RuntimeError):
