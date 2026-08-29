@@ -81,6 +81,13 @@ class Settings(BaseSettings):
     max_outreach_per_mission: int = Field(default=12, ge=0, le=200)
     max_calls_per_mission: int = Field(default=3, ge=0, le=50)
     max_event_retries: int = Field(default=5, ge=0, le=20)
+
+    #: How many vendors may be researched at once. Discovery fans out over every
+    #: supply-chain node simultaneously, and each research branch is a tool loop
+    #: making several model calls, so without a bound a single mission issues
+    #: dozens of concurrent requests and rate-limits itself. Parallelism is still
+    #: the point — this caps it at a width the quota can actually serve.
+    max_concurrent_research: int = Field(default=3, ge=1, le=32)
     llm_timeout_seconds: float = 90.0
 
     #: Compresses scheduled delays in DEMO mode. A 48-hour follow-up timer is

@@ -21,6 +21,7 @@ handlers:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import Awaitable, Callable
@@ -53,6 +54,10 @@ def on(event_type: EventType) -> Callable[[Handler], Handler]:
 LEASE_SECONDS = 300.0
 #: Retry backoff, in seconds, indexed by attempt.
 BACKOFF = (5.0, 15.0, 60.0, 300.0, 900.0)
+#: A rate limit is a queueing problem: back off much harder than for a bug,
+#: because retrying it at the same cadence just extends the storm.
+RATE_LIMIT_BACKOFF = (30.0, 90.0, 240.0, 600.0, 1800.0)
+RATE_LIMIT_MARKERS = ("429", "resource_exhausted", "resource exhausted", "quota")
 
 
 class Orchestrator:
@@ -65,6 +70,8 @@ class Orchestrator:
         self.repo = Repo(providers.store)
         self.agents = agents
         self.stats: dict[str, int] = {}
+        #: Bounds the widest fan-out in the system. See Settings.max_concurrent_research.
+        self.research_slots = asyncio.Semaphore(self.settings.max_concurrent_research)
 
     # -- entry point --------------------------------------------------------
 
@@ -195,7 +202,10 @@ class Orchestrator:
         retry = event.model_copy(
             update={"attempt": attempt, "payload": {**event.payload, "retry": attempt}}
         )
-        await self.schedule(retry, delay_seconds=BACKOFF[min(attempt - 1, len(BACKOFF) - 1)])
+        schedule = (
+            RATE_LIMIT_BACKOFF if _is_rate_limited(exc) else BACKOFF
+        )
+        await self.schedule(retry, delay_seconds=schedule[min(attempt - 1, len(schedule) - 1)])
         await self._record(event, status="retrying", error=str(exc))
 
     async def _fail_mission(self, mission_id: str, reason: str) -> None:
@@ -245,6 +255,11 @@ class Orchestrator:
 
     def _count(self, name: str) -> None:
         self.stats[name] = self.stats.get(name, 0) + 1
+
+
+def _is_rate_limited(exc: Exception) -> bool:
+    text = f"{type(exc).__name__} {exc}".lower()
+    return any(marker in text for marker in RATE_LIMIT_MARKERS)
 
 
 #: Payload keys whose values are large or sensitive and never belong in the log.

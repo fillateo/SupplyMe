@@ -357,3 +357,46 @@ class TestPromptInjection:
         wrapped = sanitize.wrap(hostile, origin="a supplier reply")
         assert "prompt injection" in wrapped
         assert "[flagged:" in wrapped
+
+
+class TestConcurrencyBounds:
+    """A mission must not rate-limit itself by fanning out without a ceiling."""
+
+    async def test_research_runs_in_parallel_but_bounded(self):
+        import asyncio
+
+        settings = Settings(
+            mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS,
+            max_concurrent_research=2,
+        )
+        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
+
+        peak = {"now": 0, "max": 0}
+        original = runtime.agents.research.investigate
+
+        async def watched(**kwargs):
+            peak["now"] += 1
+            peak["max"] = max(peak["max"], peak["now"])
+            try:
+                await asyncio.sleep(0.02)      # hold the slot long enough to overlap
+                return await original(**kwargs)
+            finally:
+                peak["now"] -= 1
+
+        runtime.agents.research.investigate = watched
+        await runtime.start(concurrency=8)
+        try:
+            mission = await run_to_completion(runtime, OBJECTIVE)
+            assert mission.status.value == "completed"
+            assert peak["max"] > 1, "research did not run in parallel at all"
+            assert peak["max"] <= settings.max_concurrent_research
+        finally:
+            await runtime.stop()
+
+    def test_rate_limits_back_off_harder_than_ordinary_failures(self):
+        from app.workflow.orchestrator import BACKOFF, RATE_LIMIT_BACKOFF, _is_rate_limited
+
+        assert _is_rate_limited(RuntimeError("429 RESOURCE_EXHAUSTED"))
+        assert _is_rate_limited(RuntimeError("Quota exceeded for requests"))
+        assert not _is_rate_limited(ValueError("bad schema"))
+        assert all(slow > fast for slow, fast in zip(RATE_LIMIT_BACKOFF, BACKOFF, strict=True))

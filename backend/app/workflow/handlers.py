@@ -310,23 +310,10 @@ async def handle_research_started(orc: Orchestrator, event: Event) -> list[Event
     node_names = await _node_names(orc, mission.id, vendor.node_keys)
     wanted = list(CONTACTABLE_FIELDS)
 
-    if getattr(orc.agents.research, "name", "") == "research" and hasattr(
-        orc.agents.research, "_runner"
-    ):
-        # The ADK agent fetches its own sources; pre-fetching for it would pay
-        # for pages it may never need.
-        research = await orc.agents.research.investigate(
-            vendor_name=vendor.name, node_names=node_names, wanted_fields=wanted,
-            market=mission.market, website=vendor.website,
-            mission_id=mission.id, vendor_id=vendor.id,
-        )
-    else:
-        pages, hits, place, videos = await _research_sources(orc, vendor, mission)
-        research = await orc.agents.research.investigate(
-            vendor_name=vendor.name, node_names=node_names, pages=pages, hits=hits,
-            place=place, videos=videos, wanted_fields=wanted,
-            mission_id=mission.id, vendor_id=vendor.id,
-        )
+    # Research is the widest fan-out and the most model calls per branch. Hold a
+    # slot for the duration so a mission does not rate-limit itself.
+    async with orc.research_slots:
+        research = await _run_research(orc, mission, vendor, node_names, wanted)
 
     if research.suspicious_content:
         log.warning(
@@ -379,6 +366,30 @@ async def handle_research_started(orc: Orchestrator, event: Event) -> list[Event
 async def handle_evidence_found(orc: Orchestrator, event: Event) -> list[Event]:
     """Terminal by design: evidence is recorded during research; this marks the timeline."""
     return []
+
+
+async def _run_research(
+    orc: Orchestrator, mission: Mission, vendor: Vendor, node_names: list[str],
+    wanted: list[str],
+) -> Any:
+    """Dispatch to whichever research agent is bound.
+
+    The ADK agent fetches its own sources, so pre-fetching for it would pay for
+    pages it may never open. The scripted-model agent is handed a fixed set,
+    which is what makes the tests deterministic.
+    """
+    if hasattr(orc.agents.research, "_runner"):
+        return await orc.agents.research.investigate(
+            vendor_name=vendor.name, node_names=node_names, wanted_fields=wanted,
+            market=mission.market, website=vendor.website,
+            mission_id=mission.id, vendor_id=vendor.id,
+        )
+    pages, hits, place, videos = await _research_sources(orc, vendor, mission)
+    return await orc.agents.research.investigate(
+        vendor_name=vendor.name, node_names=node_names, pages=pages, hits=hits,
+        place=place, videos=videos, wanted_fields=wanted,
+        mission_id=mission.id, vendor_id=vendor.id,
+    )
 
 
 async def _research_sources(

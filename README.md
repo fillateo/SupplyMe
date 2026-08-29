@@ -270,7 +270,7 @@ Vertex AI, Secret Manager, Cloud Logging. All provisioned by OpenTofu in
 # Backend
 cd backend
 uv venv --python 3.12 .venv && VIRTUAL_ENV=.venv uv pip install -e ".[dev]"
-.venv/bin/python -m pytest                     # 188 tests, no cloud needed
+.venv/bin/python -m pytest                     # 190 tests, no cloud needed
 .venv/bin/python scripts/run_demo.py           # whole mission, scripted model, free
 .venv/bin/python scripts/run_demo.py --live-model --project YOUR_PROJECT
 
@@ -314,6 +314,7 @@ Everything is `VDS_`-prefixed and read only in `app/config.py`.
 | `VDS_YOUTUBE_API_KEY` | — | YouTube Data API |
 | `VDS_TWILIO_*` | — | telephony; unset means calls run against the mock |
 | `VDS_MAX_CALLS_PER_MISSION` | `3` | cost guard |
+| `VDS_MAX_CONCURRENT_RESEARCH` | `3` | caps the widest fan-out so a mission cannot rate-limit itself |
 | `VDS_MAX_OUTREACH_PER_MISSION` | `12` | cost guard |
 | `VDS_DEMO_SPEEDUP` | `1.0` | compresses scheduled delays in demo mode only |
 | `VDS_USE_ADK_RESEARCH` | `true` | research as an ADK tool loop; off falls back to pre-fetching |
@@ -325,7 +326,7 @@ to have called a Google API it did not call.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest -q     # 188 tests, ~8 seconds, no network
+.venv/bin/python -m pytest -q     # 190 tests, ~8 seconds, no network
 ```
 
 - **Unit** — evidence classification, identity resolution, quote normalisation,
@@ -334,9 +335,9 @@ to have called a Google API it did not call.
 - **Integration** — the whole workflow over the real event bus, plus the HTTP
   surface with a `TestClient`.
 - **Failure** — every message delivered twice, search outage, Maps timeout,
-  blocked pages, call failure, model timeout, Cloud Run restart mid-mission,
-  events for records that no longer exist, and a supplier reply containing a
-  prompt-injection payload.
+  blocked pages, call failure, model timeout, rate limiting, Cloud Run restart
+  mid-mission, events for records that no longer exist, and a supplier reply
+  containing a prompt-injection payload.
 
 The redelivery test runs the entire mission with a 100% duplicate rate and
 asserts no supplier is emailed twice.
