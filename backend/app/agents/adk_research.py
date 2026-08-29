@@ -199,7 +199,6 @@ class AdkResearchAgent:
         # Vertex deployment silently looks for a Gemini API key it does not have.
         from ..adapters.gemini_llm import _client
 
-        self._store = store
         self._agent = LlmAgent(
             name="vendor_research",
             model=Gemini(
