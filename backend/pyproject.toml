@@ -1,0 +1,40 @@
+[project]
+name = "vendor-discovery-shortcut"
+version = "0.1.0"
+description = "Agentic sourcing workflow: goal -> supply chain -> vendors -> evidence -> outreach -> recommendation"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "google-adk>=1.0.0",
+    "google-genai>=1.0.0",
+    "google-cloud-firestore>=2.16.0",
+    "google-cloud-pubsub>=2.21.0",
+    "google-cloud-tasks>=2.16.0",
+    "google-api-python-client>=2.130.0",
+    "google-auth>=2.30.0",
+    "google-auth-oauthlib>=1.2.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    "httpx>=0.27.0",
+    "python-json-logger>=2.0.7",
+    "tenacity>=8.3.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2.0", "pytest-asyncio>=0.23.0", "ruff>=0.5.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
