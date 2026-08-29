@@ -225,6 +225,18 @@ async def handle_discovery_started(orc: Orchestrator, event: Event) -> list[Even
         resolved, match = identity.resolve(candidate, existing)
         is_new = match is None
 
+        # A vendor already known to this mission is free to enrich; a new one
+        # costs a research tool loop, so it has to fit inside the mission's
+        # ceiling. Taken atomically because every node discovers in parallel.
+        if is_new and not await _take_budget(
+            orc, mission.id, "vendors_admitted", orc.settings.max_vendors_per_mission
+        ):
+            log.info(
+                "vendor_not_admitted",
+                extra={"mission_id": mission.id, "status": "mission vendor ceiling reached"},
+            )
+            break
+
         if found.source_url and found.excerpt:
             await _record_evidence(
                 orc, mission.id, resolved.id,

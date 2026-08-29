@@ -190,6 +190,9 @@ class Mission(Base):
     #: Counters, kept on the mission so cost guards do not need a collection scan.
     emails_sent: int = 0
     calls_made: int = 0
+    #: Admitted for research. Counted atomically so parallel discovery branches
+    #: cannot collectively overshoot the mission's ceiling.
+    vendors_admitted: int = 0
     failure_reason: str | None = None
 
     #: What this mission has actually spent on model calls, from the API's own

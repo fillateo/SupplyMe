@@ -159,3 +159,34 @@ class TestPlacesCost:
             assert len(seen) <= nodes
         finally:
             await runtime.stop()
+
+
+class TestVendorCeiling:
+    """Researching 40 candidates to recommend 5 is the expensive way to be thorough."""
+
+    async def test_a_mission_cannot_admit_more_vendors_than_its_ceiling(self):
+        from app.adapters.scripted_world import build_scripted_llm
+        from app.config import ApprovalPolicy, Mode
+        from app.domain.models import Vendor
+        from app.runtime import Runtime
+
+        from .conftest import OBJECTIVE, run_to_completion
+
+        settings = Settings(
+            mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS,
+            max_vendors_per_mission=3,
+        )
+        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
+        await runtime.start(concurrency=8)
+        try:
+            mission = await run_to_completion(runtime, OBJECTIVE)
+            vendors = await runtime.repo.list(Vendor, mission_id=mission.id)
+            assert len(vendors) <= 3
+            assert mission.status.value == "completed"
+        finally:
+            await runtime.stop()
+
+    def test_the_default_ceiling_is_well_below_category_times_nodes(self):
+        settings = Settings()
+        # 8 per category across ~7 nodes would be 56 research loops.
+        assert settings.max_vendors_per_mission < settings.max_vendors_per_category * 7

@@ -90,6 +90,14 @@ class Settings(BaseSettings):
 
     # --- Cost / depth guards ------------------------------------------------
     max_vendors_per_category: int = Field(default=8, ge=1, le=50)
+
+    #: Ceiling across the whole mission, not per category. Discovery fans out
+    #: over every supply-chain node at once, so a per-category cap of 6 across 7
+    #: nodes still admits 42 suppliers — and every one of them is then researched
+    #: with a tool loop. Researching 40 candidates to recommend 5 is the
+    #: expensive way to be thorough; a smaller shortlist researched properly
+    #: beats a long one researched cheaply.
+    max_vendors_per_mission: int = Field(default=12, ge=1, le=200)
     max_research_depth: int = Field(default=3, ge=1, le=10)
     max_outreach_per_mission: int = Field(default=12, ge=0, le=200)
     max_calls_per_mission: int = Field(default=3, ge=0, le=50)
