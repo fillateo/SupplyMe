@@ -55,6 +55,13 @@ resource "google_cloud_run_v2_service" "api" {
         value = "true"
       }
       env {
+        # Firestore, Pub/Sub and Cloud Tasks instead of the in-process store,
+        # bus and scheduler. Independent of var.mode on purpose — see
+        # Settings.use_cloud_infra.
+        name  = "VDS_USE_CLOUD_INFRA"
+        value = "true"
+      }
+      env {
         name  = "VDS_REASONING_MODEL"
         value = var.reasoning_model
       }

@@ -79,7 +79,7 @@ def build(
     bus = LocalBus(duplicate_rate=duplicate_rate)
     scheduler = LocalScheduler(bus, speedup=demo_speedup)
 
-    if settings.mode is Mode.LIVE and settings.project_id:
+    if settings.use_cloud_infra and settings.project_id:
         from .firestore_store import FirestoreStore
         from .pubsub_bus import PubSubBus
 
@@ -97,8 +97,16 @@ def build(
             )
     else:
         store = MemoryStore()
-        if settings.mode is Mode.LIVE:
-            notes.append("LIVE mode without VDS_PROJECT_ID: using in-memory store and local bus")
+        if settings.use_cloud_infra:
+            notes.append(
+                "VDS_USE_CLOUD_INFRA is set but VDS_PROJECT_ID is not: falling back to "
+                "the in-process store and bus"
+            )
+        elif settings.mode is Mode.LIVE:
+            notes.append(
+                "state is in-process: missions do not survive a restart. Set "
+                "VDS_USE_CLOUD_INFRA=true with a Firestore database to persist them."
+            )
 
     if llm is None:
         if settings.use_scripted_model:

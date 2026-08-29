@@ -206,13 +206,32 @@ class GoogleSearchProvider:
 
 
 class PlacesProvider:
-    """Google Places API (New). Text Search + Place Details."""
+    """Google Places API (New). Text Search + Place Details.
+
+    Places is billed per request and by which fields you ask for, and it is the
+    most expensive call this system makes — an order of magnitude more than a
+    Gemini call. Two consequences are baked in here:
+
+    * Search asks for the cheapest field set that still identifies a business.
+      Ratings and review counts are deliberately absent, because the product
+      does not treat reviews as evidence of manufacturing capability anyway
+      (see app/agents/research.py) and requesting them moves the request into a
+      dearer SKU to no benefit.
+    * The fuller field set is only fetched by `place_details`, which runs once
+      per vendor that survived discovery, not once per search query.
+    """
 
     BASE = "https://places.googleapis.com/v1"
-    FIELDS = (
-        "places.id,places.displayName,places.formattedAddress,places.internationalPhoneNumber,"
-        "places.websiteUri,places.location,places.rating,places.userRatingCount,"
-        "places.businessStatus,places.types"
+
+    #: Text Search. Identification only — no ratings, no reviews.
+    SEARCH_FIELDS = (
+        "places.id,places.displayName,places.formattedAddress,"
+        "places.websiteUri,places.location,places.businessStatus"
+    )
+    #: Place Details, once per shortlisted vendor.
+    DETAIL_FIELDS = (
+        "id,displayName,formattedAddress,internationalPhoneNumber,websiteUri,"
+        "location,rating,userRatingCount,businessStatus,types"
     )
 
     def __init__(self, settings: Settings) -> None:
@@ -224,7 +243,7 @@ class PlacesProvider:
             return []
         response = await self._client.post(
             f"{self.BASE}/places:searchText",
-            headers={"X-Goog-Api-Key": self._key, "X-Goog-FieldMask": self.FIELDS},
+            headers={"X-Goog-Api-Key": self._key, "X-Goog-FieldMask": self.SEARCH_FIELDS},
             json={"textQuery": query, **({"regionCode": region} if region else {})},
         )
         if response.status_code != 200:
@@ -235,10 +254,9 @@ class PlacesProvider:
     async def place_details(self, place_id: str) -> Place | None:
         if not self._key:
             return None
-        fields = self.FIELDS.replace("places.", "")
         response = await self._client.get(
             f"{self.BASE}/places/{place_id}",
-            headers={"X-Goog-Api-Key": self._key, "X-Goog-FieldMask": fields},
+            headers={"X-Goog-Api-Key": self._key, "X-Goog-FieldMask": self.DETAIL_FIELDS},
         )
         if response.status_code != 200:
             return None

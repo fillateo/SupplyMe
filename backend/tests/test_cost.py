@@ -106,3 +106,56 @@ class TestDefaults:
         settings = Settings()
         assert settings.max_outreach_per_mission <= 20
         assert settings.max_calls_per_mission <= 5
+
+
+class TestPlacesCost:
+    """Places is the priciest call per unit; the defaults have to reflect that."""
+
+    def test_search_does_not_request_the_dearer_review_fields(self):
+        from app.adapters.google_providers import PlacesProvider
+
+        # Reviews are explicitly not treated as evidence of capability, so
+        # paying a higher SKU to fetch them on every search buys nothing.
+        assert "rating" not in PlacesProvider.SEARCH_FIELDS
+        assert "userRatingCount" not in PlacesProvider.SEARCH_FIELDS
+
+    def test_details_may_request_more_because_it_runs_once_per_vendor(self):
+        from app.adapters.google_providers import PlacesProvider
+
+        assert "rating" in PlacesProvider.DETAIL_FIELDS
+
+    def test_maps_queries_per_node_are_capped_low_by_default(self):
+        assert Settings().max_maps_queries_per_node <= 2
+
+    async def test_the_cap_is_enforced_during_discovery(self):
+        from app.config import ApprovalPolicy, Mode
+        from app.adapters.scripted_world import build_scripted_llm
+        from app.runtime import Runtime
+
+        settings = Settings(
+            mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS,
+            max_maps_queries_per_node=1,
+        )
+        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
+
+        seen: list[str] = []
+        original = runtime.providers.maps.search_places
+
+        async def counted(query, *, region=""):
+            seen.append(query)
+            return await original(query, region=region)
+
+        runtime.providers.maps.search_places = counted
+        await runtime.start(concurrency=8)
+        try:
+            from .conftest import OBJECTIVE, run_to_completion
+
+            mission = await run_to_completion(runtime, OBJECTIVE)
+            nodes = len(await runtime.repo.list(
+                __import__("app.domain.models", fromlist=["SupplyChainNode"]).SupplyChainNode,
+                mission_id=mission.id,
+            ))
+            # One discovery branch per node, one Places query each at most.
+            assert len(seen) <= nodes
+        finally:
+            await runtime.stop()

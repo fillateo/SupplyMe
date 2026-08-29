@@ -43,8 +43,21 @@ class Settings(BaseSettings):
         env_prefix="VDS_", env_file=".env", extra="ignore", protected_namespaces=()
     )
 
+    #: Which product integrations to bind: DEMO uses the mock providers, LIVE
+    #: uses Google Search, Places, YouTube, Gmail and telephony for whichever
+    #: have credentials.
     mode: Mode = Mode.DEMO
     approval_policy: ApprovalPolicy = ApprovalPolicy.EXTERNAL_ACTIONS
+
+    #: Whether to use Firestore, Pub/Sub and Cloud Tasks instead of the
+    #: in-process store, bus and scheduler.
+    #:
+    #: Deliberately independent of `mode`. Running against the real Google
+    #: product APIs and running on Google's infrastructure are different
+    #: decisions: locally you usually want real Search and Places with an
+    #: in-process store, because provisioning Firestore just to try the thing
+    #: out is a tax on curiosity. Terraform sets this true on Cloud Run.
+    use_cloud_infra: bool = False
 
     # --- Google Cloud -------------------------------------------------------
     project_id: str = ""
@@ -109,6 +122,13 @@ class Settings(BaseSettings):
     #: Planning and adjudication do benefit, so the reasoning tier keeps a
     #: bounded allowance. -1 means "let the model decide", which is the default
     #: and the expensive option.
+    #: Google Places is billed per request and is the most expensive call this
+    #: system makes — roughly an order of magnitude more than a Gemini call. A
+    #: mission fans out over every supply-chain node, so this caps how many
+    #: locality searches each node may run. 1 is usually enough; the web search
+    #: finds the same suppliers and costs far less.
+    max_maps_queries_per_node: int = Field(default=1, ge=0, le=5)
+
     fast_thinking_budget: int = Field(default=0, ge=-1, le=32768)
     reasoning_thinking_budget: int = Field(default=2048, ge=-1, le=32768)
     llm_timeout_seconds: float = 90.0

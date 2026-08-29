@@ -44,6 +44,24 @@ mkdir -p "$RUNDIR"
 # Prerequisites
 # --------------------------------------------------------------------------
 
+find_gcloud() {
+  # gcloud is frequently a shell alias rather than something on PATH — it is on
+  # this machine — and a shell alias is invisible to any script or subprocess.
+  # Look for the binary in the usual install locations instead of assuming.
+  if command -v gcloud >/dev/null 2>&1; then command -v gcloud; return 0; fi
+  local candidate
+  for candidate in \
+    "$HOME/google-cloud-sdk/bin/gcloud" \
+    "/usr/lib/google-cloud-sdk/bin/gcloud" \
+    "/usr/local/google-cloud-sdk/bin/gcloud" \
+    "/opt/homebrew/share/google-cloud-sdk/bin/gcloud" \
+    "/snap/bin/gcloud"
+  do
+    [ -x "$candidate" ] && { echo "$candidate"; return 0; }
+  done
+  return 1
+}
+
 find_python() {
   # google-adk does not support 3.14 yet, so pick a version that works rather
   # than whatever `python3` happens to be.
@@ -208,11 +226,17 @@ start_services() {
   (
     cd "$BACKEND"
     if [ "$mode" = live ]; then
-      VDS_USE_SCRIPTED_MODEL=false nohup "$VENV/bin/uvicorn" app.api.main:app \
-        --host 127.0.0.1 --port "$API_PORT" > "$RUNDIR/api.log" 2>&1 &
+      # Real Gemini AND the real Google APIs for anything that has a key.
+      # Integrations without one degrade to their mock and say so at
+      # /api/health, so a missing Gmail token costs the mission its mailbox
+      # rather than failing the run.
+      VDS_USE_SCRIPTED_MODEL=false VDS_MODE=live \
+        nohup "$VENV/bin/uvicorn" app.api.main:app \
+          --host 127.0.0.1 --port "$API_PORT" > "$RUNDIR/api.log" 2>&1 &
     else
-      VDS_USE_SCRIPTED_MODEL=true nohup "$VENV/bin/uvicorn" app.api.main:app \
-        --host 127.0.0.1 --port "$API_PORT" > "$RUNDIR/api.log" 2>&1 &
+      VDS_USE_SCRIPTED_MODEL=true VDS_MODE=demo \
+        nohup "$VENV/bin/uvicorn" app.api.main:app \
+          --host 127.0.0.1 --port "$API_PORT" > "$RUNDIR/api.log" 2>&1 &
     fi
     echo $! > "$RUNDIR/api.pid"
   )
@@ -250,6 +274,17 @@ print_banner() {
   echo
   printf '%s\n' "  model     $model"
   printf '%s\n' "  approvals $policy${DIM}   (it will ask before the first email to each supplier)${OFF}"
+
+  local bound
+  bound="$("$PY" -c "
+import json, sys
+d = json.loads(sys.argv[1])
+p = d.get('providers', {})
+real = [k for k in ('search','maps','video','mail','voice') if not p.get(k,'').startswith('Mock')]
+mock = [k for k in ('search','maps','video','mail','voice') if p.get(k,'').startswith('Mock')]
+print(('real: ' + ', '.join(real) if real else 'real: none') + '   |   mock: ' + (', '.join(mock) or 'none'))
+" "$health" 2>/dev/null || echo "")"
+  [ -n "$bound" ] && printf '%s\n' "  tools     $bound"
   if [ "$model" = "ScriptedLLM" ]; then
     printf '%s\n' "  spend     ${GREEN}none${OFF} ${DIM}— deterministic model, no network${OFF}"
   else
@@ -280,16 +315,30 @@ cmd_live() {
     info "set it, then: gcloud auth application-default login"
     die "cannot start live"
   fi
-  if ! gcloud auth application-default print-access-token >/dev/null 2>&1; then
-    warn "no application default credentials."
-    info "run: gcloud auth application-default login"
+  local gcloud_bin adc
+  gcloud_bin="$(find_gcloud || true)"
+  adc="${CLOUDSDK_CONFIG:-$HOME/.config/gcloud}/application_default_credentials.json"
+
+  if [ -n "$gcloud_bin" ]; then
+    if ! "$gcloud_bin" auth application-default print-access-token >/dev/null 2>&1; then
+      warn "no application default credentials."
+      info "run: gcloud auth application-default login"
+      die "cannot start live"
+    fi
+  elif [ ! -f "$adc" ]; then
+    warn "gcloud was not found and there are no application default credentials at:"
+    info "$adc"
+    info "install the Cloud SDK, then: gcloud auth application-default login"
     die "cannot start live"
+  else
+    info "gcloud not on PATH; using the credentials at $adc"
   fi
 
-  say "checking which Gemini models this project can reach"
-  (cd "$BACKEND" && "$PY" scripts/check_models.py \
-      --project "$(grep -E '^VDS_PROJECT_ID=' "$BACKEND/.env" | cut -d= -f2)" 2>/dev/null \
-      | tail -6 | sed 's/^/    /') || warn "model check failed; starting anyway"
+  local project
+  project="$(grep -E '^VDS_PROJECT_ID=' "$BACKEND/.env" | head -1 | cut -d= -f2 | tr -d '[:space:]')"
+  say "checking which Gemini models $project can reach"
+  (cd "$BACKEND" && "$PY" scripts/check_models.py --project "$project" 2>/dev/null \
+      | tail -5 | sed 's/^/    /') || warn "model check failed; starting anyway"
 
   start_services live
   print_banner

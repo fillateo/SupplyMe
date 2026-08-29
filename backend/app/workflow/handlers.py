@@ -268,7 +268,13 @@ async def _gather_sources(
     """Run web and Maps lookups in parallel; a failing source costs its results only."""
     region = _region_code(market)
     search_tasks = [orc.providers.search.search(q, limit=6) for q in queries[:4]]
-    maps_tasks = [orc.providers.maps.search_places(q, region=region) for q in maps_queries[:3]]
+    # Places costs an order of magnitude more per call than web search, so it is
+    # capped tightly and used to confirm a business exists, not to find one.
+    maps_budget = orc.settings.max_maps_queries_per_node
+    maps_tasks = [
+        orc.providers.maps.search_places(q, region=region)
+        for q in maps_queries[:maps_budget]
+    ]
     results = await asyncio.gather(*search_tasks, *maps_tasks, return_exceptions=True)
 
     hits, places = [], []

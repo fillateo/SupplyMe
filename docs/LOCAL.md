@@ -122,6 +122,21 @@ http://localhost:8080/docs                       interactive API
 curl -s localhost:8080/api/health | jq           which providers are actually bound
 ```
 
+## 3b. Three independent switches
+
+They are separate on purpose, and mixing them up is the most likely way to
+confuse yourself:
+
+| Switch | Chooses |
+| --- | --- |
+| `VDS_USE_SCRIPTED_MODEL` | scripted model vs real Gemini |
+| `VDS_MODE` | mock product integrations vs Google Search, Places, Gmail, telephony |
+| `VDS_USE_CLOUD_INFRA` | in-process store and bus vs Firestore, Pub/Sub, Cloud Tasks |
+
+`./run.sh live` sets the first two and leaves the third alone, so you get real
+Gemini and the real Google APIs against local state — no Firestore database
+needed. Terraform sets the third on Cloud Run.
+
 ## 4. Use real Gemini
 
 ```bash

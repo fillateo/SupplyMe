@@ -327,7 +327,8 @@ Everything is `VDS_`-prefixed and read only in `app/config.py`.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `VDS_MODE` | `demo` | `demo` binds mock providers; `live` binds Google APIs |
+| `VDS_MODE` | `demo` | which product integrations: `demo` binds mocks, `live` binds Google APIs |
+| `VDS_USE_CLOUD_INFRA` | `false` | Firestore/Pub/Sub/Cloud Tasks vs in-process. Independent of `VDS_MODE` |
 | `VDS_APPROVAL_POLICY` | `external` | `autonomous` \| `external` \| `strict` |
 | `VDS_PROJECT_ID` | — | Google Cloud project for Vertex AI and Firestore |
 | `VDS_REASONING_MODEL` | resolved | empty = newest reachable model on the ladder |
