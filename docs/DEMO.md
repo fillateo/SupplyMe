@@ -18,12 +18,12 @@ Closing line: *"I gave it one product idea. It built the sourcing workflow, chec
 
 ## Setup
 
-```bash
-cd backend
-cp .env.example .env          # set VDS_PROJECT_ID
-.venv/bin/uvicorn app.api.main:app --port 8080
+See [docs/LOCAL.md](LOCAL.md) for running it on your machine. The short version:
 
-cd ../frontend && npm run dev
+```bash
+cd backend && cp .env.example .env    # VDS_USE_SCRIPTED_MODEL=true is the default
+.venv/bin/uvicorn app.api.main:app --port 8080
+cd ../frontend && npm run dev         # http://localhost:3000
 ```
 
 Recommended `.env` for a recorded demo:

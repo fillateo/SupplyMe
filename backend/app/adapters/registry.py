@@ -95,14 +95,24 @@ def build(
             notes.append("LIVE mode without VDS_PROJECT_ID: using in-memory store and local bus")
 
     if llm is None:
-        if settings.mode is Mode.LIVE or settings.project_id or settings.gemini_api_key:
+        if settings.use_scripted_model:
+            from .scripted_world import build_scripted_llm
+
+            llm = build_scripted_llm()
+            notes.append(
+                "VDS_USE_SCRIPTED_MODEL is on: responses are deterministic and no "
+                "Gemini call is made. The workflow, events, storage and scoring are "
+                "unchanged."
+            )
+        elif settings.mode is Mode.LIVE or settings.project_id or settings.gemini_api_key:
             from .gemini_llm import GeminiLLM
 
             llm = GeminiLLM(settings)
         else:
             raise RuntimeError(
-                "no LLM configured: set VDS_PROJECT_ID (Vertex) or VDS_GEMINI_API_KEY, "
-                "or pass a ScriptedLLM for offline runs"
+                "No model configured. Either set VDS_PROJECT_ID (Vertex AI) or "
+                "VDS_GEMINI_API_KEY, or set VDS_USE_SCRIPTED_MODEL=true to run the "
+                "whole system deterministically with no credentials."
             )
 
     if settings.mode is Mode.DEMO:

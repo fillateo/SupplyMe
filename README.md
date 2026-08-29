@@ -266,23 +266,28 @@ Vertex AI, Secret Manager, Cloud Logging. All provisioned by OpenTofu in
 
 ## Local development
 
+**You do not need a Google Cloud project to run this.** With
+`VDS_USE_SCRIPTED_MODEL=true` the entire system — console included — runs with
+no credentials and no network. The agents, events, storage, conflict detection
+and scoring are the real ones; only the text generation is deterministic.
+
 ```bash
-# Backend
 cd backend
 uv venv --python 3.12 .venv && VIRTUAL_ENV=.venv uv pip install -e ".[dev]"
-.venv/bin/python -m pytest                     # 190 tests, no cloud needed
-.venv/bin/python scripts/run_demo.py           # whole mission, scripted model, free
-.venv/bin/python scripts/run_demo.py --live-model --project YOUR_PROJECT
 
-# Serve it
+.venv/bin/python -m pytest -q                  # 191 tests, ~10s, no credentials
+.venv/bin/python scripts/run_demo.py           # a whole mission, ~30s, no credentials
+
+cp .env.example .env                           # scripted model is the default
 .venv/bin/uvicorn app.api.main:app --port 8080
-
-# Console
 cd ../frontend && npm install && npm run dev   # http://localhost:3000
 ```
 
-`run_demo.py` prints the activity timeline, the evidence, the conflicts and the
-final network — all read back from storage, none of it narrated.
+To use real Gemini instead: `gcloud auth application-default login`, then set
+`VDS_USE_SCRIPTED_MODEL=false` and `VDS_PROJECT_ID` in `.env`.
+
+**[docs/LOCAL.md](docs/LOCAL.md)** has the full walkthrough — what to click,
+what to look for, and what to do when something breaks.
 
 ## Deployment
 

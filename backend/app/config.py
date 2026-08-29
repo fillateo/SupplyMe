@@ -98,6 +98,13 @@ class Settings(BaseSettings):
     #: Redelivers this fraction of events, to demonstrate idempotency on demand.
     demo_duplicate_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
+    #: Bind the deterministic scripted model instead of Gemini. The entire
+    #: system then runs with no Google Cloud project, no API key and no network
+    #: — same agents, same events, same storage, same scoring. Intended for
+    #: local development, for the test suite, and for anyone who wants to see
+    #: the workflow before setting up credentials.
+    use_scripted_model: bool = False
+
     #: Run vendor research as a Google ADK tool-use loop, letting the agent
     #: decide which sources to read, instead of pre-fetching a fixed set. Off
     #: when the model is scripted, because the tests assert on workflow

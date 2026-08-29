@@ -89,7 +89,7 @@ def _research_agent(providers: Any) -> Any:
     both satisfy the same `investigate` contract.
     """
     settings: Settings = providers.settings
-    if not settings.use_adk_research:
+    if settings.use_scripted_model or not settings.use_adk_research:
         return None
     if type(providers.llm).__name__ != "GeminiLLM":
         return None
