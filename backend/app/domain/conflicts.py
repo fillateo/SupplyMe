@@ -14,6 +14,7 @@ from typing import Any
 
 from .evidence import DIRECT_SOURCES, SOURCE_WEIGHT
 from .models import Conflict, ConflictStatus, Evidence, SourceType
+from .numbers import as_number
 
 #: Relative tolerance below which two numbers are the same claim, not a conflict.
 #: Lead times get a wider band on purpose: a site that advertises "25-30 working
@@ -42,18 +43,26 @@ class Disagreement:
     question: str
 
 
-def _comparable(value: Any) -> Any:
+def _comparable(value: Any, field: str = "") -> Any:
+    """Reduce a value to something two sources can be compared on.
+
+    A string that states a number is compared as that number, so "MOQ 500" from
+    a page and 500 from an email agree instead of being reported as a conflict.
+    """
     if isinstance(value, bool):
         return value
     if isinstance(value, (int, float)):
         return float(value)
     if isinstance(value, str):
+        number = as_number(value, unit="days" if "lead_time" in field else "")
+        if number is not None:
+            return number
         return value.strip().lower()
     return value
 
 
 def _same(a: Any, b: Any, field: str = "") -> bool:
-    ca, cb = _comparable(a), _comparable(b)
+    ca, cb = _comparable(a, field), _comparable(b, field)
     if isinstance(ca, float) and isinstance(cb, float):
         if ca == cb:
             return True

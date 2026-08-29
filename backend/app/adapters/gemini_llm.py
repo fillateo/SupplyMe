@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 import time
 from typing import Any, TypeVar
 
@@ -32,6 +33,22 @@ log = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 _RESOLVED: dict[str, str] = {}
+
+#: Vertex returns 429 under sustained parallel load, which is exactly what a
+#: fan-out over a dozen vendors produces. This is a queueing problem, not a
+#: failure: back off and the same request succeeds. Failing the mission instead
+#: would make the system look broken whenever it was busy.
+RETRYABLE_MARKERS = (
+    "429", "resource_exhausted", "resource exhausted", "quota",
+    "503", "unavailable", "500", "internal error", "deadline",
+)
+MAX_ATTEMPTS = 5
+BASE_BACKOFF = 2.0
+
+
+def _is_retryable(exc: Exception) -> bool:
+    text = f"{type(exc).__name__} {exc}".lower()
+    return any(marker in text for marker in RETRYABLE_MARKERS)
 
 
 def _client(settings: Settings) -> genai.Client:
@@ -109,18 +126,7 @@ class GeminiLLM:
         )
 
         started = time.perf_counter()
-        try:
-            response = await asyncio.wait_for(
-                self._client.aio.models.generate_content(
-                    model=model, contents=contents, config=config
-                ),
-                timeout=self._settings.llm_timeout_seconds,
-            )
-        except TimeoutError as exc:
-            raise LLMError(f"{agent}: {model} timed out") from exc
-        finally:
-            self.calls += 1
-
+        response = await self._generate_with_backoff(agent, model, contents, config)
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         log.info(
             "llm_call", extra={"agent": agent, "model": model, "latency_ms": elapsed_ms}
@@ -136,6 +142,44 @@ class GeminiLLM:
             return schema.model_validate_json(text)
         except Exception as exc:
             raise LLMError(f"{agent}: response did not match {schema.__name__}") from exc
+
+
+    async def _generate_with_backoff(
+        self, agent: str, model: str, contents: str, config: Any
+    ) -> Any:
+        """Call the model, retrying rate limits with exponential backoff and jitter.
+
+        Jitter matters here: without it, a fan-out that all hits 429 at once
+        retries in lockstep and hits 429 again.
+        """
+        last: Exception | None = None
+        for attempt in range(MAX_ATTEMPTS):
+            self.calls += 1
+            try:
+                return await asyncio.wait_for(
+                    self._client.aio.models.generate_content(
+                        model=model, contents=contents, config=config
+                    ),
+                    timeout=self._settings.llm_timeout_seconds,
+                )
+            except TimeoutError as exc:
+                last = exc
+                if attempt == MAX_ATTEMPTS - 1:
+                    raise LLMError(f"{agent}: {model} timed out") from exc
+            except Exception as exc:  # noqa: BLE001 - classify, then decide
+                last = exc
+                if not _is_retryable(exc) or attempt == MAX_ATTEMPTS - 1:
+                    raise LLMError(f"{agent}: {model} failed: {exc}") from exc
+
+            delay = BASE_BACKOFF * (2**attempt) * (0.5 + random.random())
+            log.warning(
+                "llm_retry",
+                extra={"agent": agent, "model": model, "retry_count": attempt + 1,
+                       "error": str(last)[:200], "latency_ms": int(delay * 1000)},
+            )
+            await asyncio.sleep(delay)
+
+        raise LLMError(f"{agent}: {model} exhausted retries: {last}")
 
 
 class LLMError(RuntimeError):

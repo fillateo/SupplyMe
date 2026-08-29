@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from .models import Conflict, ScoringWeights, Vendor
+from .numbers import as_number
 from .quotes import PackageQuote
 from .trust import TrustProfile
 
@@ -91,9 +92,9 @@ def _price_component(
 
 def _moq_component(weight: float, vendor: Vendor, needed: int | None) -> Component:
     fact = vendor.moq
-    if not fact.known or needed is None:
+    moq = as_number(fact.value) if fact.known else None
+    if moq is None or needed is None:
         return Component("moq_fit", weight, 0.0, "MOQ unknown")
-    moq = float(fact.value)
     if moq <= needed:
         return Component(
             "moq_fit", weight, 1.0, f"MOQ {moq:g} fits an order of {needed:g}"
@@ -132,9 +133,9 @@ def _capability_component(
 
 def _lead_time_component(weight: float, vendor: Vendor, target_days: int | None) -> Component:
     fact = vendor.lead_time_days
-    if not fact.known:
+    days = as_number(fact.value, unit="days") if fact.known else None
+    if days is None:
         return Component("lead_time", weight, 0.0, "lead time unknown")
-    days = float(fact.value)
     if target_days is None:
         raw = 1.0 if days <= 30 else max(0.0, 1.0 - (days - 30) / 60)
         return Component("lead_time", weight, round(raw, 4), f"{days:g} days quoted")
@@ -197,10 +198,11 @@ def score_vendor(
 
     reasons: list[str] = []
     disqualified = False
-    if vendor.moq.known and quantity is not None and float(vendor.moq.value) > quantity * 4:
+    moq_value = as_number(vendor.moq.value) if vendor.moq.known else None
+    if moq_value is not None and quantity is not None and moq_value > quantity * 4:
         disqualified = True
         reasons.append(
-            f"MOQ {float(vendor.moq.value):g} against a first batch of {quantity} — "
+            f"MOQ {moq_value:g} against a first batch of {quantity} — "
             "good supplier at scale, wrong fit for this launch"
         )
     if not vendor.email and not vendor.phone:

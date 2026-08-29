@@ -16,7 +16,7 @@ from typing import Any
 
 from ..domain import conflicts as conflict_engine
 from ..domain import evidence as evidence_engine
-from ..domain import identity, quotes as quote_engine, scoring, trust
+from ..domain import identity, numbers, quotes as quote_engine, scoring, trust
 from ..domain.events import Event, EventType
 from ..domain.ids import slug, stable_id
 from ..domain.models import (
@@ -533,10 +533,11 @@ async def handle_vendor_updated(orc: Orchestrator, event: Event) -> list[Event]:
 
     # A vendor that cannot serve this order at all is rejected now, with the
     # reason recorded, rather than being emailed and rejected later.
-    if vendor.moq.known and mission.quantity and float(vendor.moq.value) > mission.quantity * 4:
+    vendor_moq = numbers.as_number(vendor.moq.value) if vendor.moq.known else None
+    if vendor_moq is not None and mission.quantity and vendor_moq > mission.quantity * 4:
         await _set_status(
             orc, vendor, VendorStatus.REJECTED,
-            [f"MOQ {float(vendor.moq.value):g} against a first batch of {mission.quantity}"],
+            [f"MOQ {vendor_moq:g} against a first batch of {mission.quantity}"],
         )
         return [
             event.child(EventType.VENDOR_REJECTED, vendor_id=vendor.id, version=vendor.version),
@@ -1678,7 +1679,7 @@ def _apply_facts(
                 vendor,
                 field,
                 Fact(
-                    value=settled.resolved_value,
+                    value=numbers.normalize_field(field, settled.resolved_value),
                     provenance=Provenance.DIRECT_QUOTE,
                     evidence_ids=[e.id for e in supporting],
                     confidence=max(evidence_engine.confidence_for(supporting), 0.9),
@@ -1693,11 +1694,14 @@ def _apply_facts(
                            e.retrieved_at.timestamp()),
         )
         disagreement = conflict_engine.detect(field, supporting)
+        # Store the field as the type the rest of the system expects. Gemini
+        # legitimately answers "10-14" for a lead time; the scorer needs a number
+        # and the evidence record keeps the original wording.
         setattr(
             vendor,
             field,
             Fact(
-                value=best.value,
+                value=numbers.normalize_field(field, best.value),
                 provenance=Provenance.CONFLICTING if disagreement else provenance,
                 evidence_ids=[e.id for e in supporting],
                 confidence=evidence_engine.confidence_for(supporting),
