@@ -83,6 +83,14 @@ class Settings(BaseSettings):
     max_event_retries: int = Field(default=5, ge=0, le=20)
     llm_timeout_seconds: float = 90.0
 
+    #: Compresses scheduled delays in DEMO mode. A 48-hour follow-up timer is
+    #: correct behaviour and useless in a four-minute demo, so the clock — not
+    #: the workflow — is what gets sped up. Ignored in LIVE mode, where the
+    #: scheduler is Cloud Tasks and the delays are real.
+    demo_speedup: float = Field(default=1.0, ge=1.0, le=1_000_000.0)
+    #: Redelivers this fraction of events, to demonstrate idempotency on demand.
+    demo_duplicate_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+
     @property
     def is_demo(self) -> bool:
         return self.mode is Mode.DEMO

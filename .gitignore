@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+backend.hcl
+terraform.tfvars
+
+# Secrets — never committed. See docs/SECRETS.md.
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*credentials*.json
+*token*.json

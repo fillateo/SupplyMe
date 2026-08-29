@@ -18,6 +18,8 @@ _runtime: Runtime | None = None
 async def startup(settings: Settings | None = None, **kw: Any) -> Runtime:
     global _runtime
     settings = settings or get_settings()
+    kw.setdefault("demo_speedup", settings.demo_speedup)
+    kw.setdefault("duplicate_rate", settings.demo_duplicate_rate)
     _runtime = Runtime.build(settings, **kw)
     await _runtime.start()
     log.info("runtime_started", extra={"status": settings.mode.value})

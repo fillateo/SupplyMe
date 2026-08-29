@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Three typefaces, three epistemic registers:
+ *   serif  — what the founder said
+ *   sans   — what the system concluded
+ *   mono   — anything measured, quoted, or sourced
+ * Nothing crosses registers. A price is never set in sans.
+ */
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+  }
+  ::selection {
+    @apply bg-petrol-light text-petrol-deep;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-petrol ring-offset-2 ring-offset-paper rounded-sm;
+  }
+}
+
+@layer components {
+  /* The reading surface for machine findings. */
+  .card {
+    @apply bg-surface shadow-card rounded-md;
+  }
+  .rule {
+    @apply border-rule;
+  }
+  /* A column header in a data table. */
+  .col-label {
+    @apply font-mono text-2xs uppercase tracking-[0.12em] text-faint;
+  }
+  /* Any figure the system asserts. Clickable everywhere it appears. */
+  .figure {
+    @apply font-mono tabular-nums text-ink;
+  }
+  .sourced {
+    @apply cursor-pointer underline decoration-dotted decoration-rule
+           underline-offset-4 hover:decoration-petrol hover:text-petrol
+           transition-colors;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Hatched divider used only where two sources disagree. */
+.hatch {
+  background-image: repeating-linear-gradient(
+    45deg,
+    theme("colors.rose.DEFAULT") 0 1px,
+    transparent 1px 6px
+  );
+}

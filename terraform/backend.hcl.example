@@ -1,0 +1,3 @@
+# tofu init -backend-config=backend.hcl
+bucket = "CHANGE-ME-tfstate"
+prefix = "vendor-discovery"

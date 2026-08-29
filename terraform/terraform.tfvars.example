@@ -1,0 +1,19 @@
+project_id = "your-project-id"
+region     = "us-central1"
+image      = "us-central1-docker.pkg.dev/your-project-id/vendor-discovery/api:latest"
+
+# demo binds the mock providers and makes the service publicly readable so a
+# judge can open the link. live binds Gmail, Places and telephony and does not.
+mode            = "demo"
+approval_policy = "external"
+
+# Leave empty to resolve the newest model the project can actually reach.
+reasoning_model = ""
+fast_model      = ""
+
+max_instances = 4
+
+# Optional, but do set them.
+budget_amount_usd = 50
+billing_account   = ""
+alert_email       = ""
