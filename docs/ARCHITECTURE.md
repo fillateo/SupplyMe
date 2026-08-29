@@ -129,6 +129,13 @@ judging whether a source supports a brand relationship, drafting emails,
 extracting quotes from messy replies, planning call questions, writing the final
 narrative.
 
+**Chooses its own path in exactly one place:** vendor research, which runs as a
+Google ADK `LlmAgent` with `search_web`, `read_page`, `query_maps` and
+`search_videos`. Every tool call passes through `before_tool_callback`, which
+calls `policy.check("research", ...)` — so the allowlist is enforced at runtime,
+and the agent that reads attacker-controlled pages provably holds nothing that
+can email, call or spend.
+
 **Is not:** deciding what a claim is worth, deciding whether sources conflict,
 deciding what to do about a conflict, computing confidence, computing scores,
 ranking vendors, deciding whether to send or call, or deciding when a mission is

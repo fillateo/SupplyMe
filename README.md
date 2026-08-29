@@ -156,6 +156,39 @@ Evidence — hold no tool that can reach the outside world. That is deliberate: 
 a supplier's page convinces the model of something, the worst it can do is
 record a bad claim, which the evidence engine then rates on its source.
 
+### Where Google ADK is used, and why only there
+
+Six of the seven agents are single structured calls, because the *workflow*
+decides what happens next and the model only fills in shape. Research is the
+exception: which source is worth reading depends on what the last one said, so
+that stage is a **Google ADK `LlmAgent`** with real tools
+(`app/agents/adk_research.py`). It searches, reads pages and queries Maps until
+it can answer, and stops when it can — instead of being handed a fixed set of
+pre-fetched pages, most of which it would not have needed.
+
+A live run reading one supplier chose this sequence unprompted:
+
+```
+read_page   https://kemasan-wangi.example.com/
+search_web  "PT Kemasan Wangi Nusantara Indonesia 50ml glass perfume bottle MOQ"
+read_page   https://kemasan-wangi.example.com/produk/botol-parfum-50ml
+```
+
+and came back with `moq = 500`, quoted as *"Minimum order: 500 pcs per desain."*,
+`unit_price` and `lead_time_days` correctly reported as missing — because that
+page genuinely does not state them, which is what later causes the system to
+email and ask.
+
+ADK's `before_tool_callback` runs `app/domain/policy.py` on **every** tool
+invocation, so the permission table above executes rather than describing. A
+denial is returned to the model as a result, not raised, so the agent carries on
+with the tools it does hold.
+
+The tool loop gathers and writes up findings; a second call turns that write-up
+into the schema. Asking one turn to both choose the next tool call and emit
+strict JSON makes it do neither reliably, and everything downstream depends on
+the schema.
+
 ## Evidence model
 
 The LLM extracts claims. It does not decide what they are worth — `app/domain/evidence.py` does, from the source and nothing else:
@@ -237,7 +270,7 @@ Vertex AI, Secret Manager, Cloud Logging. All provisioned by OpenTofu in
 # Backend
 cd backend
 uv venv --python 3.12 .venv && VIRTUAL_ENV=.venv uv pip install -e ".[dev]"
-.venv/bin/python -m pytest                     # 170 tests, no cloud needed
+.venv/bin/python -m pytest                     # 188 tests, no cloud needed
 .venv/bin/python scripts/run_demo.py           # whole mission, scripted model, free
 .venv/bin/python scripts/run_demo.py --live-model --project YOUR_PROJECT
 
@@ -283,6 +316,7 @@ Everything is `VDS_`-prefixed and read only in `app/config.py`.
 | `VDS_MAX_CALLS_PER_MISSION` | `3` | cost guard |
 | `VDS_MAX_OUTREACH_PER_MISSION` | `12` | cost guard |
 | `VDS_DEMO_SPEEDUP` | `1.0` | compresses scheduled delays in demo mode only |
+| `VDS_USE_ADK_RESEARCH` | `true` | research as an ADK tool loop; off falls back to pre-fetching |
 
 A missing key never fails the mission — the provider degrades to its mock and
 the substitution is reported at `/api/health`, so a demo can never quietly claim
@@ -291,11 +325,12 @@ to have called a Google API it did not call.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest -q     # 170 tests, ~8 seconds, no network
+.venv/bin/python -m pytest -q     # 188 tests, ~8 seconds, no network
 ```
 
 - **Unit** — evidence classification, identity resolution, quote normalisation,
-  conflict detection, scoring, number parsing, policy, injection defence.
+  conflict detection, scoring, number parsing, policy, injection defence, and
+  the ADK tool guard.
 - **Integration** — the whole workflow over the real event bus, plus the HTTP
   surface with a `TestClient`.
 - **Failure** — every message delivered twice, search outage, Maps timeout,

@@ -91,6 +91,12 @@ class Settings(BaseSettings):
     #: Redelivers this fraction of events, to demonstrate idempotency on demand.
     demo_duplicate_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
+    #: Run vendor research as a Google ADK tool-use loop, letting the agent
+    #: decide which sources to read, instead of pre-fetching a fixed set. Off
+    #: when the model is scripted, because the tests assert on workflow
+    #: behaviour and a tool loop is not deterministic.
+    use_adk_research: bool = True
+
     @property
     def is_demo(self) -> bool:
         return self.mode is Mode.DEMO

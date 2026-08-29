@@ -27,7 +27,9 @@ class Runtime:
     def __init__(self, providers: Any) -> None:
         self.providers = providers
         self.settings: Settings = providers.settings
-        self.agents = Agents.build(providers.llm, providers.store)
+        self.agents = Agents.build(
+            providers.llm, providers.store, research=_research_agent(providers)
+        )
         self.orchestrator = Orchestrator(providers, self.agents)
         self.repo = Repo(providers.store)
         if hasattr(providers.bus, "subscribe"):
@@ -76,3 +78,28 @@ class Runtime:
         """Wait for the local bus to go idle. Only meaningful for LocalBus."""
         if hasattr(self.providers.bus, "drain"):
             await self.providers.bus.drain(timeout=timeout)
+
+
+def _research_agent(providers: Any) -> Any:
+    """Build the ADK research agent when a real model is in play.
+
+    A tool-use loop is the right shape for research and the wrong shape for a
+    test: it is non-deterministic by design. So a scripted model always gets the
+    pre-fetching agent, and the workflow assertions stay stable either way —
+    both satisfy the same `investigate` contract.
+    """
+    settings: Settings = providers.settings
+    if not settings.use_adk_research:
+        return None
+    if type(providers.llm).__name__ != "GeminiLLM":
+        return None
+    try:
+        from .adapters.gemini_llm import _RESOLVED
+
+        model = settings.reasoning_model or _RESOLVED.get("reasoning") or "gemini-2.5-flash"
+        from .agents.adk_research import AdkResearchAgent
+
+        return AdkResearchAgent(providers, model, providers.store, llm=providers.llm)
+    except Exception:
+        log.exception("could not build the ADK research agent; falling back")
+        return None

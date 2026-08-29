@@ -307,14 +307,26 @@ async def handle_research_started(orc: Orchestrator, event: Event) -> list[Event
     vendor = await orc.repo.vendor(event.payload["vendor_id"])
     await _set_status(orc, vendor, VendorStatus.RESEARCHING)
 
-    pages, hits, place, videos = await _research_sources(orc, vendor, mission)
-
     node_names = await _node_names(orc, mission.id, vendor.node_keys)
-    research = await orc.agents.research.investigate(
-        vendor_name=vendor.name, node_names=node_names, pages=pages, hits=hits,
-        place=place, videos=videos, wanted_fields=list(CONTACTABLE_FIELDS),
-        mission_id=mission.id, vendor_id=vendor.id,
-    )
+    wanted = list(CONTACTABLE_FIELDS)
+
+    if getattr(orc.agents.research, "name", "") == "research" and hasattr(
+        orc.agents.research, "_runner"
+    ):
+        # The ADK agent fetches its own sources; pre-fetching for it would pay
+        # for pages it may never need.
+        research = await orc.agents.research.investigate(
+            vendor_name=vendor.name, node_names=node_names, wanted_fields=wanted,
+            market=mission.market, website=vendor.website,
+            mission_id=mission.id, vendor_id=vendor.id,
+        )
+    else:
+        pages, hits, place, videos = await _research_sources(orc, vendor, mission)
+        research = await orc.agents.research.investigate(
+            vendor_name=vendor.name, node_names=node_names, pages=pages, hits=hits,
+            place=place, videos=videos, wanted_fields=wanted,
+            mission_id=mission.id, vendor_id=vendor.id,
+        )
 
     if research.suspicious_content:
         log.warning(
