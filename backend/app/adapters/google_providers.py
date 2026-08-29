@@ -19,11 +19,12 @@ import logging
 import re
 import urllib.robotparser
 from html.parser import HTMLParser
+from typing import ClassVar
 
 import httpx
 
 from ..config import Settings
-from ..ports.base import CallResult, InboundMail, PageContent, Place, SearchHit, SentMail, Video
+from ..ports.base import PageContent, Place, SearchHit, Video
 
 log = logging.getLogger(__name__)
 
@@ -35,7 +36,9 @@ MAX_PAGE_BYTES = 800_000
 class _TextExtractor(HTMLParser):
     """Minimal readable-text extraction. No JS, no heuristic article detection."""
 
-    _SKIP = {"script", "style", "noscript", "svg", "head"}
+    _SKIP: ClassVar[frozenset[str]] = frozenset(
+        {"script", "style", "noscript", "svg", "head"}
+    )
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -115,7 +118,6 @@ class GoogleSearchProvider:
 
     async def _grounded(self, query: str, limit: int) -> list[SearchHit]:
         """Gemini + Google Search grounding, read for its citations."""
-        from google import genai
         from google.genai import types
 
         from .gemini_llm import _client, resolve_model

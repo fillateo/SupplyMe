@@ -1,0 +1,138 @@
+# Architecture
+
+Only components that exist are drawn here.
+
+## Request and event paths
+
+```
+                 ┌──────────────────────────────────────────────┐
+   browser ────► │ Next.js console (Cloud Run or local)          │
+                 │  proxies /api/* server-side — no credential   │
+                 │  ever reaches client JavaScript               │
+                 └───────────────────┬──────────────────────────┘
+                                     │ HTTPS
+                 ┌───────────────────▼──────────────────────────┐
+                 │ FastAPI on Cloud Run                          │
+                 │  /api/*            console reads + decisions  │
+                 │  /events/pubsub    Pub/Sub push               │
+                 │  /events/task      Cloud Tasks                │
+                 │  /webhooks/gmail   Gmail watch notification   │
+                 │  /webhooks/voice   telephony turn + status    │
+                 └───────────────────┬──────────────────────────┘
+                                     │
+                 ┌───────────────────▼──────────────────────────┐
+                 │ Orchestrator (app/workflow/orchestrator.py)   │
+                 │  claim dedup key → run handler → emit next    │
+                 │  lease, bounded retry, drop unprocessable     │
+                 └───┬─────────────────────────────┬────────────┘
+                     │                             │
+        ┌────────────▼───────────┐     ┌───────────▼─────────────┐
+        │ Agents (Gemini/Vertex) │     │ Deterministic engines   │
+        │ mission, supply chain, │     │ evidence, identity,     │
+        │ discovery, research,   │     │ quotes, conflicts,      │
+        │ brand, comms, recomm.  │     │ trust, scoring, numbers │
+        └────────────┬───────────┘     └───────────┬─────────────┘
+                     │                             │
+        ┌────────────▼─────────────────────────────▼─────────────┐
+        │ Ports (app/ports/base.py) — the LIVE/DEMO seam          │
+        │  Search  Maps  Video  Mail  Voice  Store  Bus  Tasks    │
+        └────────────┬─────────────────────────────┬─────────────┘
+                     │                             │
+        ┌────────────▼───────────┐     ┌───────────▼─────────────┐
+        │ Google adapters        │     │ Mock adapters           │
+        │ Programmable Search /  │     │ demo_world.py fixtures  │
+        │ Gemini grounding,      │     │ raise real events on a  │
+        │ Places, YouTube,       │     │ compressed clock        │
+        │ Gmail, Twilio          │     │                         │
+        └────────────┬───────────┘     └───────────┬─────────────┘
+                     └──────────────┬──────────────┘
+                                    ▼
+                    Firestore · Pub/Sub · Cloud Tasks · Cloud Logging
+```
+
+## Why the orchestrator owns durability
+
+Handlers are deliberately naive: read state, do work, return the events that
+should happen next. Everything that makes the workflow survive production lives
+one level up, so no handler can forget it:
+
+| Concern | Mechanism |
+| --- | --- |
+| Redelivery | `store.reserve("evt:" + event.key)` before any work |
+| Worker died mid-handler | Reservations are leases; an expired lease is taken over |
+| Transient failure | Bounded retry with exponential backoff, then mission failure |
+| Unprocessable event | `MissionNotFound` / `VendorNotFound` are dropped, never retried |
+| Irreversible action | A second reservation keyed on `mission+vendor+action+version` |
+| Concurrent writers | `store.mutate` — a Firestore transaction, an asyncio lock in memory |
+
+## The dedup key
+
+```python
+Event.key = sha256(mission_id, type, canonical_json(payload))
+```
+
+Derived from the entire payload, not a chosen subset. An earlier version keyed
+on a fixed list of id fields and silently collapsed distinct events that carried
+none of them — three different supplier replies became one, and every
+`vendor.updated` after the first was discarded as a duplicate. Hashing the whole
+payload makes a new logical event a new key by construction; only a true
+redelivery, which carries a byte-identical payload, collides.
+
+This is why every emitter that can fire twice for the same vendor passes a
+discriminator: `version=call.id`, `version=quote.id`, `version=f"{thread.id}:followup:{n}"`.
+
+## Events
+
+| Event | Emitted by | Does |
+| --- | --- | --- |
+| `mission.created` | API | Reads the objective, sets scoring weights |
+| `requirements.created` | mission | Decomposes into supply-chain nodes |
+| `supply_chain.planned` | supply chain | Fans out one discovery branch per node |
+| `vendor.discovery.started` | fan-out | Search + Places, identity resolution |
+| `vendor.discovered` | discovery | Starts research on a new vendor |
+| `vendor.research.started` | discovery | Reads sources, records evidence, applies facts |
+| `evidence.found` | research | Timeline marker |
+| `brand.claim.found` | research | Investigates a claimed customer |
+| `brand.claim.adjudicated` | brand evidence | Classification recorded |
+| `vendor.updated` | many | **The routing decision** |
+| `vendor.qualified` / `vendor.rejected` | routing | Terminal for that vendor |
+| `vendor.contact.required` | routing | Drafts an email |
+| `email.draft.created` | comms | Timeline marker |
+| `approval.requested` | comms | Pauses; stores the event to replay |
+| `approval.granted` / `approval.denied` | API | Replays or cancels the paused event |
+| `email.sent` | routing | **External action** — reserved before sending |
+| `email.received` | Gmail push / mock | Extracts the quote, re-derives facts |
+| `quote.extracted` | comms | Timeline marker |
+| `conflict.detected` | evidence engine | Routes to a follow-up or a call |
+| `followup.required` | conflict / timer | Asks only what is still missing |
+| `call.required` | routing / conflict | Plans the questions |
+| `call.started` | routing | **External action** — reserved and budgeted |
+| `call.completed` | telephony / mock | Extracts answers, settles conflicts |
+| `recommendation.ready` | completion check | Scores everything, writes the report |
+| `mission.completed` / `mission.failed` | terminal | — |
+
+## Firestore collections
+
+`missions` · `supply_chain_nodes` · `vendors` · `evidence` ·
+`brand_relationships` · `email_threads` · `calls` · `quotes` · `conflicts` ·
+`approvals` · `recommendations` · `agent_runs` · `idempotency`
+
+Plus `missions/{id}/workflow_events` — the activity timeline, written on every
+handler start, success, retry, drop and exhaustion. This subcollection is the
+proof of action: the console renders it directly and nothing else.
+
+## Where the LLM is and is not
+
+**Is:** reading the objective, decomposing the product, writing search queries,
+deciding which results are real suppliers, extracting claims from pages,
+judging whether a source supports a brand relationship, drafting emails,
+extracting quotes from messy replies, planning call questions, writing the final
+narrative.
+
+**Is not:** deciding what a claim is worth, deciding whether sources conflict,
+deciding what to do about a conflict, computing confidence, computing scores,
+ranking vendors, deciding whether to send or call, or deciding when a mission is
+done. All of that is deterministic and unit-tested — see `app/domain/`.
+
+The recommendation agent receives a ranking that is already computed and is told
+it may not reorder it. If it could, the scores would be decoration.

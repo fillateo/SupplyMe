@@ -168,7 +168,8 @@ class CommunicationAgent(Agent):
         prompt = (
             f"Supplier to call: {vendor_name}\n"
             f"Why we are calling instead of emailing: {reason}\n"
-            f"Product: {product}, first batch {quantity if quantity is not None else 'unspecified'}\n"
+            f"Product: {product}, first batch "
+            f"{quantity if quantity is not None else 'unspecified'}\n"
             f"Facts still missing: {', '.join(missing_fields) or 'none'}\n"
             + (f"Disagreement to resolve: {conflict_question}\n" if conflict_question else "")
         )
@@ -181,7 +182,9 @@ class CommunicationAgent(Agent):
         self, *, transcript: list[dict[str, str]], questions: list[str],
         mission_id: str = "", vendor_id: str | None = None,
     ) -> CallExtraction:
-        rendered = "\n".join(f"{turn.get('speaker', '?')}: {turn.get('text', '')}" for turn in transcript)
+        rendered = "\n".join(
+            f"{turn.get('speaker', '?')}: {turn.get('text', '')}" for turn in transcript
+        )
         prompt = (
             "Questions the call was meant to answer:\n"
             + "\n".join(f"- {q}" for q in questions)

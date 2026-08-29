@@ -110,7 +110,9 @@ def _capability(vendor: Vendor, evidence: Sequence[Evidence]) -> Dimension:
     )
 
 
-def _field_dimension(name: str, vendor: Vendor, field: str, conflicts: Sequence[Conflict]) -> Dimension:
+def _field_dimension(
+    name: str, vendor: Vendor, field: str, conflicts: Sequence[Conflict]
+) -> Dimension:
     fact = vendor.fact(field)
     open_conflict = any(
         c.field == field and c.status is not ConflictStatus.RESOLVED for c in conflicts

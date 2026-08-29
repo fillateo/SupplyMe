@@ -161,6 +161,7 @@ const STATUS_TONE: Record<string, string> = {
   sent: "bg-amber-light text-amber",
   awaiting_approval: "bg-rose-light text-rose",
   awaiting_response: "bg-amber-light text-amber",
+  not_attempted: "bg-slate2-light text-muted",
 };
 
 export function StatusChip({ status, live = false }: { status: string; live?: boolean }) {

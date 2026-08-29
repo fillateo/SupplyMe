@@ -159,7 +159,7 @@ class ScoringWeights(BaseModel):
     evidence: float = 0.15
     logistics: float = 0.10
 
-    def normalized(self) -> "ScoringWeights":
+    def normalized(self) -> ScoringWeights:
         raw = self.model_dump()
         total = sum(raw.values())
         if total <= 0:
@@ -341,6 +341,10 @@ class CallStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
     NO_ANSWER = "no_answer"
+    #: Wanted, but the mission's call budget was spent on higher-priority calls.
+    #: Distinct from FAILED so a reader is not told the carrier rejected a call
+    #: that was never placed.
+    NOT_ATTEMPTED = "not_attempted"
 
 
 class Call(Base):

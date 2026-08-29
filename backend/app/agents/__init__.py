@@ -23,7 +23,7 @@ class Agents:
     recommendation: RecommendationAgent
 
     @classmethod
-    def build(cls, llm: Any, store: Any = None) -> "Agents":
+    def build(cls, llm: Any, store: Any = None) -> Agents:
         return cls(
             mission=MissionAgent(llm, store),
             supply_chain=SupplyChainAgent(llm, store),
@@ -36,6 +36,12 @@ class Agents:
 
 
 __all__ = [
-    "Agents", "MissionAgent", "SupplyChainAgent", "DiscoveryAgent",
-    "ResearchAgent", "BrandEvidenceAgent", "CommunicationAgent", "RecommendationAgent",
+    "Agents",
+    "BrandEvidenceAgent",
+    "CommunicationAgent",
+    "DiscoveryAgent",
+    "MissionAgent",
+    "RecommendationAgent",
+    "ResearchAgent",
+    "SupplyChainAgent",
 ]

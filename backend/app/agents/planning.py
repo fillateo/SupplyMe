@@ -78,7 +78,8 @@ class SupplyChainAgent(Agent):
         prompt = (
             f"Product: {brief.product}\n"
             f"Specification: {brief.unit_spec or 'not stated'}\n"
-            f"First batch quantity: {brief.quantity if brief.quantity is not None else 'not stated'}\n"
+            f"First batch quantity: "
+            f"{brief.quantity if brief.quantity is not None else 'not stated'}\n"
             f"Market: {brief.market or 'not stated'}\n"
             f"Priorities: {'; '.join(brief.priorities) or 'none stated'}\n"
             f"Budget note: {brief.budget_note or 'none stated'}\n\n"

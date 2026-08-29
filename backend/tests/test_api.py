@@ -134,7 +134,6 @@ class TestEventIngress:
 
     def test_a_valid_push_is_processed(self, client, mission_id):
         import base64
-        import json
 
         from app.domain.events import Event, EventType
 

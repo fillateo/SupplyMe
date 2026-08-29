@@ -39,7 +39,8 @@ export const api = {
   activity: (id: string) => get<ActivityEntry[]>(`/api/missions/${id}/activity`),
   communications: (id: string) =>
     get<{ email: { sent: number; responded: number; awaiting: number; threads: Thread[] };
-      calls: { completed: number; scheduled: number; failed: number; items: Call[] } }>(
+      calls: { completed: number; scheduled: number; failed: number;
+        not_attempted: number; items: Call[] } }>(
       `/api/missions/${id}/communications`),
   recommendation: (id: string) => get<Recommendation>(`/api/missions/${id}/recommendation`),
   approvals: (id: string) => get<Approval[]>(`/api/missions/${id}/approvals`),

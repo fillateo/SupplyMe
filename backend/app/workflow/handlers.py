@@ -16,7 +16,8 @@ from typing import Any
 
 from ..domain import conflicts as conflict_engine
 from ..domain import evidence as evidence_engine
-from ..domain import identity, numbers, quotes as quote_engine, scoring, trust
+from ..domain import identity, numbers, scoring, trust
+from ..domain import quotes as quote_engine
 from ..domain.events import Event, EventType
 from ..domain.ids import slug, stable_id
 from ..domain.models import (
@@ -52,7 +53,12 @@ log = logging.getLogger(__name__)
 #: Fields the workflow will contact a supplier to obtain. Ordered by how much
 #: they matter to a go/no-go decision on a first production run.
 CRITICAL_FIELDS = ("moq", "unit_price", "lead_time_days")
-CONTACTABLE_FIELDS = CRITICAL_FIELDS + ("sample_lead_time_days", "customization", "payment_terms")
+CONTACTABLE_FIELDS = (
+    *CRITICAL_FIELDS,
+    "sample_lead_time_days",
+    "customization",
+    "payment_terms",
+)
 
 #: How long to wait for a supplier before following up, and how many times.
 FOLLOW_UP_DELAY_SECONDS = 48 * 3600
@@ -64,6 +70,14 @@ MAX_FOLLOW_UPS = 2
 #: never produces a recommendation.
 MAX_THREADS_PER_VENDOR = 2
 MAX_CALLS_PER_VENDOR = 2
+
+#: Calls reserved for settling disagreements. A call that resolves a conflict is
+#: worth more than one that merely fills a blank: the blank can be asked by
+#: email, and the disagreement — by definition — already survived being asked in
+#: writing. Without this reserve a mission spends its whole call budget
+#: cold-calling suppliers who never published an email address, and then has
+#: nothing left when the MOQ on its best candidate turns out to be disputed.
+CALLS_RESERVED_FOR_CONFLICTS = 1
 
 
 # ==========================================================================
@@ -335,7 +349,9 @@ async def handle_research_started(orc: Orchestrator, event: Event) -> list[Event
     ]
     for brand in dict.fromkeys(research.brand_claims):
         emitted.append(
-            event.child(EventType.BRAND_CLAIM_FOUND, vendor_id=vendor.id, brand=brand, version=brand)
+            event.child(
+                EventType.BRAND_CLAIM_FOUND, vendor_id=vendor.id, brand=brand, version=brand
+            )
         )
     emitted.extend(await _detect_conflicts(orc, event, vendor, all_evidence))
     emitted.append(
@@ -470,7 +486,7 @@ async def handle_brand_claim(orc: Orchestrator, event: Event) -> list[Event]:
         source_url=vendor.website, source_title=vendor.name,
         excerpt=f"Supplier states a relationship with {brand}.",
     )
-    considered = supporting + [supplier_claim]
+    considered = [*supporting, supplier_claim]
 
     classification, relationship_type, confidence, independent = (
         evidence_engine.classify_brand_relationship(considered)
@@ -634,19 +650,24 @@ async def _abandon_conflicts(orc: Orchestrator, vendor: Vendor, why: str) -> Non
         )
 
 
-async def _take_budget(orc: Orchestrator, mission_id: str, field: str, cap: int) -> bool:
+async def _take_budget(
+    orc: Orchestrator, mission_id: str, field: str, cap: int, *, reserve: int = 0
+) -> bool:
     """Atomically consume one unit of a mission budget.
 
     The check has to happen in the same transaction as the increment. Doing it
     from a mission snapshot read earlier lets a dozen parallel vendor branches
     all observe `calls_made = 2` and all decide they are within a cap of three.
+
+    `reserve` withholds the last N units from lower-priority callers.
     """
     granted = False
+    effective = max(cap - reserve, 0)
 
     def _apply(mission: Mission) -> None:
         nonlocal granted
         current = getattr(mission, field)
-        if current >= cap:
+        if current >= effective:
             return
         setattr(mission, field, current + 1)
         granted = True
@@ -715,7 +736,8 @@ async def handle_contact_required(orc: Orchestrator, event: Event) -> list[Event
     draft = await orc.agents.communication.draft_email(
         vendor_name=vendor.name, vendor_facts=facts, product=mission.product or mission.objective,
         quantity=mission.quantity, unit_spec=mission.unit_spec, market=mission.market,
-        node_names=node_names, missing_fields=list(event.payload.get("missing") or vendor.missing_fields),
+        node_names=node_names,
+        missing_fields=list(event.payload.get("missing") or vendor.missing_fields),
         mission_id=mission.id, vendor_id=vendor.id,
     )
 
@@ -1015,7 +1037,7 @@ def _is_bounce(body: str) -> bool:
 @on(EventType.CONFLICT_DETECTED)
 async def handle_conflict_detected(orc: Orchestrator, event: Event) -> list[Event]:
     """Decide how to settle a disagreement, and route to it."""
-    mission = await orc.repo.mission(event.mission_id)
+    await orc.repo.mission(event.mission_id)   # drops the event if the mission is gone
     vendor = await orc.repo.vendor(event.payload["vendor_id"])
     conflict = await orc.repo.load(Conflict, event.payload["conflict_id"])
     if conflict is None or conflict.status is not ConflictStatus.OPEN:
@@ -1216,10 +1238,20 @@ async def handle_call_started(orc: Orchestrator, event: Event) -> list[Event]:
     if not claimed:
         return []
 
+    # A call raised to settle a disagreement may draw on the reserve; a call to
+    # fill in a missing field may not.
+    settles_conflict = any(
+        c.status is ConflictStatus.RESOLVING for c in await orc.repo.vendor_conflicts(vendor.id)
+    )
     if not await _take_budget(
-        orc, mission.id, "calls_made", orc.settings.max_calls_per_mission
+        orc, mission.id, "calls_made", orc.settings.max_calls_per_mission,
+        reserve=0 if settles_conflict else CALLS_RESERVED_FOR_CONFLICTS,
     ):
-        call.status = CallStatus.FAILED
+        call.status = CallStatus.NOT_ATTEMPTED
+        call.reason = (
+            f"{call.reason}; not placed — the mission's call budget was already spent "
+            "on higher-priority calls"
+        )
         await orc.repo.save(call)
         await _abandon_conflicts(orc, vendor, "the mission's call budget is exhausted")
         return [
@@ -1632,9 +1664,13 @@ async def _evidence_from_supplier(
         facts.append(("sample_lead_time_days", quote.sample_lead_time_days,
                       f"sample lead time {quote.sample_lead_time_days} days"))
     if quote.payment_terms:
-        facts.append(("payment_terms", quote.payment_terms, f"payment terms: {quote.payment_terms}"))
+        facts.append(
+            ("payment_terms", quote.payment_terms, f"payment terms: {quote.payment_terms}")
+        )
     if quote.customization:
-        facts.append(("customization", quote.customization, f"customization: {quote.customization}"))
+        facts.append(
+            ("customization", quote.customization, f"customization: {quote.customization}")
+        )
 
     records = []
     for field, value, claim in facts:

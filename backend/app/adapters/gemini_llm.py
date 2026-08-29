@@ -80,7 +80,7 @@ async def resolve_model(settings: Settings, *, prefer_fast: bool = False) -> str
                 contents="ping",
                 config=types.GenerateContentConfig(max_output_tokens=8),
             )
-        except Exception as exc:  # noqa: BLE001 - any failure means "try the next one"
+        except Exception as exc:
             log.debug("model %s unavailable: %s", candidate, exc)
             continue
         _RESOLVED[cache_key] = candidate
@@ -166,7 +166,7 @@ class GeminiLLM:
                 last = exc
                 if attempt == MAX_ATTEMPTS - 1:
                     raise LLMError(f"{agent}: {model} timed out") from exc
-            except Exception as exc:  # noqa: BLE001 - classify, then decide
+            except Exception as exc:
                 last = exc
                 if not _is_retryable(exc) or attempt == MAX_ATTEMPTS - 1:
                     raise LLMError(f"{agent}: {model} failed: {exc}") from exc

@@ -123,9 +123,12 @@ def merge(primary: Vendor, other: Vendor) -> Vendor:
         if getattr(primary, field, None) in (None, "") and getattr(other, field, None):
             setattr(primary, field, getattr(other, field))
 
-    if other.name and normalize_name(other.name) != normalize_name(primary.name):
-        if other.name not in primary.aliases:
-            primary.aliases.append(other.name)
+    if (
+        other.name
+        and normalize_name(other.name) != normalize_name(primary.name)
+        and other.name not in primary.aliases
+    ):
+        primary.aliases.append(other.name)
     for alias in other.aliases:
         if alias not in primary.aliases and normalize_name(alias) != normalize_name(primary.name):
             primary.aliases.append(alias)

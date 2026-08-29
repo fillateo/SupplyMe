@@ -13,7 +13,6 @@ from typing import Any, Protocol, runtime_checkable
 
 from ..domain.events import Event
 
-
 # --------------------------------------------------------------------------
 # Search / web
 # --------------------------------------------------------------------------

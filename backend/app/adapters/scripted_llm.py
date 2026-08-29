@@ -45,6 +45,7 @@ class ScriptedLLM:
         result = handler(prompt, untrusted)
         if not isinstance(result, schema):
             raise TypeError(
-                f"handler for '{agent}' returned {type(result).__name__}, expected {schema.__name__}"
+                f"handler for '{agent}' returned {type(result).__name__}, "
+                f"expected {schema.__name__}"
             )
         return result

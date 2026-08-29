@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .evidence import DIRECT_SOURCES, SOURCE_WEIGHT
-from .models import Conflict, ConflictStatus, Evidence, SourceType
+from .models import Conflict, ConflictStatus, Evidence
 from .numbers import as_number
 
 #: Relative tolerance below which two numbers are the same claim, not a conflict.

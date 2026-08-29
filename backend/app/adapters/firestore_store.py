@@ -16,7 +16,6 @@ import asyncio
 import time
 from typing import Any
 
-from google.api_core import exceptions as gexc
 from google.cloud import firestore
 
 _TIMELINE = "workflow_events"
@@ -39,7 +38,11 @@ class FirestoreStore:
     ) -> list[dict[str, Any]]:
         query = self._client.collection(collection)
         for key, value in (where or {}).items():
-            operator = "array_contains" if isinstance(value, str) and key.endswith("_keys") else "=="
+            operator = (
+                "array_contains"
+                if isinstance(value, str) and key.endswith("_keys")
+                else "=="
+            )
             if isinstance(value, (list, tuple, set)):
                 operator, value = "in", list(value)
             query = query.where(filter=firestore.FieldFilter(key, operator, value))

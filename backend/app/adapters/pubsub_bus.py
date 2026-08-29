@@ -9,7 +9,6 @@ own `enable_message_ordering` is not load-bearing.
 from __future__ import annotations
 
 import asyncio
-import json
 
 from google.cloud import pubsub_v1
 

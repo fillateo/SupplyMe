@@ -13,7 +13,7 @@ from typing import Any
 
 from .adapters import registry
 from .agents import Agents
-from .config import Mode, Settings, get_settings
+from .config import Settings, get_settings
 from .domain.events import Event, EventType
 from .domain.models import Mission, MissionStatus
 from .workflow import handlers as _handlers  # noqa: F401  (registers handlers)
@@ -41,7 +41,7 @@ class Runtime:
         llm: Any | None = None,
         demo_speedup: float = 1.0,
         duplicate_rate: float = 0.0,
-    ) -> "Runtime":
+    ) -> Runtime:
         settings = settings or get_settings()
         providers = registry.build(
             settings, llm=llm, demo_speedup=demo_speedup, duplicate_rate=duplicate_rate

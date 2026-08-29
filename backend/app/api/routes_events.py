@@ -41,7 +41,7 @@ async def pubsub_push(
         event = Event.model_validate(payload)
     except (ValueError, binascii.Error) as exc:
         # Unparseable: acknowledge it. Redelivering it will not make it parse.
-        log.error("pubsub_push_undecodable", extra={"error": str(exc)})
+        log.warning("pubsub_push_undecodable", extra={"error": str(exc)})
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     log.info(
@@ -62,7 +62,7 @@ async def cloud_task(
     try:
         event = Event.model_validate(payload)
     except ValueError as exc:
-        log.error("cloud_task_undecodable", extra={"error": str(exc)})
+        log.warning("cloud_task_undecodable", extra={"error": str(exc)})
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     log.info(

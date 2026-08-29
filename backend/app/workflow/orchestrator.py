@@ -99,7 +99,7 @@ class Orchestrator:
             await self._record(event, status="dropped", error=str(exc))
             self._count("dropped")
             return
-        except Exception as exc:  # noqa: BLE001 - every failure is retried the same way
+        except Exception as exc:
             await self._on_failure(event, exc)
             return
 
@@ -171,7 +171,7 @@ class Orchestrator:
                 "mission_id": event.mission_id, "retry_count": attempt,
                 "error": f"{type(exc).__name__}: {exc}",
             },
-            exc_info=True,
+            exc_info=exc,
         )
         self._count("failed")
 

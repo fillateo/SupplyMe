@@ -241,7 +241,7 @@ def _draft_email(prompt: str) -> EmailDraft:
         + "\n\nThank you."
     )
     return EmailDraft(
-        subject=f"Quotation request — {quantity} × 50ml perfume components",
+        subject=f"Quotation request - {quantity} x 50ml perfume components",
         body=body, questions_asked=questions,
         personalization_basis=facts[:2],
     )
@@ -288,12 +288,11 @@ def _extract_quote(prompt: str, body: str) -> QuoteExtraction:
                 line_items[key] = _money(match.group(1))
                 break
 
-    if "all-in price" in body or "complete package" in body:
-        if match := re.search(rf"Rp\s*{_NUM}\s*per unit", body):
-            line_items = {"package": _money(match.group(1))}
-    if not line_items:
-        if match := re.search(rf"Rp\s*{_NUM}\s*(?:each|/pcs|per pcs)", body):
-            line_items = {"package": _money(match.group(1))}
+    bundled = "all-in price" in body or "complete package" in body
+    if bundled and (match := re.search(rf"Rp\s*{_NUM}\s*per unit", body)):
+        line_items = {"package": _money(match.group(1))}
+    if not line_items and (match := re.search(rf"Rp\s*{_NUM}\s*(?:each|/pcs|per pcs)", body)):
+        line_items = {"package": _money(match.group(1))}
 
     # The quantity must be followed by a unit, or "MOQ for 50ml flacons is 5,000"
     # reads the 50 out of the product name.

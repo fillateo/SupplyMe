@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.config import ApprovalPolicy, Mode, Settings
+from app.domain.events import Event, EventType
 from app.domain.models import (
     Approval,
     ApprovalStatus,
@@ -23,7 +24,6 @@ from app.domain.models import (
     Vendor,
     VendorStatus,
 )
-from app.domain.events import Event, EventType
 from app.runtime import Runtime
 
 from .conftest import OBJECTIVE, run_to_completion
@@ -326,3 +326,35 @@ class TestResolvedConflictsAffectTheOutcome:
         )
         assert "fits" in moq_component["explanation"]
         assert moq_component["raw"] == 1.0
+
+
+class TestCallBudgetPriority:
+    """A disputed fact outranks a blank one when calls are scarce."""
+
+    async def test_a_conflict_call_may_draw_on_the_reserve(self):
+        from app.domain.models import Mission as MissionModel
+        from app.workflow.handlers import CALLS_RESERVED_FOR_CONFLICTS, _take_budget
+
+        settings = Settings(mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS,
+                            max_calls_per_mission=2)
+        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
+        mission = MissionModel(objective="x", mode="demo")
+        await runtime.repo.save(mission)
+
+        cap = settings.max_calls_per_mission
+        # Ordinary calls may take everything except the reserve.
+        for _ in range(cap - CALLS_RESERVED_FOR_CONFLICTS):
+            assert await _take_budget(
+                runtime.orchestrator, mission.id, "calls_made", cap,
+                reserve=CALLS_RESERVED_FOR_CONFLICTS,
+            )
+        # The next ordinary call is refused...
+        assert not await _take_budget(
+            runtime.orchestrator, mission.id, "calls_made", cap,
+            reserve=CALLS_RESERVED_FOR_CONFLICTS,
+        )
+        # ...but a conflict call still gets through.
+        assert await _take_budget(runtime.orchestrator, mission.id, "calls_made", cap, reserve=0)
+        # And the hard cap still holds.
+        assert not await _take_budget(runtime.orchestrator, mission.id, "calls_made", cap, reserve=0)
+        await runtime.stop()

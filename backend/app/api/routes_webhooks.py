@@ -15,7 +15,7 @@ import logging
 from fastapi import APIRouter, Depends, Form, Request, Response, status
 
 from ..domain.events import Event, EventType
-from ..domain.models import Call, CallStatus, EmailThread, Mission
+from ..domain.models import Call, CallStatus, EmailThread
 from ..runtime import Runtime
 from .deps import runtime, verify_push_token
 
@@ -45,7 +45,7 @@ async def gmail_push(
     try:
         notification = json.loads(base64.b64decode(raw).decode())
     except ValueError:
-        log.error("gmail_push_undecodable")
+        log.warning("gmail_push_undecodable")
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     history_id = str(notification.get("historyId", ""))
@@ -54,8 +54,8 @@ async def gmail_push(
 
     try:
         messages, new_token = await rt.providers.mail.history(since)
-    except Exception as exc:  # noqa: BLE001 - a Gmail outage must not 500 the webhook
-        log.error("gmail_history_failed", extra={"error": str(exc)})
+    except Exception as exc:
+        log.warning("gmail_history_failed", extra={"error": str(exc)})
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     await rt.providers.store.put(
@@ -134,7 +134,9 @@ async def voice_turn(
 
 @router.post("/voice/{call_id}/status", status_code=status.HTTP_204_NO_CONTENT)
 async def voice_status(
-    call_id: str, rt: Runtime = Depends(runtime), CallStatus_: str = Form(default="", alias="CallStatus")
+    call_id: str,
+    rt: Runtime = Depends(runtime),
+    CallStatus_: str = Form(default="", alias="CallStatus"),
 ) -> Response:
     """Terminal call status. A call nobody answered still has to move the mission on."""
     call = await rt.repo.load(Call, call_id)

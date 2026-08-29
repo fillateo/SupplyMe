@@ -38,3 +38,23 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "TRY", "LOG"]
+ignore = [
+    # `Depends(...)` and `Header(...)` in defaults is how FastAPI declares
+    # dependencies. Flagging it would mean writing the framework wrong.
+    "B008",
+    # Broad excepts are deliberate at the two boundaries that must not crash a
+    # mission: the orchestrator's retry path and provider fan-out. Each carries
+    # a comment saying why.
+    "BLE001",
+    # Long messages inside raise() read better than a hoisted variable.
+    "TRY003",
+    "EM101",
+    "EM102",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests name things for readability, not for a linter.
+"tests/*" = ["E501", "RUF012"]

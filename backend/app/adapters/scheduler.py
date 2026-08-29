@@ -9,7 +9,6 @@ two-day follow-up is observable inside a demo.
 from __future__ import annotations
 
 import asyncio
-import json
 from typing import Any
 
 from ..domain.events import Event
@@ -31,9 +30,8 @@ class LocalScheduler:
             try:
                 await asyncio.sleep(delay_seconds / self._speedup)
                 await self._bus.publish(event)
-            except asyncio.CancelledError:
-                raise
             finally:
+                # Runs on cancellation too, so a cancelled timer is not leaked.
                 self._tasks.pop(task_id, None)
 
         self._tasks[task_id] = asyncio.create_task(_fire(), name=task_id)
@@ -64,9 +62,10 @@ class CloudTasksScheduler:
         self._token = token
 
     async def schedule(self, event: Event, *, delay_seconds: float) -> str:
+        import time
+
         from google.cloud import tasks_v2
         from google.protobuf import timestamp_pb2
-        import time
 
         schedule_time = timestamp_pb2.Timestamp()
         schedule_time.FromSeconds(int(time.time() + delay_seconds))

@@ -18,19 +18,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.config import ApprovalPolicy, Mode, Settings  # noqa: E402
-from app.domain.models import (  # noqa: E402
+from app.config import ApprovalPolicy, Mode, Settings
+from app.domain.models import (
     BrandRelationship,
+    Call,
     Conflict,
     EmailThread,
     Evidence,
-    Call,
-    Mission,
     Recommendation,
     SupplyChainNode,
     Vendor,
 )
-from app.runtime import Runtime  # noqa: E402
+from app.runtime import Runtime
 
 OBJECTIVE = (
     "I want to launch a 50ml EDP perfume in Indonesia. Initial production: 500 units. "

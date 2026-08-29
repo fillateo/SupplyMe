@@ -16,7 +16,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
-_RANGE = re.compile(r"^\s*([\d.,]+)\s*(?:-|–|—|to|s/d|sampai)\s*([\d.,]+)")
+# The dashes are deliberately ambiguous characters: suppliers type en and em
+# dashes in ranges and the parser has to match what they actually wrote.
+_RANGE = re.compile(r"^\s*([\d.,]+)\s*(?:-|–|—|to|s/d|sampai)\s*([\d.,]+)")  # noqa: RUF001
 _FIRST_NUMBER = re.compile(r"[\d][\d.,]*")
 _WEEKS = re.compile(r"\b(week|minggu|pekan)", re.I)
 _MONTHS = re.compile(r"\b(month|bulan)", re.I)

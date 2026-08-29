@@ -10,7 +10,10 @@ export function Communications({
 }: {
   data: {
     email: { sent: number; responded: number; awaiting: number; threads: Thread[] };
-    calls: { completed: number; scheduled: number; failed: number; items: Call[] };
+    calls: {
+      completed: number; scheduled: number; failed: number;
+      not_attempted: number; items: Call[];
+    };
   };
 }) {
   const [open, setOpen] = useState<string | null>(null);
@@ -95,6 +98,8 @@ export function Communications({
           <p className="font-mono text-2xs uppercase tracking-[0.08em] text-muted">
             {data.calls.completed} completed · {data.calls.scheduled} queued ·{" "}
             {data.calls.failed} failed
+            {data.calls.not_attempted > 0 &&
+              ` · ${data.calls.not_attempted} skipped, budget spent elsewhere`}
           </p>
         </div>
         {data.calls.items.length === 0 ? (

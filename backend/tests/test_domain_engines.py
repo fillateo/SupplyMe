@@ -8,7 +8,6 @@ from app.domain import identity
 from app.domain.conflicts import detect, detect_all
 from app.domain.models import (
     Conflict,
-    ConflictStatus,
     Evidence,
     Fact,
     Provenance,
@@ -17,7 +16,7 @@ from app.domain.models import (
     SourceType,
     Vendor,
 )
-from app.domain.quotes import PACKAGE_CONTENTS, comparable_set, normalize
+from app.domain.quotes import comparable_set, normalize
 from app.domain.scoring import apply_priorities, score_vendor
 from app.domain.trust import profile
 

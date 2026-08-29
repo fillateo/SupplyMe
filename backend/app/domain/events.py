@@ -83,7 +83,7 @@ class Event(BaseModel):
         canonical = json.dumps(self.payload, sort_keys=True, default=str)
         return stable_id("k", self.mission_id, self.type.value, canonical)
 
-    def child(self, type_: EventType, **payload: Any) -> "Event":
+    def child(self, type_: EventType, **payload: Any) -> Event:
         return Event(
             type=type_, mission_id=self.mission_id, payload=payload, caused_by=self.id
         )

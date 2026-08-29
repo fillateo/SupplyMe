@@ -9,15 +9,10 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from app.config import ApprovalPolicy, Mode, Settings
 from app.domain.events import Event, EventType
 from app.domain.models import (
-    Call,
-    EmailThread,
     Evidence,
-    Mission,
     Quote,
     Recommendation,
     Vendor,

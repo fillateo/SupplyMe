@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import base64
-import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -13,14 +11,11 @@ from ..domain.events import Event, EventType
 from ..domain.models import (
     Approval,
     ApprovalStatus,
-    BrandRelationship,
     Call,
     Conflict,
     EmailThread,
     Evidence,
     Mission,
-    MissionStatus,
-    Quote,
     Recommendation,
     ScoringWeights,
     SupplyChainNode,
@@ -194,6 +189,7 @@ async def mission_communications(
             "completed": sum(1 for c in calls if c.status.value == "completed"),
             "scheduled": sum(1 for c in calls if c.status.value in ("required", "dialing")),
             "failed": sum(1 for c in calls if c.status.value in ("failed", "no_answer")),
+            "not_attempted": sum(1 for c in calls if c.status.value == "not_attempted"),
             "items": [
                 {**c.model_dump(mode="json"), "vendor_name": vendors.get(c.vendor_id, "")}
                 for c in calls

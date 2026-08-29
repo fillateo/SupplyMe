@@ -94,7 +94,8 @@ VENDORS: list[DemoVendor] = [
                     "Kapasitas produksi: 40.000 pcs per bulan.\n"
                     "Sample: tersedia, 5-7 hari kerja.\n"
                     "Kustomisasi: warna, coating, hot stamping logo, dan cetak silkscreen.\n"
-                    "Kami juga menyediakan pump sprayer dan tutup (cap) aluminium sebagai satu paket.\n\n"
+                    "Kami juga menyediakan pump sprayer dan tutup (cap) aluminium "
+                    "sebagai satu paket.\n\n"
                     "Hubungi: sales@kemasan-wangi.example.com | +62 21 5566 7788"
                 ),
             ),
@@ -143,7 +144,10 @@ VENDORS: list[DemoVendor] = [
         place_id="ChIJdemo0002AromaNusantara",
         rating=4.6, reviews=134,
         node_keys=("filling", "fragrance", "manufacturing"),
-        keywords=("maklon parfum", "contract filling", "perfume manufacturer", "fragrance", "filling"),
+        keywords=(
+            "maklon parfum", "contract filling", "perfume manufacturer",
+            "fragrance", "filling",
+        ),
         pages=[
             DemoPage(
                 url="https://aroma-nusantara.example.com/layanan/maklon-parfum",
@@ -156,7 +160,8 @@ VENDORS: list[DemoVendor] = [
                     "Lead time produksi: 25-30 hari kerja setelah formula disetujui.\n"
                     "Kami dapat menangani pengadaan botol dan kemasan sekaligus, sehingga klien "
                     "cukup berhubungan dengan satu vendor.\n\n"
-                    "Klien kami termasuk Maison Verel, salah satu rumah parfum premium."
+                    "Klien kami termasuk Maison Verel, salah satu rumah parfum premium.\n\n"
+                    "Hubungi: inquiry@aroma-nusantara.example.com | +62 21 8899 1122"
                 ),
             )
         ],
@@ -208,7 +213,8 @@ VENDORS: list[DemoVendor] = [
                     "Standard 50ml fragrance flacons available from stock moulds; custom moulds "
                     "from 20,000 pcs.\n"
                     "Lead time: 35 days.\n\n"
-                    "Our glassware has been supplied to Maison Verel and other premium houses."
+                    "Our glassware has been supplied to Maison Verel and other premium houses.\n\n"
+                    "Contact: sales@botolprima.example.com | +62 31 7788 3344"
                 ),
             )
         ],
@@ -245,7 +251,8 @@ VENDORS: list[DemoVendor] = [
                     "Minimum order label: 250 pcs. Minimum rigid box: 300 pcs.\n"
                     "Finishing: hot foil emas/perak, emboss, spot UV, soft touch lamination.\n"
                     "Lead time: 10-14 hari kerja.\n"
-                    "Sample cetak: 3 hari kerja, gratis untuk order di atas 1.000 pcs."
+                    "Sample cetak: 3 hari kerja, gratis untuk order di atas 1.000 pcs.\n\n"
+                    "Order: order@cetaklabel.example.com | +62 21 4455 9900"
                 ),
             )
         ],
