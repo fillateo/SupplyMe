@@ -21,6 +21,9 @@ next-env.d.ts
 backend.hcl
 terraform.tfvars
 
+# run.sh working directory: pids, logs, displaced build caches
+.run/
+
 # Secrets — never committed. See docs/SECRETS.md.
 .env
 .env.*

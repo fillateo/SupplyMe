@@ -290,19 +290,19 @@ no credentials and no network. The agents, events, storage, conflict detection
 and scoring are the real ones; only the text generation is deterministic.
 
 ```bash
-cd backend
-uv venv --python 3.12 .venv && VIRTUAL_ENV=.venv uv pip install -e ".[dev]"
-
-.venv/bin/python -m pytest -q                  # 191 tests, ~10s, no credentials
-.venv/bin/python scripts/run_demo.py           # a whole mission, ~30s, no credentials
-
-cp .env.example .env                           # scripted model is the default
-.venv/bin/uvicorn app.api.main:app --port 8080
-cd ../frontend && npm install && npm run dev   # http://localhost:3000
+./run.sh            # installs what is missing, then starts the API and console
+./run.sh demo       # one whole mission in the terminal, ~30s
+./run.sh test       # 208 tests, ~10s
+./run.sh status     # what is running, and what it has spent
+./run.sh stop
 ```
 
-To use real Gemini instead: `gcloud auth application-default login`, then set
-`VDS_USE_SCRIPTED_MODEL=false` and `VDS_PROJECT_ID` in `.env`.
+`./run.sh` needs Python 3.12 or 3.13 and Node 20+, and nothing else — no Google
+Cloud project, no API key, no network.
+
+To use real Gemini: set `VDS_PROJECT_ID` in `backend/.env`, run
+`gcloud auth application-default login`, then `./run.sh live`. It refuses to
+start if either is missing rather than failing halfway through a mission.
 
 **[docs/LOCAL.md](docs/LOCAL.md)** has the full walkthrough — what to click,
 what to look for, and what to do when something breaks.

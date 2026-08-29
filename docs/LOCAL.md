@@ -1,5 +1,28 @@
 # Running it locally
 
+## The short version
+
+```bash
+./run.sh
+```
+
+That installs anything missing, starts the API and the console, and prints the
+URLs. No Google Cloud project, no API key, no network, no spend.
+
+```
+./run.sh            start the API and the console
+./run.sh demo       one whole mission in the terminal, no servers
+./run.sh test       the test suite
+./run.sh live       against real Gemini instead (opt-in, costs money)
+./run.sh status     what is running, and what it has spent
+./run.sh stop
+./run.sh clean      remove build caches; never touches source or .env
+```
+
+The rest of this page is what those commands do, and what to look at.
+
+---
+
 Four ways in, cheapest first. Everything below has been run on a clean machine.
 
 ## 0. What you need
@@ -158,9 +181,9 @@ without you reading it first.
 ## If something goes wrong
 
 **Console returns 500, log says `__webpack_modules__[moduleId] is not a function`.**
-`npm run build` and `npm run dev` share `.next` and a production build run while
-the dev server is up corrupts it. Stop the dev server, move `.next` aside, start
-it again.
+`npm run build` and `npm run dev` share `.next`, and a production build run while
+the dev server is up corrupts it. `./run.sh` detects this and clears it on
+start; by hand, stop the dev server, move `.next` aside, start it again.
 
 **`No model configured`.** Either set `VDS_USE_SCRIPTED_MODEL=true`, or set
 `VDS_PROJECT_ID` and run `gcloud auth application-default login`.
