@@ -204,7 +204,17 @@ class EventBus(Protocol):
 class Scheduler(Protocol):
     """Delayed execution: follow-ups, non-response timeouts, retry backoff."""
 
-    async def schedule(self, event: Event, *, delay_seconds: float) -> str: ...
+    async def schedule(
+        self, event: Event, *, delay_seconds: float, compressible: bool = True
+    ) -> str:
+        """Deliver `event` later.
+
+        `compressible` says whether the demo clock may shorten this delay.
+        Waiting two days for a supplier is business time and should compress in a
+        demo. Backing off from a rate limit is not: shortening it makes the
+        retries land inside the same overloaded window they were meant to avoid.
+        """
+        ...
 
 
 @runtime_checkable

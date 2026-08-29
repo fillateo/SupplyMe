@@ -129,8 +129,12 @@ class Orchestrator:
             raise ValueError(f"event {event.type} has no mission_id")
         await self.bus.publish(event)
 
-    async def schedule(self, event: Event, *, delay_seconds: float) -> None:
-        await self.scheduler.schedule(event, delay_seconds=delay_seconds)
+    async def schedule(
+        self, event: Event, *, delay_seconds: float, compressible: bool = True
+    ) -> None:
+        await self.scheduler.schedule(
+            event, delay_seconds=delay_seconds, compressible=compressible
+        )
 
     # -- external action guard ---------------------------------------------
 
@@ -205,7 +209,11 @@ class Orchestrator:
         schedule = (
             RATE_LIMIT_BACKOFF if _is_rate_limited(exc) else BACKOFF
         )
-        await self.schedule(retry, delay_seconds=schedule[min(attempt - 1, len(schedule) - 1)])
+        await self.schedule(
+            retry,
+            delay_seconds=schedule[min(attempt - 1, len(schedule) - 1)],
+            compressible=False,
+        )
         await self._record(event, status="retrying", error=str(exc))
 
     async def _fail_mission(self, mission_id: str, reason: str) -> None:

@@ -186,8 +186,12 @@ class TestProviderFailure:
         finally:
             await runtime.stop()
 
-    async def test_a_model_outage_is_retried_then_gives_up_cleanly(self):
+    async def test_a_model_outage_is_retried_then_gives_up_cleanly(self, monkeypatch):
         """A permanently broken model must fail the mission loudly, not silently."""
+        # Retry backoff is deliberately not compressed by the demo clock, so the
+        # schedule itself is shortened here rather than waiting it out.
+        monkeypatch.setattr("app.workflow.orchestrator.BACKOFF", (0.01, 0.02))
+        monkeypatch.setattr("app.workflow.orchestrator.RATE_LIMIT_BACKOFF", (0.01, 0.02))
         runtime = build(max_event_retries=1)
         calls = {"n": 0}
         original = runtime.providers.llm.structured
@@ -208,7 +212,8 @@ class TestProviderFailure:
         finally:
             await runtime.stop()
 
-    async def test_a_transient_model_error_recovers(self):
+    async def test_a_transient_model_error_recovers(self, monkeypatch):
+        monkeypatch.setattr("app.workflow.orchestrator.BACKOFF", (0.01, 0.02))
         runtime = build()
         state = {"failed": False}
         original = runtime.providers.llm.structured
@@ -400,3 +405,29 @@ class TestConcurrencyBounds:
         assert _is_rate_limited(RuntimeError("Quota exceeded for requests"))
         assert not _is_rate_limited(ValueError("bad schema"))
         assert all(slow > fast for slow, fast in zip(RATE_LIMIT_BACKOFF, BACKOFF, strict=True))
+
+    async def test_the_demo_clock_does_not_compress_retry_backoff(self):
+        """A backoff divided by the demo speedup stops being a backoff."""
+        import asyncio
+
+        from app.adapters.local_bus import LocalBus
+        from app.adapters.scheduler import LocalScheduler
+
+        bus = LocalBus()
+        scheduler = LocalScheduler(bus, speedup=1000.0)
+        event = Event(type=EventType.VENDOR_UPDATED, mission_id="m", payload={})
+
+        started = asyncio.get_running_loop().time()
+        await scheduler.schedule(event, delay_seconds=1.0, compressible=True)
+        await scheduler.schedule(event, delay_seconds=0.25, compressible=False)
+        await bus.start(2)
+        try:
+            # The compressible one fires in ~1ms; the incompressible one waits.
+            await asyncio.sleep(0.1)
+            assert scheduler.pending == 1, "the backoff was compressed away"
+            await asyncio.sleep(0.25)
+            assert scheduler.pending == 0
+            assert asyncio.get_running_loop().time() - started >= 0.25
+        finally:
+            await scheduler.cancel_all()
+            await bus.stop()

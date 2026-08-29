@@ -23,12 +23,17 @@ class LocalScheduler:
         self._speedup = max(speedup, 1e-6)
         self._tasks: dict[str, asyncio.Task[None]] = {}
 
-    async def schedule(self, event: Event, *, delay_seconds: float) -> str:
+    async def schedule(
+        self, event: Event, *, delay_seconds: float, compressible: bool = True
+    ) -> str:
         task_id = new_id("task")
+        # Only business waits compress. An infrastructure backoff that gets
+        # divided by 2000 stops being a backoff.
+        delay = delay_seconds / self._speedup if compressible else delay_seconds
 
         async def _fire() -> None:
             try:
-                await asyncio.sleep(delay_seconds / self._speedup)
+                await asyncio.sleep(delay)
                 await self._bus.publish(event)
             finally:
                 # Runs on cancellation too, so a cancelled timer is not leaked.
