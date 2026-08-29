@@ -64,13 +64,13 @@ async def main(argv: list[str] | None = None) -> int:
 
     if args.live_model:
         runtime = Runtime.build(
-            settings, demo_speedup=600.0, duplicate_rate=args.duplicate_rate
+            settings, demo_speedup=100_000.0, duplicate_rate=args.duplicate_rate
         )
     else:
         from tests.fixtures import build_scripted_llm
 
         runtime = Runtime.build(
-            settings, llm=build_scripted_llm(), demo_speedup=600.0,
+            settings, llm=build_scripted_llm(), demo_speedup=100_000.0,
             duplicate_rate=args.duplicate_rate,
         )
 

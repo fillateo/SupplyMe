@@ -103,18 +103,29 @@ def provenance_for(items: Sequence[Evidence]) -> Provenance:
     return Provenance.INFERRED
 
 
-def confidence_for(items: Sequence[Evidence]) -> float:
-    """Combine evidence with diminishing returns; corroboration never exceeds 1.0.
+#: Nothing read off the public web makes a fact certain, so combined confidence
+#: saturates below 1.0 no matter how many sources agree.
+CONFIDENCE_CEILING = 0.97
 
-    Uses noisy-OR so two moderate independent sources beat one strong source,
-    but ten weak ones never reach certainty.
+#: Each additional source counts for less than the one before it. Without this,
+#: twenty directory listings all copying the same press release would outscore
+#: the manufacturer's own specification sheet.
+CORROBORATION_DECAY = 0.55
+
+
+def confidence_for(items: Sequence[Evidence]) -> float:
+    """Combine evidence with diminishing returns.
+
+    Noisy-OR over decayed per-source confidences: two moderate independent
+    sources beat one strong source, but a pile of weak ones plateaus.
     """
     if not items:
         return 0.0
     residual = 1.0
-    for item in sorted(items, key=lambda e: e.confidence, reverse=True):
-        residual *= 1.0 - min(max(item.confidence, 0.0), 0.97)
-    return round(1.0 - residual, 4)
+    for rank, item in enumerate(sorted(items, key=lambda e: e.confidence, reverse=True)):
+        weight = min(max(item.confidence, 0.0), CONFIDENCE_CEILING)
+        residual *= 1.0 - weight * (CORROBORATION_DECAY**rank)
+    return round(min(1.0 - residual, CONFIDENCE_CEILING), 4)
 
 
 def classify_brand_relationship(

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -56,6 +57,13 @@ CONTACTABLE_FIELDS = CRITICAL_FIELDS + ("sample_lead_time_days", "customization"
 #: How long to wait for a supplier before following up, and how many times.
 FOLLOW_UP_DELAY_SECONDS = 48 * 3600
 MAX_FOLLOW_UPS = 2
+
+#: Per-vendor attempt ceilings. Beyond these the vendor is closed out with a
+#: reason rather than left in play: a supplier who has not answered two emails
+#: and a phone call is not going to, and a mission that waits for them forever
+#: never produces a recommendation.
+MAX_THREADS_PER_VENDOR = 2
+MAX_CALLS_PER_VENDOR = 2
 
 
 # ==========================================================================
@@ -317,7 +325,7 @@ async def handle_research_started(orc: Orchestrator, event: Event) -> list[Event
         )
 
     all_evidence = await orc.repo.vendor_evidence(vendor.id)
-    _apply_facts(vendor, all_evidence)
+    _apply_facts(vendor, all_evidence, await orc.repo.vendor_conflicts(vendor.id))
     vendor.missing_fields = [f for f in CONTACTABLE_FIELDS if not vendor.fact(f).known]
     vendor.version += 1
     await orc.repo.save(vendor)
@@ -330,7 +338,12 @@ async def handle_research_started(orc: Orchestrator, event: Event) -> list[Event
             event.child(EventType.BRAND_CLAIM_FOUND, vendor_id=vendor.id, brand=brand, version=brand)
         )
     emitted.extend(await _detect_conflicts(orc, event, vendor, all_evidence))
-    emitted.append(event.child(EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="research"))
+    emitted.append(
+        event.child(
+            EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="research",
+            version=f"{vendor.id}:v{vendor.version}",
+        )
+    )
     return emitted
 
 
@@ -538,9 +551,16 @@ async def handle_vendor_updated(orc: Orchestrator, event: Event) -> list[Event]:
         ]
 
     threads = await orc.repo.list(EmailThread, vendor_id=vendor.id)
-    awaiting = [t for t in threads if t.status in (ThreadStatus.SENT, ThreadStatus.AWAITING_APPROVAL)]
+    # The supplier has the ball only while a follow-up is still owed to them. A
+    # thread that has used its whole follow-up budget and still has no reply is
+    # not "in progress" — waiting on it forever is how a mission never finishes.
+    awaiting = [
+        t for t in threads
+        if t.status in (ThreadStatus.SENT, ThreadStatus.AWAITING_APPROVAL)
+        and t.follow_up_count < MAX_FOLLOW_UPS
+    ]
     if awaiting:
-        return []  # the supplier has the ball; a scheduled follow-up covers silence
+        return []
 
     call_wanted, call_reason = should_call(
         missing_critical_fields=missing_critical,
@@ -549,33 +569,39 @@ async def handle_vendor_updated(orc: Orchestrator, event: Event) -> list[Event]:
         has_email=bool(vendor.email),
         has_phone=bool(vendor.phone),
     )
-    # Calling a supplier a second time about a question they already declined to
-    # answer is not persistence, it is a nuisance. One completed call per vendor
-    # unless something new — a conflict — gives us a different question to ask.
-    if call_wanted and not open_conflicts and await _already_called(orc, vendor):
-        call_wanted = False
-        call_reason = "already called; the remaining fields went unanswered"
 
-    if call_wanted:
+    # Attempts are counted per vendor, including the ones that failed. A carrier
+    # that rejects the call still used the vendor's patience and our budget, and
+    # counting only completed calls would retry a bad number forever.
+    calls = await orc.repo.list(Call, vendor_id=vendor.id)
+    if call_wanted and len(calls) < MAX_CALLS_PER_VENDOR:
         return [
             event.child(
-                EventType.CALL_REQUIRED, vendor_id=vendor.id, version=vendor.version,
+                EventType.CALL_REQUIRED, vendor_id=vendor.id,
+                version=f"{vendor.id}:call:{len(calls)}",
                 reason=call_reason,
                 conflict_id=open_conflicts[0].id if open_conflicts else None,
             )
         ]
 
-    if vendor.email and mission.emails_sent < orc.settings.max_outreach_per_mission:
+    if (
+        vendor.email
+        and len(threads) < MAX_THREADS_PER_VENDOR
+        and mission.emails_sent < orc.settings.max_outreach_per_mission
+    ):
         return [
             event.child(
-                EventType.VENDOR_CONTACT_REQUIRED, vendor_id=vendor.id, version=vendor.version,
+                EventType.VENDOR_CONTACT_REQUIRED, vendor_id=vendor.id,
+                version=f"{vendor.id}:thread:{len(threads)}",
                 missing=missing_critical,
             )
         ]
 
-    # No route left. Say so rather than leaving the vendor in limbo.
+    # Every route has been tried. Close the vendor out with the reason, so the
+    # recommendation can explain the gap instead of the mission stalling.
     await _set_status(
-        orc, vendor, VendorStatus.REJECTED, _no_route_reasons(vendor, missing_critical)
+        orc, vendor, VendorStatus.REJECTED,
+        _no_route_reasons(vendor, missing_critical, len(threads), len(calls)),
     )
     return [
         event.child(EventType.VENDOR_REJECTED, vendor_id=vendor.id, version=vendor.version),
@@ -584,17 +610,27 @@ async def handle_vendor_updated(orc: Orchestrator, event: Event) -> list[Event]:
 
 
 async def _abandon_conflicts(orc: Orchestrator, vendor: Vendor, why: str) -> None:
+    """Close out disagreements whose resolution attempt has failed.
+
+    The preferred value stands — it is still the best-sourced answer — but it is
+    now marked as unconfirmed rather than in progress, so the recommendation
+    reports it as an open risk instead of the mission waiting on it.
+    """
+    abandoned = []
     for conflict in await orc.repo.vendor_conflicts(vendor.id):
         if conflict.status is not ConflictStatus.RESOLVING:
             continue
         conflict.status = ConflictStatus.UNRESOLVABLE
         conflict.preferred_reason += f"; {why}"
         await orc.repo.save(conflict)
-
-
-async def _already_called(orc: Orchestrator, vendor: Vendor) -> bool:
-    calls = await orc.repo.list(Call, vendor_id=vendor.id)
-    return any(c.status is CallStatus.COMPLETED for c in calls)
+        abandoned.append(conflict.id)
+    if abandoned:
+        await orc.repo.mutate(
+            Vendor, vendor.id,
+            lambda v: v.open_conflicts.__setitem__(
+                slice(None), [c for c in v.open_conflicts if c not in abandoned]
+            ),
+        )
 
 
 async def _take_budget(orc: Orchestrator, mission_id: str, field: str, cap: int) -> bool:
@@ -628,16 +664,22 @@ async def handle_vendor_rejected(orc: Orchestrator, event: Event) -> list[Event]
     return []
 
 
-def _no_route_reasons(vendor: Vendor, missing: list[str]) -> list[str]:
-    reasons = []
+def _no_route_reasons(
+    vendor: Vendor, missing: list[str], threads: int = 0, calls: int = 0
+) -> list[str]:
     if not vendor.email and not vendor.phone:
-        reasons.append("no email or phone found, so nothing could be confirmed")
-    elif missing:
-        reasons.append(
-            "outreach budget for this mission is exhausted; still missing "
-            + ", ".join(missing)
-        )
-    return reasons or ["no route to the remaining information"]
+        return ["no email or phone found, so nothing could be confirmed"]
+    if not missing:
+        return ["no remaining route, though the required facts were obtained"]
+    attempted = ", ".join(
+        filter(None, [
+            f"{threads} email thread(s)" if threads else "",
+            f"{calls} call(s)" if calls else "",
+        ])
+    )
+    return [
+        f"still missing {', '.join(missing)} after {attempted or 'no reachable contact'}"
+    ]
 
 
 def _days_since_last_outbound(threads: list[EmailThread]) -> float | None:
@@ -662,6 +704,11 @@ async def handle_contact_required(orc: Orchestrator, event: Event) -> list[Event
     if not vendor.email:
         return []
 
+    # Identify this outreach attempt. Deriving the thread id from the vendor's
+    # version instead let a second attempt reuse the first attempt's id, which
+    # overwrote the live thread and reset its follow-up count to zero.
+    attempt = str(event.payload.get("version") or f"{vendor.id}:thread:0")
+
     facts = await _personalization_facts(orc, vendor)
     node_names = await _node_names(orc, mission.id, vendor.node_keys)
     draft = await orc.agents.communication.draft_email(
@@ -672,7 +719,7 @@ async def handle_contact_required(orc: Orchestrator, event: Event) -> list[Event
     )
 
     thread = EmailThread(
-        id=stable_id("thr", mission.id, vendor.id, str(vendor.version)),
+        id=stable_id("thr", mission.id, vendor.id, attempt),
         mission_id=mission.id, vendor_id=vendor.id, to_address=vendor.email,
         subject=draft.subject, asked=draft.questions_asked, unanswered=list(draft.questions_asked),
         status=ThreadStatus.DRAFT,
@@ -686,7 +733,7 @@ async def handle_contact_required(orc: Orchestrator, event: Event) -> list[Event
         first_contact_with_vendor=len(vendor.thread_ids) <= 1,
     )
     send_event = event.child(
-        EventType.EMAIL_SENT, vendor_id=vendor.id, thread_id=thread.id, version=vendor.version
+        EventType.EMAIL_SENT, vendor_id=vendor.id, thread_id=thread.id, version=attempt
     )
 
     if not decision.requires_approval:
@@ -696,7 +743,7 @@ async def handle_contact_required(orc: Orchestrator, event: Event) -> list[Event
         ]
 
     approval = Approval(
-        id=stable_id("apr", mission.id, vendor.id, "send_email", str(vendor.version)),
+        id=stable_id("apr", mission.id, vendor.id, "send_email", attempt),
         mission_id=mission.id, vendor_id=vendor.id, action_type=ActionType.SEND_EMAIL.value,
         summary=f"Send a quotation request to {vendor.name} <{vendor.email}>",
         preview={
@@ -716,7 +763,7 @@ async def handle_contact_required(orc: Orchestrator, event: Event) -> list[Event
         event.child(EventType.EMAIL_DRAFT_CREATED, vendor_id=vendor.id, thread_id=thread.id),
         event.child(
             EventType.APPROVAL_REQUESTED, vendor_id=vendor.id, approval_id=approval.id,
-            action=ActionType.SEND_EMAIL.value, version=vendor.version,
+            action=ActionType.SEND_EMAIL.value, version=attempt,
         ),
     ]
 
@@ -765,9 +812,11 @@ async def handle_email_sent(orc: Orchestrator, event: Event) -> list[Event]:
     if thread is None or not thread.messages:
         return []
 
-    claimed = await orc.reserve_action(
-        mission.id, vendor.id, "send_email", thread.id
-    )
+    # The idempotency key must distinguish the original request from a follow-up
+    # on the same thread. Keying on the thread alone suppresses every follow-up
+    # as a duplicate of the first message, and the thread never leaves draft.
+    action_version = event.payload.get("version") or thread.id
+    claimed = await orc.reserve_action(mission.id, vendor.id, "send_email", action_version)
     if not claimed:
         return []  # already sent; a redelivery must not send it again
 
@@ -776,10 +825,15 @@ async def handle_email_sent(orc: Orchestrator, event: Event) -> list[Event]:
         to=thread.to_address, subject=thread.subject, body=outbound.body,
         thread_id=thread.provider_thread_id, mission_id=mission.id,
     )
-    outbound.provider_message_id = sent.provider_message_id
-    thread.provider_thread_id = sent.provider_thread_id
-    thread.status = ThreadStatus.SENT
-    await orc.repo.save(thread)
+
+    def _mark_delivered(record: EmailThread) -> None:
+        if record.messages:
+            record.messages[-1].provider_message_id = sent.provider_message_id
+        record.provider_thread_id = sent.provider_thread_id
+        record.status = ThreadStatus.SENT
+
+    updated = await orc.repo.mutate(EmailThread, thread.id, _mark_delivered)
+    thread = updated or thread
 
     await _set_status(orc, vendor, VendorStatus.CONTACTED)
 
@@ -790,7 +844,7 @@ async def handle_email_sent(orc: Orchestrator, event: Event) -> list[Event]:
     await orc.repo.mutate(Mission, mission.id, _mark_sent)
 
     await orc.confirm_action(
-        mission.id, vendor.id, "send_email", thread.id,
+        mission.id, vendor.id, "send_email", action_version,
         {"provider_thread_id": sent.provider_thread_id},
     )
 
@@ -798,7 +852,7 @@ async def handle_email_sent(orc: Orchestrator, event: Event) -> list[Event]:
     await orc.schedule(
         event.child(
             EventType.FOLLOW_UP_REQUIRED, vendor_id=vendor.id, thread_id=thread.id,
-            reason="no response", version=f"{thread.id}:0",
+            reason="no response", version=f"{thread.id}:followup:{thread.follow_up_count}",
         ),
         delay_seconds=FOLLOW_UP_DELAY_SECONDS,
     )
@@ -852,7 +906,14 @@ async def handle_email_received(orc: Orchestrator, event: Event) -> list[Event]:
 
     await _set_status(orc, vendor, VendorStatus.RESPONDED)
 
-    if extraction.not_a_quote:
+    committed_to_something = bool(
+        extraction.line_items
+        or extraction.moq is not None
+        or extraction.lead_time_days is not None
+        or extraction.sample_lead_time_days is not None
+        or extraction.payment_terms
+    )
+    if extraction.not_a_quote or not committed_to_something:
         thread.status = ThreadStatus.CLOSED if _is_bounce(body) else ThreadStatus.SENT
         await orc.repo.save(thread)
         return [
@@ -890,7 +951,7 @@ async def handle_email_received(orc: Orchestrator, event: Event) -> list[Event]:
     await orc.repo.save(thread)
 
     all_evidence = await orc.repo.vendor_evidence(vendor.id)
-    _apply_facts(vendor, all_evidence)
+    _apply_facts(vendor, all_evidence, await orc.repo.vendor_conflicts(vendor.id))
     vendor.currency = quote.currency
     vendor.missing_fields = [f for f in CONTACTABLE_FIELDS if not vendor.fact(f).known]
     vendor.version += 1
@@ -903,7 +964,11 @@ async def handle_email_received(orc: Orchestrator, event: Event) -> list[Event]:
         )
     ]
     emitted.extend(await _detect_conflicts(orc, event, vendor, all_evidence))
-    emitted.append(event.child(EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="email"))
+    emitted.append(
+        event.child(
+            EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="email", version=quote.id
+        )
+    )
     return emitted
 
 
@@ -1001,8 +1066,21 @@ async def handle_follow_up(orc: Orchestrator, event: Event) -> list[Event]:
     if event.payload.get("reason") == "no response" and thread.status is ThreadStatus.RESPONDED:
         return []
     if thread.follow_up_count >= MAX_FOLLOW_UPS:
-        return [event.child(EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="follow_up_exhausted")]
+        return [
+            event.child(
+                EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="follow_up_exhausted",
+                version=f"{thread.id}:{thread.follow_up_count}",
+            )
+        ]
     if mission.emails_sent >= orc.settings.max_outreach_per_mission:
+        return []
+
+    # Two follow-ups can be triggered at once — the scheduled silence timer and a
+    # reply that answered nothing. Claim the slot before drafting, so the vendor
+    # gets one follow-up rather than two, and we pay for one model call.
+    if not await orc.reserve_action(
+        mission.id, vendor.id, "follow_up", f"{thread.id}:{thread.follow_up_count}"
+    ):
         return []
 
     draft = await orc.agents.communication.follow_up_email(
@@ -1012,12 +1090,17 @@ async def handle_follow_up(orc: Orchestrator, event: Event) -> list[Event]:
         mission_id=mission.id, vendor_id=vendor.id,
     )
 
-    thread.follow_up_count += 1
-    thread.messages.append(Message(direction="outbound", subject=draft.subject, body=draft.body))
-    thread.asked = list(dict.fromkeys(thread.asked + draft.questions_asked))
-    thread.unanswered = [q for q in thread.asked if q not in thread.answered]
-    thread.status = ThreadStatus.DRAFT
-    await orc.repo.save(thread)
+    def _add_follow_up(record: EmailThread) -> None:
+        record.follow_up_count += 1
+        record.messages.append(
+            Message(direction="outbound", subject=draft.subject, body=draft.body)
+        )
+        record.asked = list(dict.fromkeys(record.asked + draft.questions_asked))
+        record.unanswered = [q for q in record.asked if q not in record.answered]
+        record.status = ThreadStatus.DRAFT
+
+    updated = await orc.repo.mutate(EmailThread, thread.id, _add_follow_up)
+    thread = updated or thread
 
     decision = approval_for(ActionType.SEND_FOLLOW_UP, orc.settings.approval_policy)
     send_event = event.child(
@@ -1138,7 +1221,12 @@ async def handle_call_started(orc: Orchestrator, event: Event) -> list[Event]:
         call.status = CallStatus.FAILED
         await orc.repo.save(call)
         await _abandon_conflicts(orc, vendor, "the mission's call budget is exhausted")
-        return [event.child(EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="call_budget")]
+        return [
+            event.child(
+                EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="call_budget",
+                version=call.id,
+            )
+        ]
 
     call.status = CallStatus.DIALING
     await orc.repo.save(call)
@@ -1160,7 +1248,18 @@ async def handle_call_started(orc: Orchestrator, event: Event) -> list[Event]:
     if result.status != "completed":
         call.status = CallStatus.FAILED if result.status == "failed" else CallStatus.NO_ANSWER
         await orc.repo.save(call)
-        return [event.child(EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="call_failed")]
+        # A call placed to settle a disagreement that never connected leaves that
+        # disagreement open. Say so, or the vendor waits on an answer that is
+        # never coming.
+        await _abandon_conflicts(
+            orc, vendor, f"the call to resolve it {result.status.replace('_', ' ')}"
+        )
+        return [
+            event.child(
+                EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="call_failed",
+                version=call.id,
+            )
+        ]
 
     call.transcript = result.transcript
     call.duration_seconds = result.duration_seconds
@@ -1220,12 +1319,16 @@ async def handle_call_completed(orc: Orchestrator, event: Event) -> list[Event]:
         await orc.repo.save(conflict)
 
     all_evidence = await orc.repo.vendor_evidence(vendor.id)
-    _apply_facts(vendor, all_evidence)
+    _apply_facts(vendor, all_evidence, await orc.repo.vendor_conflicts(vendor.id))
     vendor.missing_fields = [f for f in CONTACTABLE_FIELDS if not vendor.fact(f).known]
     vendor.version += 1
     await orc.repo.save(vendor)
 
-    return [event.child(EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="call")]
+    return [
+        event.child(
+            EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="call", version=call.id
+        )
+    ]
 
 
 def _resolved_value(field: str, extraction: Any) -> Any:
@@ -1544,17 +1647,45 @@ async def _evidence_from_supplier(
     return records
 
 
-def _apply_facts(vendor: Vendor, all_evidence: list[Evidence]) -> None:
+def _apply_facts(
+    vendor: Vendor, all_evidence: list[Evidence], conflicts: Sequence[Conflict] = ()
+) -> None:
     """Recompute every vendor fact from the full evidence set.
 
     Deliberately a full recompute rather than an incremental update: the
     provenance of a field depends on everything known about it, so a new email
     can promote a field from `publicly_listed` to `direct_quote` and must.
+
+    A settled conflict wins over the raw evidence. When the supplier told us on a
+    recorded call that 500 is possible as a pilot, that answer is the MOQ — not
+    the 1,000 their sales desk emailed. Skipping this step is how a system does
+    the work of resolving a disagreement and then scores as if it never had.
     """
+    resolved = {
+        c.field: c
+        for c in conflicts
+        if c.status is ConflictStatus.RESOLVED and c.resolved_value is not None
+    }
+
     for field in CONTACTABLE_FIELDS:
         supporting = [e for e in all_evidence if e.field == field and e.value is not None]
         if not supporting:
             continue
+
+        settled = resolved.get(field)
+        if settled is not None:
+            setattr(
+                vendor,
+                field,
+                Fact(
+                    value=settled.resolved_value,
+                    provenance=Provenance.DIRECT_QUOTE,
+                    evidence_ids=[e.id for e in supporting],
+                    confidence=max(evidence_engine.confidence_for(supporting), 0.9),
+                ),
+            )
+            continue
+
         provenance = evidence_engine.provenance_for(supporting)
         best = max(
             supporting,
