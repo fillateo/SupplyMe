@@ -62,14 +62,14 @@ resource "google_pubsub_subscription" "workflow_push" {
 # Gmail push notifications land on their own topic; Gmail's own service account
 # must be allowed to publish to it.
 resource "google_pubsub_topic" "gmail" {
-  count = var.mode == "live" ? 1 : 0
+  count = var.gmail_push ? 1 : 0
 
   name       = "${var.service_name}-gmail"
   depends_on = [google_project_service.enabled]
 }
 
 resource "google_pubsub_topic_iam_member" "gmail_publisher" {
-  count = var.mode == "live" ? 1 : 0
+  count = var.gmail_push ? 1 : 0
 
   topic  = google_pubsub_topic.gmail[0].name
   role   = "roles/pubsub.publisher"
@@ -77,7 +77,7 @@ resource "google_pubsub_topic_iam_member" "gmail_publisher" {
 }
 
 resource "google_pubsub_subscription" "gmail_push" {
-  count = var.mode == "live" ? 1 : 0
+  count = var.gmail_push ? 1 : 0
 
   name  = "${var.service_name}-gmail-push"
   topic = google_pubsub_topic.gmail[0].id

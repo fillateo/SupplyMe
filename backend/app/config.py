@@ -13,15 +13,10 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Mode(StrEnum):
-    LIVE = "live"
-    DEMO = "demo"
-
-
 class ApprovalPolicy(StrEnum):
     """How much the agent may do without a human in the loop."""
 
-    AUTONOMOUS = "autonomous"          # no approvals; used for tests and offline demo
+    AUTONOMOUS = "autonomous"          # no approvals; used by the test suite
     EXTERNAL_ACTIONS = "external"      # approve first email/call per vendor (default)
     STRICT = "strict"                  # approve every outbound action
 
@@ -48,10 +43,6 @@ class Settings(BaseSettings):
         env_prefix="VDS_", env_file=".env", extra="ignore", protected_namespaces=()
     )
 
-    #: Which product integrations to bind: DEMO uses the mock providers, LIVE
-    #: uses Google Search, Places, YouTube and Gmail for whichever have
-    #: credentials.
-    mode: Mode = Mode.DEMO
     approval_policy: ApprovalPolicy = ApprovalPolicy.EXTERNAL_ACTIONS
 
     #: Whether to use Firestore, Pub/Sub and Cloud Tasks instead of the
@@ -111,6 +102,11 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = ""
+
+    #: Reading the same mailbox back. The app password that sends also reads, so
+    #: closing the loop needs no second credential — see adapters/imap_mail.py.
+    imap_host: str = "imap.gmail.com"
+    imap_port: int = Field(default=993, ge=1, le=65535)
 
     #: Send every outbound email here instead of to the supplier. The addresses
     #: in a live mission belong to real businesses, so this is how you prove the
@@ -184,30 +180,9 @@ class Settings(BaseSettings):
     reasoning_thinking_budget: int = Field(default=2048, ge=-1, le=32768)
     llm_timeout_seconds: float = 90.0
 
-    #: Compresses scheduled delays in DEMO mode. A 48-hour follow-up timer is
-    #: correct behaviour and useless in a four-minute demo, so the clock — not
-    #: the workflow — is what gets sped up. Ignored in LIVE mode, where the
-    #: scheduler is Cloud Tasks and the delays are real.
-    demo_speedup: float = Field(default=1.0, ge=1.0, le=1_000_000.0)
-    #: Redelivers this fraction of events, to demonstrate idempotency on demand.
-    demo_duplicate_rate: float = Field(default=0.0, ge=0.0, le=1.0)
-
-    #: Bind the deterministic scripted model instead of Gemini. The entire
-    #: system then runs with no Google Cloud project, no API key and no network
-    #: — same agents, same events, same storage, same scoring. Intended for
-    #: local development, for the test suite, and for anyone who wants to see
-    #: the workflow before setting up credentials.
-    use_scripted_model: bool = False
-
     #: Run vendor research as a Google ADK tool-use loop, letting the agent
-    #: decide which sources to read, instead of pre-fetching a fixed set. Off
-    #: when the model is scripted, because the tests assert on workflow
-    #: behaviour and a tool loop is not deterministic.
+    #: decide which sources to read, instead of pre-fetching a fixed set.
     use_adk_research: bool = True
-
-    @property
-    def is_demo(self) -> bool:
-        return self.mode is Mode.DEMO
 
 
 @lru_cache(maxsize=1)

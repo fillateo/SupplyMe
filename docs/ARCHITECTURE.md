@@ -34,19 +34,20 @@ Only components that exist are drawn here.
         └────────────┬───────────┘     └───────────┬─────────────┘
                      │                             │
         ┌────────────▼─────────────────────────────▼─────────────┐
-        │ Ports (app/ports/base.py) — the LIVE/DEMO seam          │
+        │ Ports (app/ports/base.py)                               │
         │  Search   Maps   Video   Mail   Store   Bus   Tasks      │
-        └────────────┬─────────────────────────────┬─────────────┘
-                     │                             │
-        ┌────────────▼───────────┐     ┌───────────▼─────────────┐
-        │ Google adapters        │     │ Mock adapters           │
-        │ Programmable Search /  │     │ demo_world.py fixtures  │
-        │ Gemini grounding,      │     │ raise real events on a  │
-        │ Places, YouTube,       │     │ compressed clock        │
-        │ Gmail / SMTP           │     │                         │
-        └────────────┬───────────┘     └───────────┬─────────────┘
-                     └──────────────┬──────────────┘
-                                    ▼
+        └────────────────────────┬────────────────────────────────┘
+                                 │
+        ┌────────────────────────▼────────────────────────────────┐
+        │ Adapters — every one of them the real service            │
+        │  Programmable Search or Gemini grounding · Places ·      │
+        │  YouTube · SMTP out and IMAP in (or the Gmail API)       │
+        │                                                         │
+        │  A missing credential is a startup failure, not a        │
+        │  fallback. The test doubles live in tests/ and are       │
+        │  reachable from nowhere in app/.                         │
+        └────────────────────────┬────────────────────────────────┘
+                                 ▼
                     Firestore · Pub/Sub · Cloud Tasks · Cloud Logging
 ```
 
@@ -102,7 +103,7 @@ discriminator: `version=vendor.version`, `version=quote.id`,
 | `approval.requested` | comms | Pauses; stores the event to replay |
 | `approval.granted` / `approval.denied` | API | Replays or cancels the paused event |
 | `email.sent` | routing | **External action** — reserved before sending |
-| `email.received` | Gmail push / mock | Extracts the quote, re-derives facts |
+| `email.received` | IMAP poll or Gmail push | Extracts the quote, re-derives facts |
 | `quote.extracted` | comms | Timeline marker |
 | `conflict.detected` | evidence engine | Routes to a targeted follow-up |
 | `followup.required` | conflict / timer | Asks only what is still missing |

@@ -6,24 +6,32 @@
 ./run.sh
 ```
 
-That installs anything missing, starts the API and the console, and prints the
-URLs. No Google Cloud project, no API key, no network, no spend.
+That installs anything missing, checks your credentials, starts the API and the
+console, and prints the URLs.
 
 ```
 ./run.sh            start the API and the console
-./run.sh demo       one whole mission in the terminal, no servers
+./run.sh mission    one whole mission in the terminal, no servers
 ./run.sh test       the test suite
-./run.sh live       against real Gemini instead (opt-in, costs money)
+./run.sh mail       read the mailbox now instead of waiting for the poll
 ./run.sh status     what is running, and what it has spent
 ./run.sh stop
 ./run.sh clean      remove build caches; never touches source or .env
 ```
 
+**There is no offline mode.** Every provider is the real service or the process
+refuses to start and names the variable that is missing, so a mission either
+read the live web and wrote to a real mailbox or it never began. Filling in
+`backend/.env` is the first step, not an optional one.
+
+The one safety valve is `VDS_MAIL_REDIRECT_TO`: set it to a mailbox you own and
+every outbound message goes there instead of to the supplier, with a banner
+saying who it would have reached. Leave it set unless you have decided, on
+purpose, to write to real businesses.
+
 The rest of this page is what those commands do, and what to look at.
 
 ---
-
-Four ways in, cheapest first. Everything below has been run on a clean machine.
 
 ## 0. What you need
 
@@ -46,17 +54,21 @@ cd backend
 .venv/bin/python -m pytest -q
 ```
 
-335 tests, about 55 seconds. They cover the whole workflow end to end,
+334 tests, about 55 seconds. They cover the whole workflow end to end,
 including every message being delivered twice, a search outage, a model
 timeout, a mid-mission restart, and a supplier reply containing a
 prompt-injection payload.
 
-## 2. Watch a whole mission in the terminal — 30 seconds, still no credentials
+## 2. Watch a whole mission in the terminal
 
 ```bash
 cd backend
-.venv/bin/python scripts/run_demo.py
+.venv/bin/python scripts/run_mission.py --project YOUR_PROJECT
 ```
+
+This reads the live web, so it takes minutes rather than seconds — it is bounded
+by the slowest supplier site the research agent decides to open. It prints a
+progress line as it goes.
 
 This runs a complete mission and prints what happened, all of it read back out
 of storage: the activity timeline, the supply chain it derived, every supplier
@@ -90,7 +102,7 @@ Two terminals.
 ```bash
 # terminal 1
 cd backend
-cp .env.example .env          # VDS_USE_SCRIPTED_MODEL=true is already set
+cp .env.example .env          # then fill in the required credentials
 .venv/bin/uvicorn app.api.main:app --port 8080
 
 # terminal 2
@@ -123,20 +135,20 @@ http://localhost:8080/docs                       interactive API
 curl -s localhost:8080/api/health | jq           which providers are actually bound
 ```
 
-## 3b. Three independent switches
-
-They are separate on purpose, and mixing them up is the most likely way to
-confuse yourself:
+## 3b. The one switch left
 
 | Switch | Chooses |
 | --- | --- |
-| `VDS_USE_SCRIPTED_MODEL` | scripted model vs real Gemini |
-| `VDS_MODE` | mock product integrations vs Google Search, Places and Gmail |
-| `VDS_USE_CLOUD_INFRA` | in-process store and bus vs Firestore, Pub/Sub, Cloud Tasks |
+| `VDS_USE_CLOUD_INFRA` | in-process store, bus and scheduler vs Firestore, Pub/Sub, Cloud Tasks |
 
-`./run.sh live` sets the first two and leaves the third alone, so you get real
-Gemini and the real Google APIs against local state — no Firestore database
-needed. Terraform sets the third on Cloud Run.
+Locally you usually want it off: real Gemini and the real Google APIs against
+in-process state, because provisioning Firestore just to try the thing out is a
+tax on curiosity. Missions then do not survive a restart, and `/api/health` says
+so. Terraform sets it on Cloud Run.
+
+There used to be two more switches here — one for a scripted model and one for
+mock integrations. Both are gone. What they bought was a demonstration that
+looked exactly like the real thing while proving nothing about it.
 
 ## 4. Use real Gemini
 
@@ -157,7 +169,6 @@ model exists at another endpoint, so this is an easy hour to lose.
 Then in `.env`:
 
 ```
-VDS_USE_SCRIPTED_MODEL=false
 VDS_PROJECT_ID=your-project
 VDS_VERTEX_LOCATION=global
 ```
@@ -170,41 +181,33 @@ Gemini perfectly still failed its startup probe.
 
 and restart the API. `/api/health` will show `GeminiLLM`.
 
-Everything else is identical — same agents, same events, same storage, same
-scoring. What changes is that Gemini now writes the search queries, decides
-which results are real suppliers, reads the pages, drafts the emails and reads
-the replies, and the research stage becomes a Google ADK tool loop that chooses
-what to read next.
+Gemini writes the search queries, decides which results are real suppliers,
+reads the pages, drafts the emails and reads the replies, and the research stage
+is a Google ADK tool loop that chooses what to read next.
 
-Or, without touching `.env`:
-
-```bash
-.venv/bin/python scripts/run_demo.py --live-model --project YOUR_PROJECT
-```
-
-**Expect it to be slower**, and on a project with default quota, expect
+**Expect it to be slow**, and on a project with default quota, expect
 rate limiting. A mission fans out over every supply-chain node at once and each
 research branch makes several model calls. `VDS_MAX_CONCURRENT_RESEARCH=3`
 bounds that; lower it to `1` if you see 429s in the log.
 
 ## Connecting the real integrations
 
-Each one is independent, and any you skip degrades to its mock and says so at
-`/api/health` — nothing silently pretends to have called an API it did not.
+| Integration | To turn on | Skippable |
+| --- | --- | --- |
+| Google Places | `VDS_MAPS_API_KEY` | no — the process will not start |
+| YouTube | `VDS_YOUTUBE_API_KEY` | no — the process will not start |
+| Mailbox | `VDS_SMTP_USER` + `VDS_SMTP_PASSWORD` (a Gmail app password) | no — sends and reads |
+| Programmable Search | `VDS_SEARCH_API_KEY` + `VDS_SEARCH_ENGINE_ID` | yes — falls back to Gemini search grounding, which also reads the live web |
+| Gmail API instead of IMAP | `python scripts/gmail_auth.py --client-secret client_secret.json` | yes — replies are polled rather than pushed |
 
-| Integration | To turn on |
-| --- | --- |
-| Google Places | `VDS_MAPS_API_KEY` |
-| Programmable Search | `VDS_SEARCH_API_KEY` + `VDS_SEARCH_ENGINE_ID` (without it, Gemini search grounding is used) |
-| YouTube | `VDS_YOUTUBE_API_KEY` |
-| Gmail | `python scripts/gmail_auth.py --client-secret client_secret.json` |
+The Gmail API path also needs a publicly reachable `VDS_PUBLIC_BASE_URL` for its
+webhook; a tunnel is fine for local work. IMAP needs nothing but the app
+password, and replies arrive on the next poll — `./run.sh mail` reads the
+mailbox immediately rather than waiting.
 
-Gmail also needs `VDS_MODE=live` and a publicly reachable
-`VDS_PUBLIC_BASE_URL` for their webhooks — a tunnel is fine for local work.
-
-**Sending real email reaches real businesses.** Keep
-`VDS_APPROVAL_POLICY=external` (the default) or `strict` so nothing leaves
-without you reading it first.
+**Sending real email reaches real businesses.** Keep `VDS_MAIL_REDIRECT_TO` set
+to a mailbox you own, and keep `VDS_APPROVAL_POLICY=external` (the default) or
+`strict` so nothing leaves without you reading it first.
 
 ## If something goes wrong
 
@@ -213,17 +216,24 @@ without you reading it first.
 the dev server is up corrupts it. `./run.sh` detects this and clears it on
 start; by hand, stop the dev server, move `.next` aside, start it again.
 
-**`No model configured`.** Either set `VDS_USE_SCRIPTED_MODEL=true`, or set
-`VDS_PROJECT_ID` and run `gcloud auth application-default login`.
+**`No model configured`, or `VDS_MAPS_API_KEY is not set`.** There is nothing to
+fall back to. Set what the message names; for the model that is `VDS_PROJECT_ID`
+plus `gcloud auth application-default login`, or `VDS_GEMINI_API_KEY`.
 
 **429 `RESOURCE_EXHAUSTED` in the API log.** Vertex quota. Lower
-`VDS_MAX_CONCURRENT_RESEARCH`, or use `gemini-2.5-flash` for both tiers, or run
-with the scripted model. Retries back off automatically and are deliberately
-*not* compressed by `VDS_DEMO_SPEEDUP`.
+`VDS_MAX_CONCURRENT_RESEARCH`, or use `gemini-2.5-flash` for both tiers.
+Retries back off automatically.
 
 **A mission sits in `awaiting_response` and does not finish.** It is waiting for
-a supplier, which is correct. `VDS_DEMO_SPEEDUP=2000` turns the 48-hour
-follow-up timer into about 86 seconds; without it you would wait 48 real hours.
+a supplier, which is correct — that is what the product is. Reply to the message
+yourself from the redirect mailbox and it will resume; `./run.sh mail` reads the
+reply immediately instead of waiting for the poll. Left alone, the follow-up
+timer is a real 48 hours.
+
+**A reply was sent but the mission did not notice.** Check `./run.sh mail` —
+it reports how many messages were read and how many resumed a mission. A reply
+is matched by its `In-Reply-To` header, so replying in the thread works and
+composing a fresh message to the same address does not.
 
 **`pytest` fails on import with a `google-adk` error.** Check your Python is
 3.12 or 3.13: `.venv/bin/python --version`.
@@ -231,14 +241,11 @@ follow-up timer into about 86 seconds; without it you would wait 48 real hours.
 ## Every environment variable
 
 All `VDS_`-prefixed, and read in exactly one place: `app/config.py`. A missing
-API key never fails a mission — the provider degrades to its mock and the
-substitution is reported at `/api/health`, so a demo cannot quietly claim to
-have called a Google API it did not call.
+credential stops the process and names itself rather than being substituted for,
+and `/api/health` lists every adapter actually bound.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `VDS_USE_SCRIPTED_MODEL` | `false` | deterministic model, no network, no spend. `.env.example` sets it true |
-| `VDS_MODE` | `demo` | which product integrations: `demo` binds mocks, `live` binds Google APIs |
 | `VDS_USE_CLOUD_INFRA` | `false` | Firestore/Pub/Sub/Cloud Tasks vs in-process. Independent of `VDS_MODE` |
 | `VDS_APPROVAL_POLICY` | `external` | `autonomous` \| `external` \| `strict` |
 | `VDS_PROJECT_ID` | — | Google Cloud project for Vertex AI and Firestore |
@@ -247,9 +254,9 @@ have called a Google API it did not call.
 | `VDS_USE_VERTEX` | `true` | false uses the Gemini Developer API and `VDS_GEMINI_API_KEY` instead |
 | `VDS_REASONING_MODEL` | resolved | empty = newest reachable model on the ladder |
 | `VDS_FAST_MODEL` | resolved | cheap model for extraction and classification |
-| `VDS_MAPS_API_KEY` | — | Places. Unset degrades to demo data, and says so |
+| `VDS_MAPS_API_KEY` | — | Google Places. Required; unset is a startup failure |
 | `VDS_SEARCH_API_KEY` / `VDS_SEARCH_ENGINE_ID` | — | Programmable Search; unset falls back to Gemini grounding |
-| `VDS_YOUTUBE_API_KEY` | — | YouTube Data API |
+| `VDS_YOUTUBE_API_KEY` | — | YouTube Data API. Required; unset is a startup failure |
 | `VDS_SMTP_USER` / `VDS_SMTP_PASSWORD` | — | real outbound mail without OAuth. Outbound only |
 | `VDS_MAIL_REDIRECT_TO` | — | send every message here instead of to the supplier. Use it |
 | `VDS_MAX_CONCURRENT_RESEARCH` | `3` | caps the widest fan-out so a mission cannot rate-limit itself |
@@ -261,6 +268,4 @@ have called a Google API it did not call.
 | `VDS_FAST_THINKING_BUDGET` | `0` | thinking is billed as output and buys nothing on extraction |
 | `VDS_MAX_OUTREACH_PER_MISSION` | `12` | cost guard |
 | `VDS_MAX_VENDORS_PER_MISSION` | `12` | across the whole mission, not per category |
-| `VDS_DEMO_SPEEDUP` | `1.0` | compresses scheduled delays in demo mode only |
-| `VDS_DEMO_DUPLICATE_RATE` | `0.0` | redelivers this fraction of events, to show idempotency on demand |
 | `VDS_USE_ADK_RESEARCH` | `true` | research as an ADK tool loop; off falls back to pre-fetching |

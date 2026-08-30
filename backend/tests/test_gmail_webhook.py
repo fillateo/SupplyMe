@@ -17,11 +17,11 @@ from fastapi.testclient import TestClient
 from app.api import deps
 from app.api.main import app
 from app.api.routes_webhooks import _mission_for_thread
-from app.config import ApprovalPolicy, Mode, Settings
+from app.config import ApprovalPolicy, Settings
 from app.domain.models import EmailThread, ThreadStatus
 from app.ports.base import InboundMail
 
-from .fixtures import build_scripted_llm
+from .fixtures import build_runtime
 
 
 def push_body(history_id: str = "99") -> dict:
@@ -36,10 +36,14 @@ def client():
     original = deps.startup
 
     async def scripted(settings=None, **kw):
-        return await original(
-            Settings(mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS),
-            llm=build_scripted_llm(), demo_speedup=200_000.0,
+        # The doubles replace the outside world; deps.startup would
+        # otherwise build real providers and demand real credentials.
+        from app.api import deps as _deps
+        _deps._runtime = build_runtime(
+            Settings(approval_policy=ApprovalPolicy.AUTONOMOUS, use_adk_research=False)
         )
+        await _deps._runtime.start()
+        return _deps._runtime
 
     deps.startup = scripted
     with TestClient(app) as test_client:

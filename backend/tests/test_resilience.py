@@ -11,7 +11,7 @@ import asyncio
 
 import pytest
 
-from app.config import ApprovalPolicy, Mode, Settings
+from app.config import ApprovalPolicy, Settings
 from app.domain.events import Event, EventType
 from app.domain.models import (
     EmailThread,
@@ -25,18 +25,15 @@ from app.runtime import Runtime
 from app.workflow.orchestrator import Orchestrator
 
 from .conftest import OBJECTIVE, run_to_completion
-from .fixtures import build_scripted_llm
+from .fixtures import build_runtime
 
 
 def build(duplicate_rate: float = 0.0, **kw) -> Runtime:
     settings = Settings(
-        mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS,
+        approval_policy=ApprovalPolicy.AUTONOMOUS,
         **kw,
     )
-    return Runtime.build(
-        settings, llm=build_scripted_llm(), demo_speedup=200_000.0,
-        duplicate_rate=duplicate_rate,
-    )
+    return build_runtime(settings, duplicate_rate=duplicate_rate)
 
 
 class TestIdempotency:
@@ -314,7 +311,7 @@ class TestUnprocessableEvents:
 class TestPromptInjection:
     async def test_an_injected_reply_produces_no_action_and_no_fabricated_fact(self):
         """A hostile supplier reply must not become instructions."""
-        from app.adapters import demo_world as world
+        from . import doubles_world as world
 
         runtime = build()
         target = world.vendor_by_key("cetak-label")
@@ -355,10 +352,10 @@ class TestConcurrencyBounds:
         import asyncio
 
         settings = Settings(
-            mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS,
+            approval_policy=ApprovalPolicy.AUTONOMOUS,
             max_concurrent_research=2,
         )
-        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
+        runtime = build_runtime(settings)
 
         peak = {"now": 0, "max": 0}
         original = runtime.agents.research.investigate
@@ -424,10 +421,10 @@ class TestSpendGuard:
         from app.domain.cost import CostMeter
 
         settings = Settings(
-            mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS,
+            approval_policy=ApprovalPolicy.AUTONOMOUS,
             max_model_calls_per_mission=3,
         )
-        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
+        runtime = build_runtime(settings)
 
         # The scripted model does not meter itself, so drive the meter directly
         # through the same path a real model call takes.
@@ -781,7 +778,7 @@ class TestAdkSharesTheModelGate:
 
         monkeypatch.setattr(Gemini, "generate_content_async", fake_generate)
         configure_throttle(
-            Settings(mode=Mode.DEMO, max_concurrent_model_calls=2,
+            Settings(max_concurrent_model_calls=2,
                      min_model_call_interval_seconds=0.0)
         )
         model = ThrottledGemini(model="gemini-2.5-flash")
@@ -956,7 +953,7 @@ class TestContactRouteDiscovery:
         runtime.providers.search.fetch = fetch
 
         # Start the vendor with nothing but a name, the way live discovery does.
-        from app.adapters import demo_world as world
+        from . import doubles_world as world
 
         target = world.vendor_by_key("sinar-pump")
         original_domain = target.domain

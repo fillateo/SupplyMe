@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from app.adapters import registry
 from app.agents.adk_research import TOOL_PERMISSIONS, _guard, build_tools
-from app.config import Mode, Settings
+from app.config import Settings
 from app.domain.policy import AGENT_TOOLS, Tool
 from app.security import sanitize
 
-from .fixtures import build_scripted_llm
+from .fixtures import build_providers
 
 
 class FakeTool:
@@ -20,7 +19,7 @@ class FakeTool:
 
 @pytest.fixture
 def providers():
-    return registry.build(Settings(mode=Mode.DEMO), llm=build_scripted_llm())
+    return build_providers(Settings())
 
 
 class TestPermissionGuard:
@@ -89,5 +88,5 @@ def test_the_scripted_model_keeps_the_deterministic_research_agent():
     """A tool loop is non-deterministic by design and must not run in tests."""
     from app.runtime import _research_agent
 
-    providers = registry.build(Settings(mode=Mode.DEMO), llm=build_scripted_llm())
+    providers = build_providers(Settings())
     assert _research_agent(providers) is None

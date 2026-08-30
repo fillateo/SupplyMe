@@ -59,7 +59,6 @@ async def health(rt: Runtime = Depends(runtime)) -> dict[str, Any]:
     meter = getattr(rt.providers, "meter", None)
     return {
         "status": "ok",
-        "mode": rt.settings.mode.value,
         "approval_policy": rt.settings.approval_policy.value,
         "providers": rt.providers.describe(),
         "notes": rt.providers.notes,

@@ -10,7 +10,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from ..config import get_settings
 from ..logging_setup import configure
 from . import deps, routes_events, routes_missions, routes_webhooks
 
@@ -59,4 +58,4 @@ app.include_router(routes_webhooks.router)
 @app.get("/healthz", include_in_schema=False)
 async def healthz() -> JSONResponse:
     """Liveness only — deliberately does not touch Firestore or Gemini."""
-    return JSONResponse({"status": "ok", "mode": get_settings().mode.value})
+    return JSONResponse({"status": "ok"})

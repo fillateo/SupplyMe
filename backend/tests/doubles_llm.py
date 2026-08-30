@@ -1,34 +1,27 @@
-"""A scripted stand-in for Gemini, driven by the demo world.
+"""A deterministic stand-in for Gemini, for the test suite only.
 
-These handlers do the job the model does — read the supplied sources and return
-schema-valid structured data — but deterministically. They are written against
-the same prompts the real agents send, so a change that breaks the contract
-between a handler and its agent breaks these too.
-
-This lives in the application rather than the test suite because it has two
-jobs. It makes the test suite assert on workflow behaviour instead of on model
-output; and it lets the whole system — console included — run end to end with no
-Google Cloud project, no API key and no network, which is the difference between
-"you can read this repo" and "you can run it".
-
-Set `VDS_USE_SCRIPTED_MODEL=true` to bind it. Nothing else changes: the same
-agents, events, storage, scoring and console.
+The product has no simulated model: `app/adapters/registry.py` builds a real
+Gemini client or refuses to start. This exists so the workflow, the event
+orchestration and the scoring can be asserted on without a network, a project,
+or a bill — which is what a test double is for, and why it lives here rather
+than in `app/`.
 """
 
 from __future__ import annotations
 
 import re
 
-from ..agents.schemas import (
+from app.adapters.scripted_llm import ScriptedLLM
+from app.agents.schemas import (
     BrandFinding,
     BrandInvestigation,
     DiscoveredVendor,
     DiscoveryResult,
     EmailDraft,
     ExtractedClaim,
+    LineItem,
     MissionBrief,
     PlannedNode,
-    LineItem,
     QuoteExtraction,
     RecommendationNarrative,
     SearchQueries,
@@ -36,9 +29,9 @@ from ..agents.schemas import (
     SupplyChainPlan,
     VendorResearch,
 )
-from ..domain.models import SourceType
-from . import demo_world as world
-from .scripted_llm import ScriptedLLM
+from app.domain.models import SourceType
+
+from . import doubles_world as world
 
 NODES = [
     ("bottle", "50ml glass perfume bottle", ("pump", "cap")),

@@ -13,7 +13,7 @@ output "workflow_topic" {
 }
 
 output "gmail_topic" {
-  value       = var.mode == "live" ? google_pubsub_topic.gmail[0].id : ""
+  value       = var.gmail_push ? google_pubsub_topic.gmail[0].id : ""
   description = "Pass this to users.watch to start Gmail push notifications."
 }
 
@@ -26,8 +26,8 @@ output "next_steps" {
     "1. Confirm which Gemini model the deployment resolved:",
     "     curl -s ${google_cloud_run_v2_service.api.uri}/api/health | jq .providers",
     "     (/healthz is the container's own probe; the public health endpoint is /api/health.)",
-    var.mode == "live" ?
+    var.gmail_push ?
     "2. Start Gmail push: python scripts/gmail_auth.py --watch ${google_pubsub_topic.gmail[0].id}" :
-    "2. Demo mode: mock providers are bound. Nothing will email or call a real supplier.",
+    "2. Replies are read over IMAP on a one-minute Cloud Scheduler poll.",
   ])
 }

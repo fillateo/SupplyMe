@@ -1,12 +1,10 @@
-"""Demo-mode adapters.
+"""Stand-ins for search, Places, YouTube and mail, for the test suite only.
 
-Each one implements the same port as its Google counterpart and returns data
-from app/adapters/demo_world.py. The mail provider is the important one: it does
-not return a reply inline. It schedules a real `email.received` event on the
-bus, minutes or seconds later,
-so a demo run exercises the same asynchronous resumption path that a supplier
-answering at 2am would — §44's requirement that mock providers produce events
-through the real workflow rather than fake results in the UI.
+The product has no simulated providers — a missing key is a startup failure, not
+a fallback to invented suppliers. These exist so a whole mission can be driven
+offline and deterministically, including the parts that are hard to provoke
+against the real web: a supplier who never answers, one whose site contradicts
+their quote, and every message being delivered twice.
 """
 
 from __future__ import annotations
@@ -15,9 +13,9 @@ import logging
 import re
 from typing import Any
 
-from ..domain.events import Event, EventType
-from ..domain.ids import new_id
-from ..ports.base import (
+from app.domain.events import Event, EventType
+from app.domain.ids import new_id
+from app.ports.base import (
     InboundMail,
     PageContent,
     Place,
@@ -25,7 +23,8 @@ from ..ports.base import (
     SentMail,
     Video,
 )
-from . import demo_world as world
+
+from . import doubles_world as world
 
 log = logging.getLogger(__name__)
 

@@ -54,7 +54,7 @@ export type Mission = {
   id: string; objective: string; status: string; product: string | null;
   quantity: number | null; unit_spec: string | null; market: string | null;
   location: string | null; search_scope: SearchScope;
-  priorities: string[]; success_criteria: string[]; mode: string;
+  priorities: string[]; success_criteria: string[];
   emails_sent: number; created_at: string;
   weights: Record<string, number>; failure_reason: string | null;
 };

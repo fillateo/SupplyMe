@@ -190,7 +190,6 @@ class Mission(Base):
     user_id: str = "demo-user"
     objective: str
     status: MissionStatus = MissionStatus.CREATED
-    mode: str = "demo"
 
     # Structured reading of the objective, produced by the Mission agent.
     product: str | None = None

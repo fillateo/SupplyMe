@@ -46,10 +46,6 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
-        name  = "VDS_MODE"
-        value = var.mode
-      }
-      env {
         name  = "VDS_APPROVAL_POLICY"
         value = var.approval_policy
       }
@@ -75,7 +71,7 @@ resource "google_cloud_run_v2_service" "api" {
       }
       env {
         # Firestore, Pub/Sub and Cloud Tasks instead of the in-process store,
-        # bus and scheduler. Independent of var.mode on purpose — see
+        # bus and scheduler. See
         # Settings.use_cloud_infra.
         name  = "VDS_USE_CLOUD_INFRA"
         value = "true"
@@ -100,12 +96,6 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "VDS_TASKS_QUEUE"
         value = google_cloud_tasks_queue.followups.name
       }
-      # A demo deployment that holds real 48-hour timers looks broken to
-      # anyone who opens it. See variables.tf.
-      env {
-        name  = "VDS_DEMO_SPEEDUP"
-        value = tostring(var.demo_speedup)
-      }
       # Spend guards. These are hard stops in the application, not alerts.
       env {
         name  = "VDS_MAX_USD_PER_MISSION"
@@ -124,6 +114,46 @@ resource "google_cloud_run_v2_service" "api" {
               secret  = google_secret_manager_secret.gemini_api_key.secret_id
               version = "latest"
             }
+          }
+        }
+      }
+
+      env {
+        name  = "VDS_SMTP_USER"
+        value = var.smtp_user
+      }
+      env {
+        name  = "VDS_MAIL_REDIRECT_TO"
+        value = var.mail_redirect_to
+      }
+
+      # The three product credentials. Secrets rather than plain values: a
+      # revision's environment is readable by anyone with viewer on the project,
+      # and an API key in it is an API key published to them.
+      env {
+        name = "VDS_MAPS_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.maps_api_key.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "VDS_YOUTUBE_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.youtube_api_key.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "VDS_SMTP_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.smtp_password.secret_id
+            version = "latest"
           }
         }
       }
@@ -156,13 +186,11 @@ resource "google_cloud_run_v2_service" "api" {
 }
 
 resource "google_cloud_run_v2_service_iam_member" "public_read" {
-  count = var.mode == "demo" ? 1 : 0
+  count = var.publicly_readable ? 1 : 0
 
   project  = var.project_id
   location = google_cloud_run_v2_service.api.location
   name     = google_cloud_run_v2_service.api.name
   role     = "roles/run.invoker"
-  # A demo deployment is meant to be openable by a judge from a link. A live
-  # deployment is not: it holds a real mailbox and can spend money on calls.
-  member = "allUsers"
+  member   = "allUsers"
 }

@@ -112,16 +112,6 @@ class TestItIsOnlyBoundWhenItDoesSomething:
         inner = FakeMail()
         assert _redirected(inner, Settings(mail_redirect_to=""), []) is inner
 
-    def test_a_mocked_mailbox_is_not_wrapped_because_it_reaches_nobody(self):
-        from app.adapters.mock_providers import MockMailProvider
-        from app.adapters.registry import _redirected
-        from app.config import Settings
-
-        mock = MockMailProvider()
-        notes: list[str] = []
-        assert _redirected(mock, Settings(mail_redirect_to=TESTER), notes) is mock
-        assert any("nothing is sent at all" in note for note in notes)
-
     def test_a_real_provider_is_wrapped_and_the_health_note_says_where_mail_goes(self):
         from app.adapters.registry import _redirected
         from app.config import Settings

@@ -9,10 +9,10 @@ from fastapi.testclient import TestClient
 
 from app.api import deps
 from app.api.main import app
-from app.config import ApprovalPolicy, Mode, Settings
+from app.config import ApprovalPolicy, Settings
 
 from .conftest import OBJECTIVE
-from .fixtures import build_scripted_llm
+from .fixtures import build_runtime
 
 
 @pytest.fixture(scope="module")
@@ -20,10 +20,14 @@ def client():
     original = deps.startup
 
     async def scripted(settings=None, **kw):
-        return await original(
-            Settings(mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS),
-            llm=build_scripted_llm(), demo_speedup=200_000.0,
+        # The doubles replace the outside world; deps.startup would
+        # otherwise build real providers and demand real credentials.
+        from app.api import deps as _deps
+        _deps._runtime = build_runtime(
+            Settings(approval_policy=ApprovalPolicy.AUTONOMOUS, use_adk_research=False)
         )
+        await _deps._runtime.start()
+        return _deps._runtime
 
     deps.startup = scripted
     with TestClient(app) as test_client:
@@ -49,10 +53,17 @@ def test_liveness_does_not_depend_on_the_workflow(client):
 
 
 def test_health_reports_which_providers_are_bound(client):
+    """The health endpoint names every adapter actually in use.
+
+    It is the only way to tell a deployment that is reading the live web from
+    one that is not, and the fastest way to spot a stale revision.
+    """
     body = client.get("/api/health").json()
-    assert body["mode"] == "demo"
-    assert body["providers"]["mail"] == "MockMailProvider"
-    assert any("SYNTHETIC" in note for note in body["notes"])
+    providers = body["providers"]
+    assert set(providers) >= {"store", "bus", "scheduler", "llm", "search", "maps", "video", "mail"}
+    # This suite drives the workflow with doubles, and the endpoint says so
+    # rather than reporting the names of adapters it is not bound to.
+    assert providers["mail"] == "MockMailProvider"
 
 
 def test_a_mission_runs_to_completion_over_http(client, mission_id):
@@ -169,10 +180,15 @@ class TestPushTokenReachesTheEndpoint:
         original = deps.startup
 
         async def scripted(settings=None, **kw):
-            return await original(
-                Settings(mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS),
-                llm=build_scripted_llm(), demo_speedup=200_000.0,
+            # The doubles replace the outside world; deps.startup would
+            # otherwise build real providers and demand real credentials.
+            from app.api import deps as _deps
+
+            _deps._runtime = build_runtime(
+                Settings(approval_policy=ApprovalPolicy.AUTONOMOUS, use_adk_research=False)
             )
+            await _deps._runtime.start()
+            return _deps._runtime
 
         deps.startup = scripted
         with TestClient(app) as test_client:

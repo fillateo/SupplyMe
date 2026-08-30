@@ -5,7 +5,7 @@ API's own `usage_metadata`, not estimated.
 
 ## Measured
 
-One mission over the demo dataset — 5 suppliers, 7 supply-chain categories,
+One mission — 5 suppliers, 7 supply-chain categories,
 research, brand adjudication, outreach drafting, quote extraction, follow-up
 planning — on `gemini-3.5-flash`, across several runs: **55–65 calls,
 roughly 87,000 input and 19,000–26,000 output tokens, $0.09–$0.13.**
@@ -27,7 +27,7 @@ they buy nothing, so the fast tier gets a budget of zero and the reasoning tier
 gets a bounded allowance. That change alone cut cost per call by about 60%.
 
 A full mission lands at **55–65 model calls**, so **$0.09–$0.13**, or
-**Rp 1,500–2,100** at 16,400 IDR/USD. The scripted model costs nothing at all.
+**Rp 1,500–2,100** at 16,400 IDR/USD.
 
 Check any mission's actual spend:
 
@@ -95,26 +95,20 @@ choosing its own sources.
 
 | Service | On this workload |
 | --- | --- |
-| Cloud Run | Scale-to-zero, `cpu_idle = true`. A mission waiting two days for a supplier holds no instance. Effectively free at demo volume. |
+| Cloud Run | Scale-to-zero, `cpu_idle = true`. A mission waiting two days for a supplier holds no instance. The one-minute mailbox poll wakes it briefly and does no work when nothing is new. |
 | Firestore | Thousands of small documents. Well inside the free tier. |
 | Pub/Sub | Tens of messages per mission. Free tier. |
 | Cloud Tasks | One task per follow-up. Free tier. |
 | Cloud Build | A few minutes per deploy. Free tier covers roughly 100 builds/month. |
 
 The realistic risk on a small balance is Vertex AI. Everything else stays in the
-free tier at anything resembling demo volume.
+free tier at this volume.
 
-## Running with no spend at all
+## There is no zero-spend mode
 
-```bash
-VDS_USE_SCRIPTED_MODEL=true
-```
-
-The whole system — console included — runs deterministically with no Google
-Cloud project, no API key and no network. Same agents, events, storage,
-conflict detection and scoring. Use this for development, for the test suite,
-and for any demo where the model output does not need to be live. It is the
-default in `.env.example` for exactly this reason.
+Every mission reads the live web and calls Gemini, so what bounds the cost is
+the caps rather than a switch. That is deliberate: a system whose cheapest mode
+was also its most convincing demonstration was demonstrating the wrong thing.
 
 ## Before you deploy
 
@@ -127,17 +121,19 @@ tofu plan
 
 Set `alert_email` and `billing_account` or no alert is created at all.
 
-Cloud Run in `demo` mode is deliberately public so a judge can open the link.
-That is safe for spend because demo mode binds mock providers — it cannot send
-mail — but the model still runs, so keep the per-mission caps on.
+Cloud Run is deliberately public so a judge can open the link
+(`publicly_readable` in Terraform). What bounds the damage is not the door: the
+per-mission caps stop a mission rather than warning about it, outreach is
+capped, and while `mail_redirect_to` is set every message goes to that address
+rather than to a supplier. Turn it off before pointing this at real suppliers
+with the redirect unset.
 
 ## If you are close to the limit
 
-1. `VDS_USE_SCRIPTED_MODEL=true` — zero spend, full workflow.
-2. `VDS_FAST_MODEL=gemini-2.5-flash-lite` — roughly a third of flash.
-3. Lower `VDS_MAX_VENDORS_PER_CATEGORY` to 3 and
+1. `VDS_FAST_MODEL=gemini-2.5-flash-lite` — roughly a third of flash.
+2. Lower `VDS_MAX_VENDORS_PER_CATEGORY` to 3 and
    `VDS_MAX_MODEL_CALLS_PER_MISSION` to 40.
-4. Check `curl -s localhost:8080/api/health | jq .spend.since_startup` after any
+3. Check `curl -s localhost:8080/api/health | jq .spend.since_startup` after any
    live run.
 
 The authoritative number is always Cloud Billing. The meter here is a guard

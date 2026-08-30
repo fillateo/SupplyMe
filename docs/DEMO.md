@@ -1,45 +1,70 @@
 # Running the demo
 
+Nothing here is simulated. The agent reads the live web, queries Google Places,
+calls Gemini, and sends real email. The one thing that is not what it appears is
+the recipient: `VDS_MAIL_REDIRECT_TO` sends every message to a mailbox you own
+instead of to the supplier it was addressed to, and the message says so at the
+top.
+
+That is also what makes the demo possible. **You reply as the supplier.** The
+agent writes to a real address, a human answers, and the mission resumes from
+that answer — which is the whole premise of the category, performed rather than
+described.
+
+## Before you record
+
+```bash
+cd backend && cp .env.example .env      # then fill it in
+```
+
+Everything in `.env.example` marked required has to be set; there is no offline
+mode and the process will refuse to start and name what is missing. Then:
+
+```bash
+./run.sh                # API on :8080, console on :3000
+./run.sh status         # confirms which providers are actually bound
+```
+
+Check two things before you press record:
+
+- `/api/health` shows `GoogleSearchProvider`, `PlacesProvider`, `YouTubeProvider`
+  and `RedirectingMailProvider`. If any of them says something else, the
+  environment is wrong.
+- The health notes say mail is going to **your** address. If that line is
+  missing, outreach will go to real businesses.
+
+Have the receiving mailbox open in a second window. You will be answering from
+it on camera.
+
 ## The four-minute path
 
 | Time | What to show | Where it comes from |
 | --- | --- | --- |
-| 0:00–0:20 | The friction, in one sentence: *"I want to start a perfume brand and I don't know who can actually make it."* | — |
-| 0:20–0:40 | Paste the objective, press **Start sourcing**, close the tab | `POST /api/missions` |
-| 0:40–1:10 | Reopen. Categories identified, discovery already running in parallel | Supply chain tab |
-| 1:10–1:40 | A supplier claims a major brand. Open it: **supplier's word only, no independent source**. Open the other: **verified, brand's own site** | Suppliers tab → expand |
-| 1:40–2:10 | The email it wrote, and what it personalised from | Approvals bar, "Read it first" |
-| 2:10–2:45 | Reply arrives on its own. Quote extracted. **Sources differ on MOQ: 500 vs 1,000** | Activity feed, then the vendor's conflict panel |
-| 2:45–3:15 | It puts both numbers back to them in one targeted follow-up. Their reply: *"minimum turun ke 500 pcs untuk pilot, Rp 11.000/pcs."* | Communications tab |
-| 3:15–3:40 | The supplier is re-scored. 84 → 95, because MOQ now fits | Recommendation tab → "How the score was reached" |
-| 3:40–4:00 | Click any number on screen: excerpt, URL, retrieval time | Evidence drawer |
+| 0:00–0:25 | The friction, in one sentence: *"I want to start a perfume brand and I don't know who can actually make it."* | — |
+| 0:25–0:45 | Paste the objective, press **Start sourcing**, close the tab | `POST /api/missions` |
+| 0:45–1:25 | Reopen. Categories identified, discovery running in parallel across them | Supply chain tab |
+| 1:25–2:00 | Open a supplier. Real company, real address, real website — and the evidence drawer shows the page it was read from, with the retrieval time | Suppliers tab → expand → any figure |
+| 2:00–2:25 | A brand claim judged on its sources: the supplier's own word, versus something written by anyone else | Suppliers tab → brand panel |
+| 2:25–2:50 | The email it wrote, and what it personalised from. Approve it | Approvals bar, "Read it first" |
+| 2:50–3:20 | **Switch to the mailbox.** The email is there. Reply as the supplier — quote a price and a minimum order that contradicts their website | your inbox |
+| 3:20–3:45 | Back in the console: the reply is in, the quote extracted, and the disagreement is flagged | Activity feed, then the conflict panel |
+| 3:45–4:00 | It puts both numbers back to them in one targeted follow-up, and the recommendation names what it could not establish | Communications, Recommendation |
 
-Closing line: *"I gave it one product idea. It worked out what the product is made of, found suppliers for every part, checked their claims against sources that were not them, wrote to them, noticed that one supplier's website and their sales desk disagreed — and asked."*
+The reply takes up to a minute to appear — Cloud Scheduler polls the mailbox
+once a minute. `./run.sh mail` reads it immediately if you would rather not wait
+on camera.
 
-## Setup
+Closing line: *"I gave it one product idea. It worked out what the product is
+made of, found real manufacturers for every part, checked their claims against
+sources that were not them, wrote to them, and when a supplier's website and
+their sales desk disagreed — it noticed, and asked."*
 
-See [docs/LOCAL.md](LOCAL.md) for running it on your machine. The short version:
+## What to say about the mailbox
 
-```bash
-cd backend && cp .env.example .env    # VDS_USE_SCRIPTED_MODEL=true is the default
-.venv/bin/uvicorn app.api.main:app --port 8080
-cd ../frontend && npm run dev         # http://localhost:3000
-```
-
-Recommended `.env` for a recorded demo:
-
-```
-VDS_MODE=demo
-VDS_APPROVAL_POLICY=external      # so the approval gate is visible
-VDS_PROJECT_ID=your-project
-VDS_VERTEX_LOCATION=global        # where Vertex serves Gemini 3.x from
-VDS_DEMO_SPEEDUP=2000             # a 48h follow-up becomes ~86 seconds
-VDS_DEMO_DUPLICATE_RATE=0.25      # a quarter of events delivered twice
-```
-
-`VDS_DEMO_DUPLICATE_RATE` is worth leaving on. It redelivers a quarter of all
-events, and the mission still sends exactly one email per supplier — which is
-the point of the idempotency work and is visible in the counters.
+Say it plainly, once: every message really sends, and it is redirected to an
+address the operator owns so that a demonstration does not cost a stranger their
+afternoon. Judges reward that more than they reward pretending the recipient was
+a factory in Tangerang.
 
 ## Proof of action
 
@@ -49,27 +74,31 @@ Nothing in the console is animated. If a judge asks whether it is real:
 # The stored event log the timeline renders from
 curl -s localhost:8080/api/missions/$MID/activity | jq '.[-12:] | .[] | {type, status, emitted}'
 
-# The structured logs, filtered to one mission
-gcloud logging read 'jsonPayload.mission_id="'$MID'"' --limit 40
-
 # Every claim with the source it came from
 curl -s localhost:8080/api/missions/$MID/evidence | jq '.[] | {claim, source_type, source_url}'
+
+# What the mission spent, from the API's own token counts
+curl -s localhost:8080/api/missions/$MID | jq .spend
+
+# The structured logs, filtered to one mission
+gcloud logging read 'jsonPayload.mission_id="'$MID'"' --limit 40
 ```
 
 And the whole thing without a browser, printing only stored state:
 
 ```bash
-.venv/bin/python scripts/run_demo.py
+.venv/bin/python scripts/run_mission.py --project YOUR_PROJECT
 ```
 
-## If a live model is unavailable
+## If a supplier's site is slow
 
-`scripts/run_demo.py` with no flags uses a scripted model and needs no
-credentials or network. The workflow, the events, the storage and the scoring
-are identical; only the text generation is deterministic. Say so if you use it.
+A real mission takes longer than a recorded one wants to. Reading the live web
+is bounded by the slowest site the research agent decides to open, and a mission
+across a dozen suppliers can run for several minutes before the first email is
+drafted.
 
-## Demo data honesty
-
-Demo mode uses synthetic suppliers under the reserved `example.com`, and
-`/api/health` reports the substitution. No real business is described, quoted or
-contacted, and no real brand is claimed as anyone's customer.
+Two things help, and neither of them fakes anything: lower
+`VDS_MAX_VENDORS_PER_MISSION` so fewer branches run, and start the mission
+before you start recording, so the video opens on a mission already underway.
+The activity feed is a stored log — it reads the same whether you were watching
+when it was written or not.

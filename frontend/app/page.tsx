@@ -25,7 +25,7 @@ export default function MissionsPage() {
   const [location, setLocation] = useState("Indonesia");
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [health, setHealth] = useState<{ mode: string; notes: string[] } | null>(null);
+  const [health, setHealth] = useState<{ providers: Record<string, string>; notes: string[] } | null>(null);
 
   useEffect(() => {
     api.missions().then(setMissions).catch(() => setError("Cannot reach the API."));
@@ -140,7 +140,7 @@ export default function MissionsPage() {
 
       {health && (
         <p className="mt-4 font-mono text-2xs uppercase tracking-[0.08em] text-faint">
-          {health.mode} mode
+          {health.providers.llm} · {health.providers.mail}
           {health.notes.length > 0 && ` · ${health.notes[0]}`}
         </p>
       )}

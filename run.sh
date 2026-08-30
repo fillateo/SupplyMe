@@ -3,16 +3,19 @@
 # VendorDiscoveryShortcut — local runner.
 #
 #   ./run.sh              set up if needed, then start the API and the console
-#   ./run.sh demo         run one whole mission in the terminal, no servers
+#   ./run.sh mission      run one whole mission in the terminal, no servers
 #   ./run.sh test         the test suite
-#   ./run.sh live         start against real Gemini instead of the scripted model
+#   ./run.sh mail         read the mailbox now instead of waiting for the poll
 #   ./run.sh stop         stop whatever this script started
 #   ./run.sh status       what is running, and what it has spent
 #   ./run.sh setup        install dependencies only
 #   ./run.sh clean        remove build caches (never touches source or .env)
 #
-# Defaults to the scripted model: no Google Cloud project, no API key, no
-# network, no spend. `./run.sh live` is the opt-in.
+# There is one mode and it is the real one: real Gemini, the live web, Google
+# Places, YouTube, and a mailbox that actually sends. Credentials are not
+# optional — a missing one stops the process and names itself. Set
+# VDS_MAIL_REDIRECT_TO in backend/.env before running this against suppliers
+# you have not agreed to contact.
 
 set -euo pipefail
 
@@ -172,7 +175,7 @@ setup_backend() {
 
   if [ ! -f "$BACKEND/.env" ]; then
     cp "$BACKEND/.env.example" "$BACKEND/.env"
-    info "wrote backend/.env (scripted model — no credentials, no spend)"
+    warn "wrote backend/.env from the example — fill in the credentials before starting"
   fi
 }
 
@@ -201,16 +204,23 @@ cmd_test() {
   (cd "$BACKEND" && "$PY" -m pytest -q "$@")
 }
 
-cmd_demo() {
+cmd_mission() {
   check_prereqs; setup_backend
   say "running one complete mission in the terminal"
-  info "scripted model — no credentials, no network, no spend"
+  info "real providers, real spend, and real email — check VDS_MAIL_REDIRECT_TO"
   echo
-  (cd "$BACKEND" && "$PY" scripts/run_demo.py "$@")
+  (cd "$BACKEND" && "$PY" scripts/run_mission.py "$@")
+}
+
+cmd_mail() {
+  check_prereqs
+  say "reading the mailbox"
+  curl -fsS -X POST "http://127.0.0.1:$API_PORT/webhooks/mail/poll" 2>/dev/null \
+    || die "the API is not running on :$API_PORT"
+  echo
 }
 
 start_services() {
-  local mode="$1"
 
   free_port "$API_PORT" "api"
   free_port "$WEB_PORT" "console"
@@ -225,19 +235,8 @@ start_services() {
   say "starting the API on :$API_PORT"
   (
     cd "$BACKEND"
-    if [ "$mode" = live ]; then
-      # Real Gemini AND the real Google APIs for anything that has a key.
-      # Integrations without one degrade to their mock and say so at
-      # /api/health, so a missing Gmail token costs the mission its mailbox
-      # rather than failing the run.
-      VDS_USE_SCRIPTED_MODEL=false VDS_MODE=live \
-        nohup "$VENV/bin/uvicorn" app.api.main:app \
-          --host 127.0.0.1 --port "$API_PORT" > "$RUNDIR/api.log" 2>&1 &
-    else
-      VDS_USE_SCRIPTED_MODEL=true VDS_MODE=demo \
-        nohup "$VENV/bin/uvicorn" app.api.main:app \
-          --host 127.0.0.1 --port "$API_PORT" > "$RUNDIR/api.log" 2>&1 &
-    fi
+    nohup "$VENV/bin/uvicorn" app.api.main:app \
+      --host 127.0.0.1 --port "$API_PORT" > "$RUNDIR/api.log" 2>&1 &
     echo $! > "$RUNDIR/api.pid"
   )
 
@@ -295,18 +294,11 @@ print(next((n for n in notes if 'REDIRECT' in n or 'real email over SMTP' in n),
   local bound
   bound="$("$PY" -c "
 import json, sys
-d = json.loads(sys.argv[1])
-p = d.get('providers', {})
-real = [k for k in ('search','maps','video','mail') if not p.get(k,'').startswith('Mock')]
-mock = [k for k in ('search','maps','video','mail') if p.get(k,'').startswith('Mock')]
-print(('real: ' + ', '.join(real) if real else 'real: none') + '   |   mock: ' + (', '.join(mock) or 'none'))
+p = json.loads(sys.argv[1]).get('providers', {})
+print(', '.join(f'{k}={p[k]}' for k in ('search','maps','video','mail') if k in p))
 " "$health" 2>/dev/null || echo "")"
   [ -n "$bound" ] && printf '%s\n' "  tools     $bound"
-  if [ "$model" = "ScriptedLLM" ]; then
-    printf '%s\n' "  spend     ${GREEN}none${OFF} ${DIM}— deterministic model, no network${OFF}"
-  else
-    printf '%s\n' "  spend     ${YELLOW}live Gemini${OFF} ${DIM}— about \$0.05-0.08 per mission; ./run.sh status to check${OFF}"
-  fi
+  printf '%s\n' "  spend     ${YELLOW}live${OFF} ${DIM}— \$0.09-0.13 per mission; ./run.sh status to check${OFF}"
   echo
   printf '%s\n' "  ${DIM}Press ${OFF}Start sourcing${DIM}, then look for:${OFF}"
   printf '%s\n' "  ${DIM}  · the supplier with the red 'disagreement' badge — website said MOQ 500,${OFF}"
@@ -320,17 +312,22 @@ print(('real: ' + ', '.join(real) if real else 'real: none') + '   |   mock: ' +
 
 cmd_dev() {
   check_prereqs; setup_backend; setup_frontend
-  start_services demo
-  print_banner
-}
 
-cmd_live() {
-  check_prereqs; setup_backend; setup_frontend
-
-  if ! grep -qE '^VDS_PROJECT_ID=.+' "$BACKEND/.env" 2>/dev/null; then
-    warn "VDS_PROJECT_ID is not set in backend/.env — live mode needs a project."
-    info "set it, then: gcloud auth application-default login"
-    die "cannot start live"
+  # Every one of these is required to start. There is nothing to fall back to,
+  # so failing here with the name of the missing variable beats failing four
+  # minutes into a mission.
+  local missing=""
+  for key in VDS_PROJECT_ID VDS_MAPS_API_KEY VDS_YOUTUBE_API_KEY VDS_SMTP_USER VDS_SMTP_PASSWORD; do
+    grep -qE "^$key=.+" "$BACKEND/.env" 2>/dev/null || missing="$missing $key"
+  done
+  if [ -n "$missing" ]; then
+    warn "backend/.env is missing:$missing"
+    info "there is no offline mode — see backend/.env.example for what each one is"
+    die "cannot start"
+  fi
+  if ! grep -qE '^VDS_MAIL_REDIRECT_TO=.+' "$BACKEND/.env" 2>/dev/null; then
+    warn "VDS_MAIL_REDIRECT_TO is empty: outreach will go to real suppliers."
+    info "set it to a mailbox you own unless that is what you meant."
   fi
   local gcloud_bin adc
   gcloud_bin="$(find_gcloud || true)"
@@ -357,7 +354,7 @@ cmd_live() {
   (cd "$BACKEND" && "$PY" scripts/check_models.py --project "$project" 2>/dev/null \
       | tail -5 | sed 's/^/    /') || warn "model check failed; starting anyway"
 
-  start_services live
+  start_services
   print_banner
 }
 
@@ -418,8 +415,8 @@ usage() {
 
 case "${1:-dev}" in
   ""|dev|start|up) shift || true; cmd_dev ;;
-  live)            shift || true; cmd_live ;;
-  demo)            shift || true; cmd_demo "$@" ;;
+  mission)         shift || true; cmd_mission "$@" ;;
+  mail)            shift || true; cmd_mail ;;
   test|tests)      shift || true; cmd_test "$@" ;;
   setup|install)   shift || true; cmd_setup ;;
   stop|down)       shift || true; stop_all ;;

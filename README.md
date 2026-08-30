@@ -235,14 +235,25 @@ not-comparable rather than as cheapest.
 pushes a historyId, `/webhooks/gmail` pulls the new message, matches it to the
 thread that asked for it, and the mission resumes. No polling, no open browser.
 
-**What has and has not been run.** The workflow half is exercised on every demo
-run and in the test suite: the mock provider raises real `email.received` events
-through the real bus, and the mission resumes from them. The Gmail half —
-OAuth, `users.watch`, and the push into `/webhooks/gmail` — is implemented and
-has not been run end to end against a live mailbox, because that needs a
-consent screen this project has not set up. `scripts/gmail_auth.py` is the path
-if you want to. SMTP is what sends today, and it is outbound only; `/api/health`
-says which of the two is bound rather than letting you assume.
+**What actually runs today is IMAP.** The Gmail API is the better watch — it
+pushes rather than being asked — and it needs an OAuth client, a consent screen
+and a browser sign-in from whoever owns the mailbox. The app password that
+already sends over SMTP also reads over IMAP, so the loop closes on one
+credential and no console work. A Cloud Scheduler job posts to
+`/webhooks/mail/poll` once a minute, which is also what wakes a scaled-to-zero
+service to notice a reply at all.
+
+The trade is real and worth naming: a supplier answering at 2am is picked up on
+the next poll rather than the same second. Set `gmail_push = true` in Terraform
+and run `scripts/gmail_auth.py` to have the push path instead; both satisfy the
+same port, and `/api/health` says which is bound.
+
+Matching a reply to the mission that asked for it is the part that is not
+obvious. Outreach is normally redirected to a test mailbox, so replies arrive
+from that address rather than from the supplier and the sender matches nothing.
+What survives is the mail thread: every message carries a `Message-ID`, and a
+reply carries it back in `In-Reply-To`. Those headers are what a mail client
+uses to draw a conversation, and they are what this uses too.
 
 Threads keep asked/answered/unanswered questions, so a follow-up asks only what
 is still missing.
@@ -267,7 +278,8 @@ was the largest unattended-spend risk in the system. Thinking tokens are billed
 as output, so the fast tier runs with a budget of zero; that alone cut cost per
 call by about 60%.
 
-`VDS_USE_SCRIPTED_MODEL=true` runs everything with zero spend.
+There is no zero-spend mode: every mission reads the live web and calls Gemini,
+so the caps are what bounds it rather than a switch.
 **[docs/COST.md](docs/COST.md)** has the measurements and every guard.
 
 ## Security
@@ -283,15 +295,23 @@ call by about 60%.
 
 ## Run it
 
-**You do not need a Google Cloud project.** With `VDS_USE_SCRIPTED_MODEL=true`
-the entire system — console included — runs with no credentials and no network.
-The agents, events, storage, conflict detection and scoring are the real ones;
-only the text generation is deterministic.
+**There is one mode and it is the real one.** Every provider is the live
+service or the process refuses to start, naming the variable that is missing —
+so a mission either read the real web, queried real business listings, called
+Gemini and wrote to a real mailbox, or it never began. Nothing here can produce
+a convincing demonstration of suppliers that do not exist.
+
+The one safety valve is `VDS_MAIL_REDIRECT_TO`. The addresses in a mission
+belong to real businesses, read off their real websites, and the distance
+between a good demonstration and an apology is one environment variable. Set it
+to a mailbox you own; every message really sends, and says at the top who it
+would have reached.
 
 ```bash
 ./run.sh            # installs what is missing, then starts the API and console
-./run.sh demo       # one whole mission in the terminal, ~30s
-./run.sh test       # 335 tests, ~55s
+./run.sh mission    # one whole mission in the terminal, start to finish
+./run.sh mail       # read the mailbox now instead of waiting for the poll
+./run.sh test       # 334 tests, ~55s
 ./run.sh status     # what is running, and what it has spent
 ./run.sh stop
 ```
@@ -327,7 +347,7 @@ the link to open; `tofu output next_steps` is what to do after that.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest -q     # 335 tests, ~55 seconds, no network
+.venv/bin/python -m pytest -q     # 334 tests, ~55 seconds, no network
 ```
 
 - **Unit** — evidence classification, identity resolution, quote normalisation,
@@ -343,11 +363,13 @@ the link to open; `tofu output next_steps` is what to do after that.
 The redelivery test runs an entire mission at a 100% duplicate rate and asserts
 no supplier is emailed twice.
 
-Demo data is synthetic and marked as such: every company, brand and quote is
-invented, and every domain is under the reserved `example.com`. A missing API
-key never fails a mission — the provider degrades to its mock and the
-substitution is reported at `/api/health`, so a demo cannot quietly claim to
-have called a Google API it did not call.
+The suite drives whole missions against test doubles, which live in `tests/`
+and are reachable from nowhere in `app/`. That distinction is the point: a
+double lets the failure cases be provoked on demand — a supplier who never
+answers, one whose site contradicts their quote, every message delivered twice —
+while the product itself has nothing to fall back to. A missing API key stops
+the process rather than substituting invented suppliers, and `/api/health` names
+every adapter actually bound.
 
 ## Limitations
 

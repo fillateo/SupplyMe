@@ -155,7 +155,7 @@ export default function MissionConsole() {
               <p className="mt-2 font-mono text-2xs uppercase tracking-[0.08em] text-faint">
                 {mission.product ?? "reading the objective"}
                 {mission.quantity ? ` · ${mission.quantity.toLocaleString()} units` : ""}
-                {mission.market ? ` · ${mission.market}` : ""} · {mission.mode} mode
+                {mission.market ? ` · ${mission.market}` : ""}
               </p>
             </div>
             <StatusChip status={mission.status} live={live} />

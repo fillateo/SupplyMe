@@ -127,15 +127,15 @@ class TestPlacesCost:
         assert Settings().max_maps_queries_per_node <= 2
 
     async def test_the_cap_is_enforced_during_discovery(self):
-        from app.adapters.scripted_world import build_scripted_llm
-        from app.config import ApprovalPolicy, Mode
-        from app.runtime import Runtime
+        from app.config import ApprovalPolicy
+
+        from .fixtures import build_runtime
 
         settings = Settings(
-            mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS,
+            approval_policy=ApprovalPolicy.AUTONOMOUS,
             max_maps_queries_per_node=1,
         )
-        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
+        runtime = build_runtime(settings)
 
         seen: list[str] = []
         original = runtime.providers.maps.search_places
@@ -164,18 +164,17 @@ class TestVendorCeiling:
     """Researching 40 candidates to recommend 5 is the expensive way to be thorough."""
 
     async def test_a_mission_cannot_admit_more_vendors_than_its_ceiling(self):
-        from app.adapters.scripted_world import build_scripted_llm
-        from app.config import ApprovalPolicy, Mode
+        from app.config import ApprovalPolicy
         from app.domain.models import Vendor
-        from app.runtime import Runtime
 
         from .conftest import OBJECTIVE, run_to_completion
+        from .fixtures import build_runtime
 
         settings = Settings(
-            mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS,
+            approval_policy=ApprovalPolicy.AUTONOMOUS,
             max_vendors_per_mission=3,
         )
-        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
+        runtime = build_runtime(settings)
         await runtime.start(concurrency=8)
         try:
             mission = await run_to_completion(runtime, OBJECTIVE)

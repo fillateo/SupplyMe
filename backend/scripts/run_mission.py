@@ -4,21 +4,26 @@ This is the proof-of-action script: every line it prints comes from a stored
 workflow event or a stored document, not from a narration of what the code
 intends to do.
 
-    python scripts/run_demo.py               # scripted model, no API cost
-    python scripts/run_demo.py --live-model  # same workflow, real Gemini calls
+It reads the live web, queries Google Places, calls Gemini and sends real
+email, because there is no other kind of run. Set VDS_MAIL_REDIRECT_TO before
+using it against suppliers you have not agreed to contact.
+
+    python scripts/run_mission.py --project YOUR_PROJECT
+    python scripts/run_mission.py --project YOUR_PROJECT --objective "..."
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import logging
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.config import ApprovalPolicy, Mode, Settings
+from app.config import ApprovalPolicy, Settings
 from app.domain.models import (
     BrandRelationship,
     Conflict,
@@ -39,10 +44,8 @@ OBJECTIVE = (
 
 async def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--live-model", action="store_true", help="use real Gemini calls")
     parser.add_argument("--project", default="", help="Google Cloud project for Vertex AI")
-    parser.add_argument("--duplicate-rate", type=float, default=0.3,
-                        help="fraction of events redelivered, to prove idempotency")
+    parser.add_argument("--objective", default=OBJECTIVE, help="what to source")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -51,29 +54,16 @@ async def main(argv: list[str] | None = None) -> int:
         format="%(levelname)s %(name)s %(message)s",
     )
 
+    overrides = {"project_id": args.project} if args.project else {}
     settings = Settings(
-        mode=Mode.DEMO,
-        # Autonomous so a single run reaches the end; the approval path has its
-        # own test in tests/test_workflow.py.
+        # Autonomous so a single run reaches the end without someone sitting on
+        # the approvals; the approval path has its own test in test_workflow.py.
+        # Every outbound message still really sends, so leave
+        # VDS_MAIL_REDIRECT_TO set unless you mean to write to suppliers.
         approval_policy=ApprovalPolicy.AUTONOMOUS,
-        project_id=args.project,
-        # --live-model means live, whatever .env says. Without this the flag is
-        # silently ignored on any machine whose .env sets the scripted model —
-        # which .env.example does, so that is most of them.
-        use_scripted_model=not args.live_model,
+        **overrides,
     )
-
-    if args.live_model:
-        runtime = Runtime.build(
-            settings, demo_speedup=100_000.0, duplicate_rate=args.duplicate_rate
-        )
-    else:
-        from tests.fixtures import build_scripted_llm
-
-        runtime = Runtime.build(
-            settings, llm=build_scripted_llm(), demo_speedup=100_000.0,
-            duplicate_rate=args.duplicate_rate,
-        )
+    runtime = Runtime.build(settings)
 
     print("=" * 78)
     print("VendorDiscoveryShortcut — demo run")
@@ -82,19 +72,42 @@ async def main(argv: list[str] | None = None) -> int:
     print("=" * 78)
 
     await runtime.start(concurrency=8)
-    mission = await runtime.create_mission(OBJECTIVE)
-    print(f"\nmission {mission.id}\n{OBJECTIVE}\n")
+    mission = await runtime.create_mission(args.objective)
+    print(f"\nmission {mission.id}\n{args.objective}\n")
 
-    # Supplier replies arrive on a compressed clock. Wait for the mission itself
-    # to reach a terminal state — the scheduler is never empty, because the
-    # 48-hour follow-up timers are supposed to still be pending.
+    # Wait for the mission itself to reach a terminal state rather than for the
+    # queue to empty: the scheduler is never empty, because the follow-up timers
+    # are supposed to still be pending.
+    #
+    # A drain that times out is not a failure here. Reading the live web takes
+    # as long as the slowest supplier's site, and a research branch that is
+    # still working looks exactly like a queue that will not settle. So the
+    # timeout is a progress tick, and the mission's own status is the answer.
+    last = ""
     for _ in range(400):
-        await runtime.drain(timeout=180)
+        # A drain that times out means a research branch is still reading
+        # somebody's website, which is not an error and not a reason to stop.
+        with contextlib.suppress(TimeoutError):
+            await runtime.drain(timeout=120)
         current = await runtime.repo.mission(mission.id)
+        counts = runtime.orchestrator.stats
+        line = (
+            f"  {current.status.value:<18} "
+            f"vendors={counts.get('vendor.discovered', 0)} "
+            f"researched={counts.get('vendor.research.started', 0)} "
+            f"emails={counts.get('email.sent', 0)} "
+            f"replies={counts.get('email.received', 0)}"
+        )
+        if line != last:
+            print(line, flush=True)
+            last = line
         if current.status.value in ("completed", "failed"):
             break
-        await asyncio.sleep(0.1)
-    await runtime.drain(timeout=180)
+        await asyncio.sleep(0.5)
+    try:
+        await runtime.drain(timeout=120)
+    except TimeoutError:
+        print("  (still working when the run ended; state below is what it reached)")
 
     await report(runtime, mission.id)
     await runtime.stop()
@@ -207,8 +220,7 @@ async def report(runtime: Runtime, mission_id: str) -> None:
     print("\n" + "=" * 78)
     print(f"mission status: {mission.status.value}")
     print(f"evidence records: {len(evidence)}   emails sent: {mission.emails_sent}")
-    # What the mission actually spent, from the API's own token counts. Zero on
-    # a scripted run, which is the point of the scripted run.
+    # What the mission actually spent, from the API's own token counts.
     if mission.model_calls:
         print(
             f"model spend: {mission.model_calls} calls  "

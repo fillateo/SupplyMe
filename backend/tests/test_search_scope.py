@@ -115,13 +115,12 @@ class TestThroughTheWholeWorkflow:
 
     async def test_the_chosen_country_overrides_what_the_model_read(self):
         """The objective says Indonesia; the user chose Malaysia. Malaysia wins."""
-        from app.config import ApprovalPolicy, Mode, Settings
-        from app.runtime import Runtime
+        from app.config import ApprovalPolicy, Settings
 
-        from .fixtures import build_scripted_llm
+        from .fixtures import build_runtime
 
-        settings = Settings(mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS)
-        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
+        settings = Settings(approval_policy=ApprovalPolicy.AUTONOMOUS)
+        runtime = build_runtime(settings)
         await runtime.start(concurrency=4)
         try:
             mission = await runtime.create_mission(
@@ -135,13 +134,12 @@ class TestThroughTheWholeWorkflow:
             await runtime.stop()
 
     async def test_a_named_city_is_kept_and_the_country_still_gets_inferred(self):
-        from app.config import ApprovalPolicy, Mode, Settings
-        from app.runtime import Runtime
+        from app.config import ApprovalPolicy, Settings
 
-        from .fixtures import build_scripted_llm
+        from .fixtures import build_runtime
 
-        settings = Settings(mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS)
-        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
+        settings = Settings(approval_policy=ApprovalPolicy.AUTONOMOUS)
+        runtime = build_runtime(settings)
         await runtime.start(concurrency=4)
         try:
             mission = await runtime.create_mission(
@@ -160,13 +158,12 @@ class TestThroughTheWholeWorkflow:
 
         from app.api import deps
         from app.api.main import app
-        from app.config import ApprovalPolicy, Mode, Settings
-        from app.runtime import Runtime
+        from app.config import ApprovalPolicy, Settings
 
-        from .fixtures import build_scripted_llm
+        from .fixtures import build_runtime
 
-        settings = Settings(mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS)
-        runtime = Runtime.build(settings, llm=build_scripted_llm())
+        settings = Settings(approval_policy=ApprovalPolicy.AUTONOMOUS)
+        runtime = build_runtime(settings)
         deps._runtime = runtime
         try:
             client = TestClient(app)
@@ -186,13 +183,12 @@ class TestThroughTheWholeWorkflow:
 
         from app.api import deps
         from app.api.main import app
-        from app.config import ApprovalPolicy, Mode, Settings
-        from app.runtime import Runtime
+        from app.config import ApprovalPolicy, Settings
 
-        from .fixtures import build_scripted_llm
+        from .fixtures import build_runtime
 
-        settings = Settings(mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS)
-        runtime = Runtime.build(settings, llm=build_scripted_llm())
+        settings = Settings(approval_policy=ApprovalPolicy.AUTONOMOUS)
+        runtime = build_runtime(settings)
         deps._runtime = runtime
         try:
             client = TestClient(app)

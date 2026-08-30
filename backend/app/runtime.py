@@ -41,14 +41,9 @@ class Runtime:
         settings: Settings | None = None,
         *,
         llm: Any | None = None,
-        demo_speedup: float = 1.0,
-        duplicate_rate: float = 0.0,
     ) -> Runtime:
         settings = settings or get_settings()
-        providers = registry.build(
-            settings, llm=llm, demo_speedup=demo_speedup, duplicate_rate=duplicate_rate
-        )
-        return cls(providers)
+        return cls(registry.build(settings, llm=llm))
 
     async def start(self, concurrency: int = 6) -> None:
         if hasattr(self.providers.bus, "start"):
@@ -139,7 +134,7 @@ class Runtime:
     ) -> Mission:
         mission = Mission(
             objective=objective.strip(), user_id=user_id,
-            status=MissionStatus.CREATED, mode=self.settings.mode.value,
+            status=MissionStatus.CREATED,
             location=(location or "").strip() or None, search_scope=scope,
         )
         await self.repo.save(mission)
@@ -158,12 +153,12 @@ def _research_agent(providers: Any) -> Any:
     """Build the ADK research agent when a real model is in play.
 
     A tool-use loop is the right shape for research and the wrong shape for a
-    test: it is non-deterministic by design. So a scripted model always gets the
-    pre-fetching agent, and the workflow assertions stay stable either way —
-    both satisfy the same `investigate` contract.
+    test: it is non-deterministic by design. A test that binds its own model
+    therefore gets the pre-fetching agent, and the workflow assertions stay
+    stable — both satisfy the same `investigate` contract.
     """
     settings: Settings = providers.settings
-    if settings.use_scripted_model or not settings.use_adk_research:
+    if not settings.use_adk_research:
         return None
     if type(providers.llm).__name__ != "GeminiLLM":
         return None

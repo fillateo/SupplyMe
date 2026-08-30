@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.config import ApprovalPolicy, Mode, Settings
+from app.config import ApprovalPolicy, Settings
 from app.domain.events import Event, EventType
 from app.domain.models import (
     Approval,
@@ -25,7 +25,7 @@ from app.domain.models import (
 from app.runtime import Runtime
 
 from .conftest import OBJECTIVE, run_to_completion
-from .fixtures import build_scripted_llm
+from .fixtures import build_runtime
 
 
 @pytest.fixture
@@ -189,8 +189,8 @@ class TestActivityTimeline:
 class TestApprovalGate:
     async def test_outreach_waits_for_approval_and_resumes_on_grant(self):
         """Under the default policy the first email to a vendor is held."""
-        settings = Settings(mode=Mode.DEMO, approval_policy=ApprovalPolicy.EXTERNAL_ACTIONS)
-        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
+        settings = Settings(approval_policy=ApprovalPolicy.EXTERNAL_ACTIONS)
+        runtime = build_runtime(settings)
         await runtime.start(concurrency=8)
         try:
             mission = await runtime.create_mission(OBJECTIVE)
@@ -222,8 +222,8 @@ class TestApprovalGate:
             await runtime.stop()
 
     async def test_denial_rejects_the_vendor_rather_than_stalling(self):
-        settings = Settings(mode=Mode.DEMO, approval_policy=ApprovalPolicy.EXTERNAL_ACTIONS)
-        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
+        settings = Settings(approval_policy=ApprovalPolicy.EXTERNAL_ACTIONS)
+        runtime = build_runtime(settings)
         await runtime.start(concurrency=8)
         try:
             mission = await runtime.create_mission(OBJECTIVE)

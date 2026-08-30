@@ -24,15 +24,55 @@ variable "service_name" {
   default = "vendor-discovery"
 }
 
-variable "mode" {
-  type        = string
-  default     = "demo"
-  description = "demo binds the mock providers; live binds Gmail, Search and Places."
+variable "gmail_push" {
+  type    = bool
+  default = false
 
-  validation {
-    condition     = contains(["demo", "live"], var.mode)
-    error_message = "mode must be demo or live."
-  }
+  description = <<-EOT
+    Read replies through the Gmail API instead of over IMAP.
+
+    Truer to how a mailbox should be watched — Google pushes rather than being
+    asked — and it needs an OAuth client, a consent screen and a browser
+    sign-in from whoever owns the mailbox. Off by default because the app
+    password that already sends can also read, and one credential that works
+    beats two that need a console. See backend/app/adapters/imap_mail.py.
+  EOT
+}
+
+variable "publicly_readable" {
+  type    = bool
+  default = true
+
+  description = <<-EOT
+    Let anyone with the link open the console and the API.
+
+    True because the point of deploying is that someone can look. What bounds
+    the damage is not the door but the caps: VDS_MAX_USD_PER_MISSION and
+    VDS_MAX_MODEL_CALLS_PER_MISSION stop a mission rather than warning about
+    it, outreach is capped per mission, and while mail_redirect_to is set every
+    message goes to that address rather than to a supplier.
+
+    Turn it off before pointing this at real suppliers with the redirect unset.
+  EOT
+}
+
+variable "mail_redirect_to" {
+  type    = string
+  default = ""
+
+  description = <<-EOT
+    Deliver every outbound message to this address instead of to the supplier.
+
+    The addresses in a mission belong to real businesses, read off their real
+    websites. Set this to a mailbox you own unless you have decided, on purpose,
+    to write to them. /api/health states which it is.
+  EOT
+}
+
+variable "smtp_user" {
+  type        = string
+  default     = ""
+  description = "The mailbox that sends and is read back. Its app password lives in Secret Manager."
 }
 
 variable "approval_policy" {
@@ -81,30 +121,6 @@ variable "reasoning_model" {
 variable "fast_model" {
   type    = string
   default = ""
-}
-
-variable "demo_speedup" {
-  type    = number
-  default = 1.0
-
-  description = <<-EOT
-    Divides scheduled delays, in demo mode only.
-
-    A 48-hour follow-up timer is correct behaviour and useless to anyone
-    watching: a demo deployment left at 1.0 shows a mission that reaches
-    `awaiting_response` and then appears to stall for two days, because Cloud
-    Tasks is faithfully holding the timer. 2000 turns that wait into about 90
-    seconds.
-
-    It compresses the clock, never the workflow, and it cannot shorten a retry
-    backoff — shortening those would land the retries inside the same
-    overloaded window they exist to avoid. Ignored entirely when mode is live.
-  EOT
-
-  validation {
-    condition     = var.mode == "demo" || var.demo_speedup == 1.0
-    error_message = "demo_speedup only applies in demo mode; leave it at 1.0 for live."
-  }
 }
 
 variable "max_instances" {

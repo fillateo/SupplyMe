@@ -37,7 +37,7 @@ async function send<T>(path: string, method: string, body?: unknown): Promise<T>
 }
 
 export const api = {
-  health: () => get<{ mode: string; approval_policy: string; providers: Record<string, string>; notes: string[] }>("/api/health"),
+  health: () => get<{ approval_policy: string; providers: Record<string, string>; notes: string[] }>("/api/health"),
   missions: () => get<Mission[]>("/api/missions"),
   createMission: (objective: string, where?: { location?: string; scope?: SearchScope }) =>
     send<Mission>("/api/missions", "POST", {

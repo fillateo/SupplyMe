@@ -1,20 +1,7 @@
-"""The deterministic demo environment.
+"""The invented supply chain the test doubles answer from.
 
-Everything in this file is synthetic. Companies, people, brands, domains and
-quotes are invented; all domains sit under the reserved `example.com` so nothing
-here can be mistaken for, or resolve to, a real business.
-
-It exists because §44 requires a demo that proves the workflow rather than
-animating it. The mock providers below return this data through the same ports
-the live Google adapters implement, so a demo run executes the real discovery,
-research, adjudication, conflict and outreach code paths — including the two
-cases the product is really about:
-
-* `kemasan-wangi` publishes "MOQ 500" but quotes 1,000 by email. The workflow has
-  to notice, put both numbers back to them, and get it settled in writing.
-* `aroma-nusantara` and `botol-prima` both claim a major-brand customer. One is
-  corroborated by the brand's own site and trade press; the other is the
-  supplier's word and nothing else.
+Every company, brand, quote and domain here is fictional, and every domain is
+under the reserved `example.com`. This is test data. Nothing in `app/` reads it.
 """
 
 from __future__ import annotations

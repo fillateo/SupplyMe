@@ -76,10 +76,9 @@ resource "google_cloud_run_v2_service" "console" {
   depends_on = [google_project_service.enabled]
 }
 
-# A demo console is meant to be openable from a link; a live one holds a real
-# mailbox behind it and is not. Same rule as the API, for the same reason.
+# Same rule as the API, for the same reason. See var.publicly_readable.
 resource "google_cloud_run_v2_service_iam_member" "console_public_read" {
-  count = var.mode == "demo" ? 1 : 0
+  count = var.publicly_readable ? 1 : 0
 
   project  = var.project_id
   location = google_cloud_run_v2_service.console.location

@@ -42,30 +42,72 @@ async def gmail_push(
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     try:
-        notification = json.loads(base64.b64decode(raw).decode())
+        # Decoded to reject a malformed notification here rather than inside the
+        # read. Google redelivers a 5xx indefinitely, and a push that will never
+        # parse will never parse on the tenth attempt either.
+        json.loads(base64.b64decode(raw).decode())
     except ValueError:
         log.warning("gmail_push_undecodable")
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    history_id = str(notification.get("historyId", ""))
-    stored = await rt.providers.store.get("gmail_state", "watch")
-    since = (stored or {}).get("history_id")
+    await drain_mailbox(rt)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/mail/poll")
+async def mail_poll(
+    rt: Runtime = Depends(runtime), _: None = Depends(verify_push_token)
+) -> dict[str, int]:
+    """Ask the mailbox whether anything arrived.
+
+    IMAP has no push, so something has to ask; Cloud Scheduler does, once a
+    minute — see terraform/scheduler.tf. Cloud Run scales to zero between
+    missions, so this is also what wakes the service up to notice a reply at
+    all.
+
+    Returns counts rather than 204 because this endpoint is the one a human
+    curls when a reply seems to have gone missing, and "read 3, resumed 1" is
+    the answer to that question.
+    """
+    return await drain_mailbox(rt)
+
+
+async def drain_mailbox(rt: Runtime) -> dict[str, int]:
+    """Turn whatever is new in the mailbox into events, once.
+
+    Shared by the Gmail push notification and the IMAP poll because the only
+    thing that differs between them is what prompted the read: Gmail tells us
+    history moved and IMAP has to be asked, and in both cases the work is to
+    fetch what is new, match each message to the conversation that asked for it,
+    and leave the rest alone.
+    """
+    stored = await rt.providers.store.get("mail_state", "cursor")
+    since = (stored or {}).get("cursor")
 
     try:
-        messages, new_token = await rt.providers.mail.history(since)
+        messages, new_cursor = await rt.providers.mail.history(since)
     except Exception as exc:
-        log.warning("gmail_history_failed", extra={"error": str(exc)})
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
+        # A mailbox that cannot be reached is a transient problem, and raising
+        # would make Cloud Scheduler retry a poll that is about to happen again
+        # anyway. The cursor is not advanced, so nothing is skipped.
+        log.warning("mail_history_failed", extra={"error": str(exc)[:200]})
+        return {"read": 0, "resumed": 0, "failed": 1}
 
-    await rt.providers.store.put(
-        "gmail_state", "watch", {"history_id": new_token or history_id}
-    )
+    # Written before the messages are dispatched, so a crash mid-dispatch cannot
+    # replay the whole batch. Anything genuinely lost that way arrives again as
+    # a follow-up on silence, which is the behaviour for an unanswered email.
+    if new_cursor and new_cursor != since:
+        await rt.providers.store.put("mail_state", "cursor", {"cursor": new_cursor})
 
+    resumed = 0
     for message in messages:
         mission_id = await _mission_for_thread(rt, message.provider_thread_id, message.from_address)
         if mission_id is None:
-            log.info("gmail_message_unrelated", extra={"status": "ignored"})
+            # A mailbox receives more than supplier replies. Anything matching
+            # no thread is somebody else's mail and must not enter a mission.
+            log.info("mail_message_unrelated", extra={"status": "ignored"})
             continue
+        resumed += 1
         await rt.orchestrator.emit(
             Event(
                 type=EventType.EMAIL_RECEIVED,
@@ -79,7 +121,8 @@ async def gmail_push(
                 },
             )
         )
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    log.info("mail_drained", extra={"status": f"read {len(messages)}, resumed {resumed}"})
+    return {"read": len(messages), "resumed": resumed, "failed": 0}
 
 
 #: Threads that are still waiting to hear back. A reply belongs to one of these,

@@ -24,7 +24,7 @@ identity is ever present in client JavaScript.
 `/events/pubsub`, `/events/task` and `/webhooks/gmail` are protected by an OIDC
 identity that Pub/Sub and Cloud Tasks present (enforced by Cloud Run IAM) *and*
 by a shared secret header checked in `app/api/deps.py`. The second lock is what
-still works when a demo deployment is deliberately made public so a judge can
+still works when the deployment is deliberately made public so a judge can
 open the link.
 
 ## Rotating the push token

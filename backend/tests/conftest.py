@@ -2,24 +2,25 @@ from __future__ import annotations
 
 import pytest
 
-from app.config import ApprovalPolicy, Mode, Settings
-from app.runtime import Runtime
+from app.config import ApprovalPolicy, Settings
 
-from .fixtures import build_scripted_llm
+from .fixtures import build_runtime
 
 
 @pytest.fixture
 def settings() -> Settings:
     return Settings(
-        mode=Mode.DEMO,
         approval_policy=ApprovalPolicy.AUTONOMOUS,
         max_outreach_per_mission=12,
+        # The doubles answer instantly, so the ADK tool loop has nothing real to
+        # decide and its non-determinism would only make assertions flaky.
+        use_adk_research=False,
     )
 
 
 @pytest.fixture
 async def runtime(settings: Settings):
-    rt = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
+    rt = build_runtime(settings)
     await rt.start(concurrency=8)
     try:
         yield rt
@@ -27,11 +28,11 @@ async def runtime(settings: Settings):
         await rt.stop()
 
 
-async def run_to_completion(rt: Runtime, objective: str, *, max_polls: int = 600):
+async def run_to_completion(rt, objective: str, *, max_polls: int = 600):
     """Drive a mission until it reaches a terminal state."""
-    mission = await rt.create_mission(objective)
     import asyncio
 
+    mission = await rt.create_mission(objective)
     for _ in range(max_polls):
         await rt.drain(timeout=120)
         current = await rt.repo.mission(mission.id)
