@@ -76,9 +76,17 @@ variable "smtp_user" {
 }
 
 variable "approval_policy" {
-  type        = string
-  default     = "external"
-  description = "autonomous | external | strict — see app/domain/policy.py."
+  type    = string
+  default = "autonomous"
+
+  description = <<-EOT
+    autonomous | external | strict — see app/domain/policy.py.
+
+    Autonomous by default: the agent acts without stopping to be authorised,
+    which is the behaviour worth deploying. mail_redirect_to is what makes that
+    safe — every message sends for real but reaches the address you nominated
+    instead of a supplier. Choose `external` if you clear the redirect.
+  EOT
 }
 
 variable "use_vertex" {

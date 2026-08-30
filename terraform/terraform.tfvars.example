@@ -23,9 +23,9 @@ console_image = "us-central1-docker.pkg.dev/your-project-id/supply-me/console:la
 smtp_user        = "you@gmail.com"
 mail_redirect_to = "you@gmail.com"
 
-# autonomous | external | strict. `external` holds the first email to each
-# supplier for a human.
-approval_policy = "external"
+# autonomous | external | strict. Autonomous is the point: the agent acts
+# without being authorised each time. mail_redirect_to above is what bounds it.
+approval_policy = "autonomous"
 
 # --- Model routing ----------------------------------------------------------
 

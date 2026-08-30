@@ -169,6 +169,7 @@ an industry — and that is the only vocabulary the code ships with.
 - **Hard spend caps** — a mission that hits its ceiling fails with a reason and is deliberately *not* retried
 - **Per-mission cost accounting** — read from the API's own token counts at `/api/missions/{id}` → `spend`
 - **Fail-fast configuration** — a missing credential stops the process and names itself; there is nothing to fall back to
+- **Autonomous by default** — no approval step stands between the agent and the supplier. The mail redirect is the safety boundary, and `/api/health` says plainly where mail is going
 
 ## 🤖 Agent Architecture
 
@@ -391,7 +392,7 @@ so the caps are what bounds it rather than a switch.
 2. **Choose the logistics scope** — a named city, a country, or anywhere. This shapes the search queries, the Places region, and the ranking
 3. **Watch the supply chain appear** — the product is decomposed into the components it needs, and each is searched in parallel
 4. **Review the evidence** — click any fact to see the verbatim excerpt, the URL, and when it was retrieved
-5. **Approve outreach** — under the default `external` policy, the first email to each supplier waits for you
+5. **Let it write** — the agent emails suppliers itself, without stopping to be authorised. `SUPPLYME_MAIL_REDIRECT_TO` is what bounds that, not a human: every message really sends, to the address you nominated. Set `SUPPLYME_APPROVAL_POLICY=external` if you would rather hold the first email to each supplier
 6. **Close the tab** — replies arrive hours or days later and resume the mission on their own
 7. **Read the recommendation** — a supply network with a sentence behind every score, and the open risks named
 
@@ -412,7 +413,7 @@ so the caps are what bounds it rather than a switch.
 | `GET /api/missions/{id}/vendors` | Suppliers with scores and provenance |
 | `GET /api/missions/{id}/evidence` | Every claim, source and excerpt |
 | `GET /api/missions/{id}/recommendation` | The final supply network |
-| `POST /api/approvals/{id}` | Approve or deny an outbound action |
+| `POST /api/approvals/{id}` | Approve or deny an outbound action, under `external` or `strict` |
 | `GET /api/health` | Which adapters and model are actually bound |
 | `POST /events/pubsub` · `/events/task` · `/webhooks/gmail` · `/webhooks/mail/poll` | Machine entry points |
 

@@ -48,7 +48,16 @@ class Settings(BaseSettings):
         env_prefix="SUPPLYME_", env_file=".env", extra="ignore", protected_namespaces=()
     )
 
-    approval_policy: ApprovalPolicy = ApprovalPolicy.EXTERNAL_ACTIONS
+    #: Autonomous by default. The agent is the product: a mission that stops to
+    #: ask permission before every email is a form with extra steps, and the
+    #: thing worth demonstrating is that it does not need one.
+    #:
+    #: What makes that safe is `mail_redirect_to`, not a human in the loop. With
+    #: it set, every message really sends but reaches the address you nominated
+    #: rather than a supplier, so the blast radius of full autonomy is your own
+    #: inbox. Unset it and you are writing to real businesses unattended — that
+    #: is the moment to choose `external` instead.
+    approval_policy: ApprovalPolicy = ApprovalPolicy.AUTONOMOUS
 
     #: Whether to use Firestore, Pub/Sub and Cloud Tasks instead of the
     #: in-process store, bus and scheduler.
