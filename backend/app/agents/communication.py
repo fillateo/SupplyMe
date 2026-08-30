@@ -43,8 +43,27 @@ line from the price, mixed languages, numbers written as "8.500" or "8,5rb" or
 "Rp 8.500,-". Extract the number the supplier means; when a format is genuinely
 ambiguous, leave the field null rather than guessing a magnitude.
 
-line_items maps a component to its per-unit price. When the supplier gives one
-price for a bundle, use the key "package" — do not split it yourself.
+line_items is one entry per priced COMPONENT — a bottle, a pump, a cap — each
+with its per-unit price. When the supplier gives a single price for a bundle,
+return one entry with the component "package" and do not split it yourself.
+When the supplier quotes a price at all, this must not be empty.
+
+A quantity is never a component, and the two are easy to confuse because they
+arrive in the same sentence.
+
+Different components: "botol Rp 8.500, pump Rp 2.500, cap Rp 1.500" — three
+entries. Their prices genuinely add up to the cost of one unit.
+
+The same thing at different order quantities: "Rp 11.000 at 500 pcs, Rp 8.500 at
+1.000 pcs" — one entry, not two. Pick the rung for the quantity we are buying
+and set quantity to it. If no rung matches, pick the one closest to what we are
+buying and set quantity to the figure the supplier attached to it. Never return
+both: they would look like two components whose prices add up, which costs a
+supplier at the sum of their own discount tiers.
+
+Never return nothing merely because the supplier quoted at a quantity we did not
+ask about. A price at the wrong quantity is still a price, and reporting it with
+its real quantity is what lets it be compared honestly.
 
 Set not_a_quote for bounces, out-of-office replies, and messages that decline or
 only ask a question back.
@@ -138,13 +157,22 @@ class CommunicationAgent(Agent):
 
     async def extract_quote(
         self, *, body: str, questions_asked: list[str], currency_hint: str = "IDR",
+        order_quantity: int | None = None,
         mission_id: str = "", vendor_id: str | None = None,
     ) -> QuoteExtraction:
         self.may(Tool.READ_MAIL)
+        # The order quantity is here because suppliers answer with a price
+        # ladder — "Rp 11.000 at 500, Rp 8.500 at 1.000" — and which rung
+        # applies is the only thing that makes the number comparable.
+        wanted = (
+            f"We are buying {order_quantity} units."
+            if order_quantity
+            else "We did not state a quantity."
+        )
         prompt = (
             "Questions we asked this supplier:\n"
             + "\n".join(f"- {q}" for q in questions_asked)
-            + f"\n\nLikely currency: {currency_hint}. "
+            + f"\n\n{wanted} Likely currency: {currency_hint}. "
             "Extract what the reply below commits to."
         )
         return await self.call(

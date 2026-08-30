@@ -1104,7 +1104,8 @@ async def handle_email_received(orc: Orchestrator, event: Event) -> list[Event]:
 
     extraction = await orc.agents.communication.extract_quote(
         body=body, questions_asked=thread.asked,
-        currency_hint=_currency_for(mission.market), mission_id=mission.id, vendor_id=vendor.id,
+        currency_hint=_currency_for(mission.market), order_quantity=mission.quantity,
+        mission_id=mission.id, vendor_id=vendor.id,
     )
     if extraction.suspicious_content:
         log.warning(
@@ -1137,7 +1138,7 @@ async def handle_email_received(orc: Orchestrator, event: Event) -> list[Event]:
         mission_id=mission.id, vendor_id=vendor.id,
         node_key=vendor.node_keys[0] if vendor.node_keys else None,
         source="email", currency=extraction.currency or _currency_for(mission.market),
-        quantity=extraction.quantity, line_items=extraction.line_items, moq=extraction.moq,
+        quantity=extraction.quantity, line_items=extraction.price_map(), moq=extraction.moq,
         lead_time_days=extraction.lead_time_days,
         sample_lead_time_days=extraction.sample_lead_time_days,
         sample_cost=extraction.sample_cost, payment_terms=extraction.payment_terms,
@@ -1704,7 +1705,8 @@ async def _settle_conflicts_from_reply(
 
 def _package_price(extraction: Any) -> float | None:
     """What one unit costs, however the supplier chose to break it down."""
-    items = getattr(extraction, "line_items", None) or {}
+    price_map = getattr(extraction, "price_map", None)
+    items = price_map() if callable(price_map) else (getattr(extraction, "line_items", None) or {})
     if not items:
         return None
     if "package" in items:

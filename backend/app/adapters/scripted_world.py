@@ -28,6 +28,7 @@ from ..agents.schemas import (
     ExtractedClaim,
     MissionBrief,
     PlannedNode,
+    LineItem,
     QuoteExtraction,
     RecommendationNarrative,
     SearchQueries,
@@ -369,7 +370,10 @@ def _extract_quote(prompt: str, body: str) -> QuoteExtraction:
         (answered if got else unanswered).append(question)
 
     return QuoteExtraction(
-        currency="IDR", line_items=line_items, moq=moq, lead_time_days=lead,
+        currency="IDR",
+        line_items=[LineItem(component=name, unit_price=price)
+                    for name, price in line_items.items()],
+        moq=moq, lead_time_days=lead,
         sample_lead_time_days=sample_lead,
         payment_terms=(
             _between(body, "Payment:", "\n") or _between(body, "Pembayaran", "\n") or None

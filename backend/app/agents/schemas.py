@@ -187,12 +187,28 @@ class EmailDraft(BaseModel):
     )
 
 
+class LineItem(BaseModel):
+    """One component and what it costs per unit."""
+
+    component: str = Field(
+        description="What is priced. Use 'package' for a single bundled price."
+    )
+    unit_price: float
+
+
 class QuoteExtraction(BaseModel):
     quantity: int | None = None
     currency: str | None = None
-    line_items: dict[str, float] = Field(
-        default_factory=dict,
-        description="component -> unit price. Use 'package' for a bundled price.",
+    #: A list of pairs rather than a component -> price mapping, which is what
+    #: this was. A response schema has to declare its properties, and an
+    #: open-ended object has none to declare — so Gemini answered every reply
+    #: with an empty map, however plainly the price was stated. Every live
+    #: mission then rejected every supplier for "still missing unit_price"
+    #: while reporting their MOQ and lead time correctly, which is a hard
+    #: symptom to read backwards. Use `price_map()` to get the mapping.
+    line_items: list[LineItem] = Field(
+        default_factory=list,
+        description="Each component and its per-unit price.",
     )
     moq: int | None = None
     lead_time_days: int | None = None
@@ -210,6 +226,14 @@ class QuoteExtraction(BaseModel):
     #: True when the message is a bounce, an auto-reply, or otherwise not a quote.
     not_a_quote: bool = False
     suspicious_content: bool = False
+
+    def price_map(self) -> dict[str, float]:
+        """The component -> unit price mapping the domain works in."""
+        return {
+            item.component.strip(): item.unit_price
+            for item in self.line_items
+            if item.component.strip()
+        }
 
 
 # --------------------------------------------------------------------------
