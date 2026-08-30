@@ -7,8 +7,12 @@ API's own `usage_metadata`, not estimated.
 
 One mission over the demo dataset — 5 suppliers, 7 supply-chain categories,
 research, brand adjudication, outreach drafting, quote extraction, follow-up
-planning — on `gemini-3.5-flash`: **61 calls, 87,272 input and 25,840 output
-tokens, $0.1124.**
+planning — on `gemini-3.5-flash`, across several runs: **55–65 calls,
+roughly 87,000 input and 19,000–26,000 output tokens, $0.09–$0.13.**
+
+The spread is not measurement noise. How many suppliers reply, and how many
+follow-ups a disagreement takes to settle, differ from run to run — which is
+the point of the thing.
 
 The effect of capping thinking, measured earlier on `gemini-2.5-flash`:
 
@@ -22,8 +26,8 @@ a price out of an email, deciding whether a search result is a manufacturer —
 they buy nothing, so the fast tier gets a budget of zero and the reasoning tier
 gets a bounded allowance. That change alone cut cost per call by about 60%.
 
-A full mission lands around **60 model calls**, so roughly **$0.11**, or
-**Rp 1,800** at 16,400 IDR/USD. The scripted model costs nothing at all.
+A full mission lands at **55–65 model calls**, so **$0.09–$0.13**, or
+**Rp 1,500–2,100** at 16,400 IDR/USD. The scripted model costs nothing at all.
 
 Check any mission's actual spend:
 
