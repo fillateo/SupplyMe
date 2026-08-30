@@ -434,7 +434,7 @@ async def _run_research(
     """Dispatch to whichever research agent is bound.
 
     The ADK agent fetches its own sources, so pre-fetching for it would pay for
-    pages it may never open. The scripted-model agent is handed a fixed set,
+    pages it may never open. The pre-fetching agent is handed a fixed set,
     which is what makes the tests deterministic.
     """
     if hasattr(orc.agents.research, "_runner"):
