@@ -14,7 +14,7 @@ import logging
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from ..domain.events import Event, EventType
-from ..domain.models import EmailThread
+from ..domain.models import EmailThread, ThreadStatus
 from ..runtime import Runtime
 from .deps import runtime, verify_push_token
 
@@ -82,8 +82,24 @@ async def gmail_push(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+#: Threads that are still waiting to hear back. A reply belongs to one of these,
+#: not to a conversation that already finished.
+_OPEN_THREAD_STATUSES = frozenset({ThreadStatus.SENT, ThreadStatus.RESPONDED})
+
+
 async def _mission_for_thread(rt: Runtime, provider_thread_id: str, sender: str) -> str | None:
-    """Find which mission owns an inbound message. Returns None for stranger mail."""
+    """Find which mission owns an inbound message. Returns None for stranger mail.
+
+    The provider's own thread id is the reliable answer and is tried first. The
+    address fallback exists because a supplier who replies from a different
+    mailbox, or whose client starts a new thread, still deserves to be heard —
+    but it has to choose between candidates, because the same supplier can be
+    contacted by more than one mission. Two rules make that choice defensible
+    rather than arbitrary: only threads still awaiting a reply are eligible, and
+    among those the most recently written-to wins. Returning whichever record
+    the store happened to list first could attribute a reply to a mission that
+    stopped asking weeks ago.
+    """
     if provider_thread_id:
         threads = await rt.repo.list(EmailThread, provider_thread_id=provider_thread_id)
         if threads:
@@ -92,7 +108,12 @@ async def _mission_for_thread(rt: Runtime, provider_thread_id: str, sender: str)
     address = sender.split("<")[-1].strip(" >").lower() if "<" in sender else sender.lower()
     if not address:
         return None
-    for thread in await rt.repo.list(EmailThread):
-        if thread.to_address.lower() == address:
-            return thread.mission_id
-    return None
+
+    candidates = [
+        thread
+        for thread in await rt.repo.list(EmailThread)
+        if thread.to_address.lower() == address and thread.status in _OPEN_THREAD_STATUSES
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda thread: thread.updated_at).mission_id

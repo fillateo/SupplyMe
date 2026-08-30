@@ -39,16 +39,17 @@ uv venv --python 3.12 .venv                        # or: python3.12 -m venv .ven
 VIRTUAL_ENV=.venv uv pip install -e ".[dev]"       # or: .venv/bin/pip install -e ".[dev]"
 ```
 
-## 1. Run the tests — 10 seconds, no credentials, no network
+## 1. Run the tests — under a minute, no credentials, no network
 
 ```bash
 cd backend
 .venv/bin/python -m pytest -q
 ```
 
-191 tests. They cover the whole workflow end to end, including every message
-being delivered twice, a search outage, a model timeout, a
-mid-mission restart, and a supplier reply containing a prompt-injection payload.
+317 tests, about 55 seconds. They cover the whole workflow end to end,
+including every message being delivered twice, a search outage, a model
+timeout, a mid-mission restart, and a supplier reply containing a
+prompt-injection payload.
 
 ## 2. Watch a whole mission in the terminal — 30 seconds, still no credentials
 
@@ -143,15 +144,22 @@ needed. Terraform sets the third on Cloud Run.
 gcloud auth application-default login
 
 cd backend
-# check what your project can actually reach first
-.venv/bin/python scripts/check_models.py --project YOUR_PROJECT
+# check what your project can actually reach, and from where
+.venv/bin/python scripts/check_models.py --project YOUR_PROJECT --location global
 ```
+
+Do run that first. Reachability is a property of the project *and* the
+location, not of the model name: on the project this was built against,
+`gemini-3.5-flash` answers from `global` and returns 404 from `us-central1`,
+while `gemini-2.5-pro` does the opposite. The 404 does not mention that the
+model exists at another endpoint, so this is an easy hour to lose.
 
 Then in `.env`:
 
 ```
 VDS_USE_SCRIPTED_MODEL=false
 VDS_PROJECT_ID=your-project
+VDS_LOCATION=global
 ```
 
 and restart the API. `/api/health` will show `GeminiLLM`.
@@ -213,3 +221,39 @@ follow-up timer into about 86 seconds; without it you would wait 48 real hours.
 
 **`pytest` fails on import with a `google-adk` error.** Check your Python is
 3.12 or 3.13: `.venv/bin/python --version`.
+
+## Every environment variable
+
+All `VDS_`-prefixed, and read in exactly one place: `app/config.py`. A missing
+API key never fails a mission — the provider degrades to its mock and the
+substitution is reported at `/api/health`, so a demo cannot quietly claim to
+have called a Google API it did not call.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `VDS_USE_SCRIPTED_MODEL` | `false` | deterministic model, no network, no spend. `.env.example` sets it true |
+| `VDS_MODE` | `demo` | which product integrations: `demo` binds mocks, `live` binds Google APIs |
+| `VDS_USE_CLOUD_INFRA` | `false` | Firestore/Pub/Sub/Cloud Tasks vs in-process. Independent of `VDS_MODE` |
+| `VDS_APPROVAL_POLICY` | `external` | `autonomous` \| `external` \| `strict` |
+| `VDS_PROJECT_ID` | — | Google Cloud project for Vertex AI and Firestore |
+| `VDS_LOCATION` | `global` | Vertex endpoint. Gemini 3.x is served from `global`; a named region 404s |
+| `VDS_USE_VERTEX` | `true` | false uses the Gemini Developer API and `VDS_GEMINI_API_KEY` instead |
+| `VDS_REASONING_MODEL` | resolved | empty = newest reachable model on the ladder |
+| `VDS_FAST_MODEL` | resolved | cheap model for extraction and classification |
+| `VDS_MAPS_API_KEY` | — | Places. Unset degrades to demo data, and says so |
+| `VDS_SEARCH_API_KEY` / `VDS_SEARCH_ENGINE_ID` | — | Programmable Search; unset falls back to Gemini grounding |
+| `VDS_YOUTUBE_API_KEY` | — | YouTube Data API |
+| `VDS_SMTP_USER` / `VDS_SMTP_PASSWORD` | — | real outbound mail without OAuth. Outbound only |
+| `VDS_MAIL_REDIRECT_TO` | — | send every message here instead of to the supplier. Use it |
+| `VDS_MAX_CONCURRENT_RESEARCH` | `3` | caps the widest fan-out so a mission cannot rate-limit itself |
+| `VDS_MAX_CONCURRENT_MODEL_CALLS` | `4` | Gemini requests in flight, process-wide, ADK's included |
+| `VDS_MIN_MODEL_CALL_INTERVAL_SECONDS` | `0` | paces the queue on a small quota |
+| `VDS_MAX_USD_PER_MISSION` | `0.50` | hard stop — the mission fails with a reason rather than spending more |
+| `VDS_MAX_MODEL_CALLS_PER_MISSION` | `120` | hard stop |
+| `VDS_MAX_RESEARCH_LLM_CALLS` | `12` | ceiling on one ADK tool loop (ADK's own default is 500) |
+| `VDS_FAST_THINKING_BUDGET` | `0` | thinking is billed as output and buys nothing on extraction |
+| `VDS_MAX_OUTREACH_PER_MISSION` | `12` | cost guard |
+| `VDS_MAX_VENDORS_PER_MISSION` | `12` | across the whole mission, not per category |
+| `VDS_DEMO_SPEEDUP` | `1.0` | compresses scheduled delays in demo mode only |
+| `VDS_DEMO_DUPLICATE_RATE` | `0.0` | redelivers this fraction of events, to show idempotency on demand |
+| `VDS_USE_ADK_RESEARCH` | `true` | research as an ADK tool loop; off falls back to pre-fetching |
