@@ -14,9 +14,10 @@ from app.domain.models import (
     Quote,
     ScoringWeights,
     SourceType,
+    SupplyChainNode,
     Vendor,
 )
-from app.domain.quotes import comparable_set, normalize
+from app.domain.quotes import ComponentVocabulary, comparable_set, normalize
 from app.domain.scoring import apply_priorities, score_vendor
 from app.domain.trust import profile
 
@@ -89,24 +90,60 @@ class TestIdentity:
 # --------------------------------------------------------------------------
 
 
+def _nodes(*specs: tuple[str, str, list[str]]) -> list[SupplyChainNode]:
+    return [
+        SupplyChainNode(mission_id="m", key=key, name=name, aliases=aliases)
+        for key, name, aliases in specs
+    ]
+
+
+#: A perfume packer's plan, as the supply-chain agent would emit it.
+PERFUME = ComponentVocabulary.from_nodes(
+    _nodes(
+        ("bottle", "Glass bottle", ["botol", "flacon", "glass bottle"]),
+        ("pump", "Atomizer pump", ["sprayer", "atomizer", "spray"]),
+        ("cap", "Cap", ["tutup", "closure", "lid"]),
+        ("label", "Label", ["stiker", "sticker"]),
+    )
+)
+
+#: An entirely different industry, to prove the engine holds no vocabulary of
+#: its own. Nothing about these words appears anywhere in app/.
+POWER_BANK = ComponentVocabulary.from_nodes(
+    _nodes(
+        ("lithium_cell", "Lithium cell", ["cell", "18650", "battery cell"]),
+        ("pcba", "Charge controller PCBA", ["pcb", "board", "pcba"]),
+        ("enclosure", "Injection-moulded enclosure", ["housing", "shell", "casing"]),
+    )
+)
+
+TRIO = ("bottle", "pump", "cap")
+
+
 class TestQuotes:
     def test_bundle_and_itemized_compare_equal(self):
-        bundled = Quote(mission_id="m", vendor_id="A", line_items={"set": 12000.0})
+        bundled = Quote(
+            mission_id="m", vendor_id="A", line_items={"set": 12000.0},
+            bundle_covers=["botol", "sprayer", "tutup"],
+        )
         itemized = Quote(
             mission_id="m", vendor_id="B",
             line_items={"Botol": 8000.0, "sprayer": 2500.0, "tutup": 1500.0},
         )
-        comparable, _ = comparable_set([bundled, itemized])
+        comparable, _ = comparable_set([bundled, itemized], TRIO, vocabulary=PERFUME)
         assert {q.unit_price for q in comparable} == {12000.0}
 
     def test_a_partial_quote_is_not_comparable(self):
         partial = Quote(mission_id="m", vendor_id="C", line_items={"bottle": 7000.0})
-        comparable, incomparable = comparable_set([partial])
+        comparable, incomparable = comparable_set([partial], TRIO, vocabulary=PERFUME)
         assert not comparable
         assert incomparable[0].missing == ("pump", "cap")
 
     def test_no_price_is_invented_for_a_missing_component(self):
-        result = normalize(Quote(mission_id="m", vendor_id="C", line_items={"bottle": 7000.0}))
+        result = normalize(
+            Quote(mission_id="m", vendor_id="C", line_items={"bottle": 7000.0}),
+            TRIO, vocabulary=PERFUME,
+        )
         assert result.unit_price is None
 
     def test_currencies_are_never_converted(self):
@@ -114,20 +151,82 @@ class TestQuotes:
                     line_items={"bottle": 8000.0, "pump": 2500.0, "cap": 1500.0})
         usd = Quote(mission_id="m", vendor_id="B", currency="USD",
                     line_items={"bottle": 0.5, "pump": 0.2, "cap": 0.1})
-        comparable, incomparable = comparable_set([idr, usd])
+        comparable, incomparable = comparable_set([idr, usd], TRIO, vocabulary=PERFUME)
         assert [q.vendor_id for q in comparable] == ["A"]
         assert "FX" in " ".join(incomparable[0].notes)
 
     def test_superseded_quotes_are_excluded(self):
         old = Quote(mission_id="m", vendor_id="A", line_items={"package": 9999.0},
                     superseded_by="q2")
-        comparable, incomparable = comparable_set([old])
+        comparable, incomparable = comparable_set([old], TRIO, vocabulary=PERFUME)
         assert not comparable and not incomparable
 
     def test_bundle_still_needs_components_it_does_not_cover(self):
-        bundled = Quote(mission_id="m", vendor_id="A", line_items={"package": 12000.0})
-        result = normalize(bundled, ("bottle", "label"))
+        bundled = Quote(
+            mission_id="m", vendor_id="A", line_items={"package": 12000.0},
+            bundle_covers=["bottle", "pump", "cap"],
+        )
+        result = normalize(bundled, ("bottle", "label"), vocabulary=PERFUME)
         assert result.unit_price is None and result.missing == ("label",)
+
+
+class TestQuotesAreVerticalAgnostic:
+    """The engine holds no industry's vocabulary. The mission supplies it."""
+
+    def test_another_industry_compares_bundle_against_itemized(self):
+        wanted = ("lithium_cell", "pcba", "enclosure")
+        bundled = Quote(
+            mission_id="m", vendor_id="A", line_items={"kit": 41000.0},
+            bundle_covers=["cell", "board", "housing"],
+        )
+        itemized = Quote(
+            mission_id="m", vendor_id="B",
+            line_items={"18650": 26000.0, "PCBA": 9000.0, "Shell": 6000.0},
+        )
+        comparable, incomparable = comparable_set(
+            [bundled, itemized], wanted, vocabulary=POWER_BANK
+        )
+        assert not incomparable
+        assert {q.unit_price for q in comparable} == {41000.0}
+
+    def test_a_local_language_line_item_resolves_to_its_node(self):
+        vocab = ComponentVocabulary.from_nodes(
+            _nodes(("oak_panel", "Oak panel", ["papan kayu jati", "tabletop blank"]))
+        )
+        quote = Quote(mission_id="m", vendor_id="A", line_items={"Papan kayu jati": 480000.0})
+        result = normalize(quote, ("oak_panel",), vocabulary=vocab)
+        assert result.comparable and result.unit_price == 480000.0
+
+    def test_an_unexplained_bundle_is_never_assumed_to_cover_anything(self):
+        quote = Quote(mission_id="m", vendor_id="A", line_items={"set": 12000.0})
+        result = normalize(quote, TRIO, vocabulary=PERFUME)
+        assert not result.comparable
+        assert result.missing == TRIO
+        assert "without saying what it covers" in " ".join(result.notes)
+
+    def test_a_bundle_covering_more_than_was_asked_says_so(self):
+        quote = Quote(
+            mission_id="m", vendor_id="A", line_items={"paket": 12000.0},
+            bundle_covers=["bottle", "pump", "cap"],
+        )
+        result = normalize(quote, ("bottle",), vocabulary=PERFUME)
+        assert result.comparable and result.extras == ("pump", "cap")
+        assert "not asked for here" in " ".join(result.notes)
+
+    def test_with_no_plan_a_component_still_stands_for_itself(self):
+        quote = Quote(mission_id="m", vendor_id="A", line_items={"Widget": 5.0})
+        result = normalize(quote, ("widget",))
+        assert result.comparable and result.unit_price == 5.0
+
+    def test_a_node_key_is_never_shadowed_by_another_nodes_alias(self):
+        vocab = ComponentVocabulary.from_nodes(
+            _nodes(
+                ("cap", "Cap", []),
+                ("closure_set", "Closure set", ["cap", "closure"]),
+            )
+        )
+        assert vocab.canonical("cap") == "cap"
+        assert vocab.canonical("closure") == "closure_set"
 
 
 # --------------------------------------------------------------------------

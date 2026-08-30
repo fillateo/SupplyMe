@@ -243,6 +243,11 @@ class SupplyChainNode(Base):
     depends_on: list[str] = Field(default_factory=list)
     #: Node keys a single vendor could plausibly cover together.
     consolidates_with: list[str] = Field(default_factory=list)
+    #: Other words suppliers in this industry use for this component, including
+    #: the local market's own. This is the mission's component vocabulary: it is
+    #: what lets a reply pricing `botol` or `enclosure` be matched to the node
+    #: that asked. See `domain/quotes.ComponentVocabulary`.
+    aliases: list[str] = Field(default_factory=list)
     search_terms: list[str] = Field(default_factory=list)
     rationale: str = ""
 
@@ -371,6 +376,9 @@ class Quote(Base):
     quantity: int | None = None
     #: Component -> unit price. A vendor quoting a bundle uses the key "package".
     line_items: dict[str, float] = Field(default_factory=dict)
+    #: What a bundled price covers, as the supplier stated it. Empty means they
+    #: did not say, which makes the bundle uncomparable rather than assumed.
+    bundle_covers: list[str] = Field(default_factory=list)
     moq: int | None = None
     lead_time_days: int | None = None
     sample_lead_time_days: int | None = None

@@ -24,7 +24,11 @@ from ..domain.models import SourceType
 class MissionBrief(BaseModel):
     product: str = Field(description="What is being manufactured, in a few words")
     quantity: int | None = Field(default=None, description="First-batch unit count if stated")
-    unit_spec: str | None = Field(default=None, description="e.g. '50ml EDP'")
+    unit_spec: str | None = Field(
+        default=None,
+        description="The unit being made, as specified: '50ml eau de parfum', "
+        "'1.5m oak dining table', '10000mAh power bank'",
+    )
     market: str | None = Field(default=None, description="Country or region of production/sale")
     budget_note: str | None = None
     priorities: list[str] = Field(
@@ -47,7 +51,10 @@ class MissionBrief(BaseModel):
 
 
 class PlannedNode(BaseModel):
-    key: str = Field(description="lowercase_snake identifier, e.g. 'bottle'")
+    key: str = Field(
+        description="lowercase_snake identifier for this component, drawn from the "
+        "product being made: 'glass_bottle', 'oak_panel', 'lithium_cell'"
+    )
     name: str
     description: str = ""
     required: bool = True
@@ -55,6 +62,13 @@ class PlannedNode(BaseModel):
     consolidates_with: list[str] = Field(
         default_factory=list,
         description="keys a single vendor could plausibly supply together with this one",
+    )
+    aliases: list[str] = Field(
+        default_factory=list,
+        description="Other words a supplier in THIS industry would use for this same "
+        "component when quoting it, including the local market's own language. "
+        "These are matched against supplier quotations, so give the words that "
+        "appear on an invoice line, not search phrases.",
     )
     search_terms: list[str] = Field(
         default_factory=list, description="2-4 search phrases a sourcing agent would actually use"
@@ -194,6 +208,12 @@ class LineItem(BaseModel):
         description="What is priced. Use 'package' for a single bundled price."
     )
     unit_price: float
+    covers: list[str] = Field(
+        default_factory=list,
+        description="Only for a 'package' line: the components that one price includes, "
+        "as the supplier described them. Leave empty if the supplier did not say — "
+        "an unexplained bundle is reported as uncomparable rather than guessed at.",
+    )
 
 
 class QuoteExtraction(BaseModel):
@@ -234,6 +254,15 @@ class QuoteExtraction(BaseModel):
             for item in self.line_items
             if item.component.strip()
         }
+
+    def bundle_covers(self) -> list[str]:
+        """What the supplier said a bundled line includes, across every bundle."""
+        covered: list[str] = []
+        for item in self.line_items:
+            for name in item.covers:
+                if name.strip() and name.strip() not in covered:
+                    covered.append(name.strip())
+        return covered
 
 
 # --------------------------------------------------------------------------

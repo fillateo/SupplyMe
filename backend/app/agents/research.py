@@ -2,9 +2,10 @@
 
 Both read content the system does not control, so both are permitted to search
 and write evidence and nothing else — they cannot email, call, or score. The
-brand agent exists separately because "who does this factory make perfume for"
-is the one question where a supplier's own marketing is least reliable and most
-persuasive, and it needs an investigator that starts from disbelief.
+brand agent exists separately because "which brands does this factory actually
+produce for" is the one question where a supplier's own marketing is least
+reliable and most persuasive, and it needs an investigator that starts from
+disbelief.
 """
 
 from __future__ import annotations
@@ -27,8 +28,10 @@ colour" are different facts; quote enough of the sentence that the difference
 survives. Do not convert currencies or units. Do not average a range — record
 what is written.
 
-capabilities are what this business does (moulding 50ml glass flacons, hot
-stamping, contract filling), not the categories it lists in a menu.
+capabilities are what this business actually does, in its own terms and at the
+specificity its sources give — "injection moulding up to 2L", "hot stamping",
+"CMT garment assembly", "SMT lines for boards up to 250mm" — not the categories
+it lists in a menu.
 
 brand_claims: copy any brand the supplier says it works with. Copy the name
 only. Do not assess it — a separate agent investigates those claims.
@@ -58,7 +61,8 @@ These do NOT support it, and you must say so in reasoning:
 - the supplier's own website, catalogue, or video saying it
 - the brand's name appearing in a list of "clients" with no detail
 - the supplier appearing at the same trade show as the brand
-- a video that shows a bottle resembling the brand's
+- imagery on the supplier's own channels showing something resembling the
+  brand's product
 - a news article about the brand that merely mentions the supplier's region
 
 The brand's own website, a case study either party published, or independent

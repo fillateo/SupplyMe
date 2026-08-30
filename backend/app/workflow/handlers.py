@@ -138,6 +138,7 @@ async def handle_requirements_created(orc: Orchestrator, event: Event) -> list[E
                 required=planned.required,
                 depends_on=[slug(d) for d in planned.depends_on],
                 consolidates_with=[slug(c) for c in planned.consolidates_with],
+                aliases=planned.aliases,
                 search_terms=planned.search_terms,
                 rationale=planned.rationale,
             )
@@ -1093,9 +1094,11 @@ async def handle_email_received(orc: Orchestrator, event: Event) -> list[Event]:
     thread.status = ThreadStatus.RESPONDED
     await orc.repo.save(thread)
 
+    nodes = await orc.repo.list(SupplyChainNode, mission_id=mission.id)
     extraction = await orc.agents.communication.extract_quote(
         body=body, questions_asked=thread.asked,
         currency_hint=_currency_for(mission.market), order_quantity=mission.quantity,
+        components=_component_names(nodes, vendor.node_keys),
         mission_id=mission.id, vendor_id=vendor.id,
     )
     if extraction.suspicious_content:
@@ -1129,7 +1132,8 @@ async def handle_email_received(orc: Orchestrator, event: Event) -> list[Event]:
         mission_id=mission.id, vendor_id=vendor.id,
         node_key=vendor.node_keys[0] if vendor.node_keys else None,
         source="email", currency=extraction.currency or _currency_for(mission.market),
-        quantity=extraction.quantity, line_items=extraction.price_map(), moq=extraction.moq,
+        quantity=extraction.quantity, line_items=extraction.price_map(),
+        bundle_covers=extraction.bundle_covers(), moq=extraction.moq,
         lead_time_days=extraction.lead_time_days,
         sample_lead_time_days=extraction.sample_lead_time_days,
         sample_cost=extraction.sample_cost, payment_terms=extraction.payment_terms,
@@ -1437,7 +1441,8 @@ async def rank_vendors(
     orc: Orchestrator, mission: Mission, nodes: list[SupplyChainNode], vendors: list[Vendor]
 ) -> dict[str, list[dict[str, Any]]]:
     """Score every vendor for every node it could serve. Pure and reproducible."""
-    node_components = {node.key: _components_for(node) for node in nodes}
+    vocabulary = quote_engine.ComponentVocabulary.from_nodes(nodes)
+    node_components = {node.key: _components_for(node, vocabulary) for node in nodes}
     ranking: dict[str, list[dict[str, Any]]] = {}
 
     for node in nodes:
@@ -1450,7 +1455,9 @@ async def rank_vendors(
         packaged: dict[str, Any] = {}
         for vendor in candidates:
             vendor_quotes = await orc.repo.vendor_quotes(vendor.id)
-            comparable, _ = quote_engine.comparable_set(vendor_quotes, components)
+            comparable, _ = quote_engine.comparable_set(
+                vendor_quotes, components, vocabulary=vocabulary
+            )
             packaged[vendor.id] = comparable[0] if comparable else None
 
         priced = [p.unit_price for p in packaged.values() if p and p.unit_price]
@@ -1484,11 +1491,22 @@ async def rank_vendors(
     return ranking
 
 
-def _components_for(node: SupplyChainNode) -> tuple[str, ...]:
-    """What a quote for this node must price to be comparable."""
-    from ..domain.quotes import canonical_component
+def _component_names(nodes: list[SupplyChainNode], node_keys: list[str]) -> list[str]:
+    """How to name each component this vendor was asked about, for the extractor.
 
-    return (canonical_component(node.key),)
+    The vendor's own nodes first, because those are what the email asked for;
+    the rest of the plan after, because a supplier who also quotes a neighbouring
+    component should have it recognised rather than filed under a new name.
+    """
+    ordered = sorted(nodes, key=lambda n: n.key not in set(node_keys))
+    return [f"{n.key} ({n.name})" if n.name and n.name != n.key else n.key for n in ordered]
+
+
+def _components_for(
+    node: SupplyChainNode, vocabulary: quote_engine.ComponentVocabulary
+) -> tuple[str, ...]:
+    """What a quote for this node must price to be comparable."""
+    return (vocabulary.canonical(node.key),)
 
 
 def _quote_dict(package: Any) -> dict[str, Any] | None:
@@ -1498,7 +1516,8 @@ def _quote_dict(package: Any) -> dict[str, Any] | None:
         "quote_id": package.quote_id, "unit_price": package.unit_price,
         "currency": package.currency, "components": list(package.components),
         "covered": list(package.covered), "missing": list(package.missing),
-        "bundled": package.bundled, "notes": package.notes,
+        "extras": list(package.extras), "bundled": package.bundled,
+        "notes": package.notes,
     }
 
 

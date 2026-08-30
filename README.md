@@ -98,10 +98,27 @@ The routing decision is the whole product: `handle_vendor_updated` in
 move — qualify, reject, email, or wait — and no part of that is scripted by the
 user.
 
+### One system, any product
+
+Nothing in `app/` knows what a bottle is. The supply-chain agent decomposes the
+product into nodes, and each node carries the words a supplier in *that*
+industry writes on a quotation — `botol`, `flacon`; `PCBA`, `board`; `papan
+kayu`. That list is the mission's **component vocabulary**
+(`domain/quotes.ComponentVocabulary`), and it is what lets a reply be matched to
+the question that asked it.
+
+It replaced a hardcoded alias table. The table only ever held one industry's
+words, so a furniture supplier pricing `papan kayu jati` looked like a supplier
+who had not answered — and worse, a fixed three-component bundle rule meant any
+supplier in any other industry who quoted one bundled price was silently
+uncomparable. What a bundle contains is now the supplier's statement, recorded
+from their reply; a bundle they did not explain is reported as uncomparable
+rather than assumed.
+
 ## ✨ Key Features
 
 ### Autonomous Investigation
-- **Product → supply chain** — a 50ml EDP becomes fragrance house, filler, bottle, pump, cap, label, box, plus local regulatory registration
+- **Any physical product** — a 50ml EDP, an oak dining table, a run of hoodies, a power bank. The supply chain is derived from the product, and so is the vocabulary used to read the quotes that come back; no industry is built in
 - **Parallel discovery** — every supply-chain node is searched at once, bounded so a mission cannot rate-limit itself
 - **Agentic research** — a Google ADK `LlmAgent` chooses which page to read next based on what the last one said, and stops when it can answer
 - **Identity resolution** — the same factory listed under three names becomes one supplier
@@ -123,7 +140,7 @@ user.
 - **Weights follow your objective** — *"minimize risk on the first batch"* moves weight onto MOQ fit and off price
 - **A sentence per component** — `MOQ 500 fits an order of 500`, not a bar
 - **Logistics scoped to your question** — city, country or global; the same factory scores differently under each, and the choice shapes the search queries too
-- **Comparable quotes only** — `bottle + pump + cap = Rp 12,000` normalises against `8,000 / 2,500 / 1,500`; a partial quote is reported as not-comparable rather than as cheapest
+- **Comparable quotes only** — `bottle + pump + cap = Rp 12,000` normalises against `8,000 / 2,500 / 1,500`, and `kit = $41` against `cell / PCBA / shell`; a partial quote, or a bundle whose contents the supplier never stated, is reported as not-comparable rather than as cheapest
 
 ### Production Behaviour
 - **Event-sourced and idempotent** — every message may be delivered twice; no supplier is ever emailed twice
@@ -245,7 +262,7 @@ backend/scripts/check_models.py --project YOUR_PROJECT --location global
 ./run.sh            # API on :8080, console on :3000
 ./run.sh mission    # one whole mission in the terminal, start to finish
 ./run.sh mail       # read the mailbox now instead of waiting for the poll
-./run.sh test       # 346 tests, ~55s, no network
+./run.sh test       # 352 tests, ~55s, no network
 ./run.sh status     # what is running, and what it has spent
 ./run.sh stop
 ./run.sh clean      # build caches only — never source or .env
@@ -396,7 +413,7 @@ has the measurements and every guard.
 ```bash
 ./run.sh test
 # or
-cd backend && .venv/bin/python -m pytest -q     # 346 tests, ~55 seconds, no network
+cd backend && .venv/bin/python -m pytest -q     # 352 tests, ~55 seconds, no network
 ```
 
 - **Unit** — evidence classification, identity resolution, quote normalisation, conflict detection, scoring, number parsing, policy, injection defence, and the ADK tool guard
@@ -419,7 +436,6 @@ to.
 - **Live research is only as good as what suppliers publish** — which in this industry is often a phone number and a WhatsApp link
 - **Currencies are never converted.** Quotes in different currencies are reported side by side and excluded from the price comparison rather than guessed at
 - **The console polls every two seconds** rather than streaming
-- **One vertical's vocabulary is encoded** in the quote normaliser's component aliases. Another vertical needs its own alias table
 
 ## 🗺️ Future Work
 

@@ -28,17 +28,52 @@ const SCOPES: { value: SearchScope; label: string; hint: string; icon: string }[
   },
 ];
 
-const EXAMPLE_OBJECTIVE =
-  "I want to launch a 50ml EDP perfume in Indonesia. Initial production: 500 units. " +
-  "I want premium packaging with a gold atomizer pump, but I want to minimize risk on the first batch. " +
-  "Find suppliers for bottle, pump, cap, fragrance oils, and BPOM registration co-packing.";
+type Example = { label: string; scope: SearchScope; location: string; objective: string };
+
+// Four industries, because the system derives its supply chain from the product
+// rather than from a built-in one. A single prefilled brief made it look like a
+// tool for whichever industry that brief happened to be in.
+const EXAMPLES: Example[] = [
+  {
+    label: "Fragrance",
+    scope: "country",
+    location: "Indonesia",
+    objective:
+      "Launch a 50ml eau de parfum in Indonesia. Initial production: 500 units. " +
+      "Premium packaging with a gold atomizer pump, and minimal risk on the first batch.",
+  },
+  {
+    label: "Furniture",
+    scope: "country",
+    location: "Vietnam",
+    objective:
+      "Produce a 1.5m solid oak dining table for export from Vietnam. 300 units to start. " +
+      "FSC-certified timber, flat-pack packaging, and a finish that survives shipping.",
+  },
+  {
+    label: "Apparel",
+    scope: "country",
+    location: "Portugal",
+    objective:
+      "Manufacture 1,000 heavyweight organic-cotton hoodies in Portugal. " +
+      "Embroidered logo, woven labels, GOTS certification, low minimums on the first run.",
+  },
+  {
+    label: "Electronics",
+    scope: "global",
+    location: "",
+    objective:
+      "Build a 10,000mAh USB-C power bank, 5,000 units. " +
+      "Cells, PCBA, injection-moulded enclosure, retail box, and CE/FCC-ready assembly.",
+  },
+];
 
 export default function MissionsPage() {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [loading, setLoading] = useState(true);
-  const [objective, setObjective] = useState(EXAMPLE_OBJECTIVE);
+  const [objective, setObjective] = useState("");
   const [scope, setScope] = useState<SearchScope>("country");
-  const [location, setLocation] = useState("Indonesia");
+  const [location, setLocation] = useState("");
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -107,8 +142,29 @@ export default function MissionsPage() {
                   What are you producing?
                 </label>
                 <p className="mt-1 text-sm text-slate-500">
-                  Include the product, packaging tier, unit count, and anything you need to keep low-risk.
+                  Any physical product. Include the unit count, the specification, and anything
+                  you need to keep low-risk — the supply chain is worked out from what you write.
                 </p>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                  Try
+                </span>
+                {EXAMPLES.map((example) => (
+                  <button
+                    key={example.label}
+                    type="button"
+                    onClick={() => {
+                      setObjective(example.objective);
+                      setScope(example.scope);
+                      setLocation(example.location);
+                    }}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                  >
+                    {example.label}
+                  </button>
+                ))}
               </div>
 
               <textarea
@@ -117,7 +173,7 @@ export default function MissionsPage() {
                 onChange={(event) => setObjective(event.target.value)}
                 rows={4}
                 className="field mt-3.5 min-h-[7.5rem] resize-y bg-slate-50 leading-relaxed focus:bg-white"
-                placeholder="A 50ml EDP perfume for the Indonesian market. 500 units to start. Premium packaging, low risk on the first batch."
+                placeholder="What you are making, how many, where, and what matters most. Pick an example above to see the shape of a good brief."
               />
 
               <fieldset className="mt-6 border-t border-slate-100 pt-5">

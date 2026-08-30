@@ -43,11 +43,13 @@ the requested component.
 
 Include a result only when the text indicates the business itself manufactures,
 fills, prints, or supplies the component. Exclude and list in rejected_hits:
-marketplace and B2B-aggregator listings, retailers selling finished perfume,
-news articles, and directory pages that only repeat a company name.
+marketplace and B2B-aggregator listings, retailers selling the finished product
+rather than making any part of it, news articles, and directory pages that only
+repeat a company name.
 
-node_keys: only the nodes the source shows evidence for. A bottle factory that
-says nothing about caps does not get the cap node.
+node_keys: only the nodes the source shows evidence for. A supplier whose page
+covers one component and says nothing about a neighbouring one does not get the
+neighbouring node.
 
 Every vendor you return must carry the source_url it came from and a verbatim
 excerpt. If a result has no usable excerpt, reject it instead of guessing.

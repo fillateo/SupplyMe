@@ -43,16 +43,25 @@ line from the price, mixed languages, numbers written as "8.500" or "8,5rb" or
 "Rp 8.500,-". Extract the number the supplier means; when a format is genuinely
 ambiguous, leave the field null rather than guessing a magnitude.
 
-line_items is one entry per priced COMPONENT — a bottle, a pump, a cap — each
-with its per-unit price. When the supplier gives a single price for a bundle,
-return one entry with the component "package" and do not split it yourself.
-When the supplier quotes a price at all, this must not be empty.
+line_items is one entry per priced COMPONENT, each with its per-unit price. Name
+each component the way the components we asked about are named, so the reply can
+be matched to the question; where the supplier used their own word for the same
+thing, use ours. When the supplier quotes a price at all, this must not be empty.
+
+When the supplier gives a single price covering several components, return one
+entry with the component "package" and do not split it yourself — but list in
+`covers` every component that one price includes, as the supplier described
+them. A bundle whose contents they did not state is reported as uncomparable
+rather than guessed at, so `covers` is what decides whether their price can be
+compared at all. Do not populate it from inference: if they wrote "set" and
+nothing else, leave it empty.
 
 A quantity is never a component, and the two are easy to confuse because they
 arrive in the same sentence.
 
-Different components: "botol Rp 8.500, pump Rp 2.500, cap Rp 1.500" — three
-entries. Their prices genuinely add up to the cost of one unit.
+Different components: "botol Rp 8.500, pump Rp 2.500, tutup Rp 1.500" — three
+entries, named as we named those components. Their prices genuinely add up to
+the cost of one unit.
 
 The same thing at different order quantities: "Rp 11.000 at 500 pcs, Rp 8.500 at
 1.000 pcs" — one entry, not two. Pick the rung for the quantity we are buying
@@ -157,7 +166,7 @@ class CommunicationAgent(Agent):
 
     async def extract_quote(
         self, *, body: str, questions_asked: list[str], currency_hint: str = "IDR",
-        order_quantity: int | None = None,
+        order_quantity: int | None = None, components: list[str] | None = None,
         mission_id: str = "", vendor_id: str | None = None,
     ) -> QuoteExtraction:
         self.may(Tool.READ_MAIL)
@@ -169,8 +178,20 @@ class CommunicationAgent(Agent):
             if order_quantity
             else "We did not state a quantity."
         )
+        # The mission's own component names. Every industry words its invoice
+        # lines differently, so the mapping from the supplier's word to ours is
+        # done here, where the model can see both, rather than by a table of
+        # synonyms that would only ever fit the vertical it was written for.
+        vocabulary = (
+            "Components this mission is sourcing, and the names to use for them:\n"
+            + "\n".join(f"- {c}" for c in components)
+            + "\n\n"
+            if components
+            else ""
+        )
         prompt = (
-            "Questions we asked this supplier:\n"
+            vocabulary
+            + "Questions we asked this supplier:\n"
             + "\n".join(f"- {q}" for q in questions_asked)
             + f"\n\n{wanted} Likely currency: {currency_hint}. "
             "Extract what the reply below commits to."
