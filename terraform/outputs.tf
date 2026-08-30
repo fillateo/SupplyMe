@@ -22,7 +22,7 @@ output "next_steps" {
     "     curl -s ${google_cloud_run_v2_service.api.uri}/api/health | jq .providers",
     "     (/healthz is the container's own probe; the public health endpoint is /api/health.)",
     var.mode == "live" ?
-    "2. Start Gmail push: python scripts/gmail_watch.py --topic ${google_pubsub_topic.gmail[0].id}" :
+    "2. Start Gmail push: python scripts/gmail_auth.py --watch ${google_pubsub_topic.gmail[0].id}" :
     "2. Demo mode: mock providers are bound. Nothing will email or call a real supplier.",
   ])
 }

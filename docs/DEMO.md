@@ -14,7 +14,7 @@
 | 3:15–3:40 | The supplier is re-scored. 84 → 95, because MOQ now fits | Recommendation tab → "How the score was reached" |
 | 3:40–4:00 | Click any number on screen: excerpt, URL, retrieval time | Evidence drawer |
 
-Closing line: *"I gave it one product idea. It built the sourcing workflow, checked the suppliers' claims against independent sources, contacted them, resolved a disagreement by phone, and produced the network."*
+Closing line: *"I gave it one product idea. It worked out what the product is made of, found suppliers for every part, checked their claims against sources that were not them, wrote to them, noticed that one supplier's website and their sales desk disagreed — and asked."*
 
 ## Setup
 
@@ -32,6 +32,7 @@ Recommended `.env` for a recorded demo:
 VDS_MODE=demo
 VDS_APPROVAL_POLICY=external      # so the approval gate is visible
 VDS_PROJECT_ID=your-project
+VDS_LOCATION=global               # where Vertex serves Gemini 3.x from
 VDS_DEMO_SPEEDUP=2000             # a 48h follow-up becomes ~86 seconds
 VDS_DEMO_DUPLICATE_RATE=0.25      # a quarter of events delivered twice
 ```

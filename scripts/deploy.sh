@@ -11,14 +11,17 @@ set -euo pipefail
 
 PROJECT="${1:?usage: deploy.sh PROJECT_ID [REGION]}"
 REGION="${2:-us-central1}"
+# Where Vertex serves the model, which is not where the service runs. Gemini
+# 3.x answers from `global` and 404s from a named region.
+VERTEX_LOCATION="${VERTEX_LOCATION:-global}"
 SERVICE="vendor-discovery"
 TAG="$(git rev-parse --short HEAD 2>/dev/null || date +%s)"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${SERVICE}/api:${TAG}"
 
 cd "$(dirname "$0")/.."
 
-echo "==> Which Gemini models can ${PROJECT} actually reach?"
-(cd backend && .venv/bin/python scripts/check_models.py --project "${PROJECT}" --location "${REGION}") || true
+echo "==> Which Gemini models can ${PROJECT} reach from ${VERTEX_LOCATION}?"
+(cd backend && .venv/bin/python scripts/check_models.py --project "${PROJECT}" --location "${VERTEX_LOCATION}") || true
 
 echo
 echo "==> Tests must pass before anything is built"
@@ -38,14 +41,16 @@ fi
 tofu init -backend-config=backend.hcl -upgrade
 tofu fmt -check
 tofu validate
-tofu plan -var "project_id=${PROJECT}" -var "region=${REGION}" -var "image=${IMAGE}"
+tofu plan -var "project_id=${PROJECT}" -var "region=${REGION}" \
+  -var "vertex_location=${VERTEX_LOCATION}" -var "image=${IMAGE}"
 
 cat <<EOF
 
 Plan written above. Nothing has been applied.
 
   cd terraform
-  tofu apply -var project_id=${PROJECT} -var region=${REGION} -var image=${IMAGE}
+  tofu apply -var project_id=${PROJECT} -var region=${REGION} \
+    -var vertex_location=${VERTEX_LOCATION} -var image=${IMAGE}
 
 Then wire the service's own URL so it can build webhook callbacks:
 

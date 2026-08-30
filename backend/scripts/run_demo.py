@@ -57,6 +57,10 @@ async def main(argv: list[str] | None = None) -> int:
         # own test in tests/test_workflow.py.
         approval_policy=ApprovalPolicy.AUTONOMOUS,
         project_id=args.project,
+        # --live-model means live, whatever .env says. Without this the flag is
+        # silently ignored on any machine whose .env sets the scripted model —
+        # which .env.example does, so that is most of them.
+        use_scripted_model=not args.live_model,
     )
 
     if args.live_model:
@@ -203,6 +207,14 @@ async def report(runtime: Runtime, mission_id: str) -> None:
     print("\n" + "=" * 78)
     print(f"mission status: {mission.status.value}")
     print(f"evidence records: {len(evidence)}   emails sent: {mission.emails_sent}")
+    # What the mission actually spent, from the API's own token counts. Zero on
+    # a scripted run, which is the point of the scripted run.
+    if mission.model_calls:
+        print(
+            f"model spend: {mission.model_calls} calls  "
+            f"{mission.input_tokens:,} in / {mission.output_tokens:,} out tokens  "
+            f"${mission.estimated_cost_usd:.4f}"
+        )
     print("orchestrator counters:", runtime.orchestrator.stats)
     print("=" * 78)
 

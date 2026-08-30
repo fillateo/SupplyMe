@@ -7,7 +7,10 @@ API's own `usage_metadata`, not estimated.
 
 One mission over the demo dataset — 5 suppliers, 7 supply-chain categories,
 research, brand adjudication, outreach drafting, quote extraction, follow-up
-planning — on `gemini-2.5-flash`:
+planning — on `gemini-3.5-flash`: **61 calls, 87,272 input and 25,840 output
+tokens, $0.1124.**
+
+The effect of capping thinking, measured earlier on `gemini-2.5-flash`:
 
 | | output tokens per call | USD per call |
 | --- | --- | --- |
@@ -19,8 +22,8 @@ a price out of an email, deciding whether a search result is a manufacturer —
 they buy nothing, so the fast tier gets a budget of zero and the reasoning tier
 gets a bounded allowance. That change alone cut cost per call by about 60%.
 
-A full mission lands around **40–60 model calls**, so roughly **$0.05–$0.08**, or
-**Rp 800–1,300** at 16,400 IDR/USD.
+A full mission lands around **60 model calls**, so roughly **$0.11**, or
+**Rp 1,800** at 16,400 IDR/USD. The scripted model costs nothing at all.
 
 Check any mission's actual spend:
 
@@ -130,7 +133,7 @@ mail — but the model still runs, so keep the per-mission caps on.
 2. `VDS_FAST_MODEL=gemini-2.5-flash-lite` — roughly a third of flash.
 3. Lower `VDS_MAX_VENDORS_PER_CATEGORY` to 3 and
    `VDS_MAX_MODEL_CALLS_PER_MISSION` to 40.
-5. Check `curl -s localhost:8080/api/health | jq .spend.since_startup` after any
+4. Check `curl -s localhost:8080/api/health | jq .spend.since_startup` after any
    live run.
 
 The authoritative number is always Cloud Billing. The meter here is a guard

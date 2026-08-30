@@ -57,13 +57,15 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "VDS_PROJECT_ID"
         value = var.project_id
       }
+      # Not var.region. See variables.tf: the model endpoint and the
+      # service's region are different decisions.
       env {
         name  = "VDS_LOCATION"
-        value = var.region
+        value = var.vertex_location
       }
       env {
         name  = "VDS_USE_VERTEX"
-        value = "true"
+        value = tostring(var.use_vertex)
       }
       env {
         # Firestore, Pub/Sub and Cloud Tasks instead of the in-process store,
@@ -96,6 +98,22 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "VDS_MAX_USD_PER_MISSION"
         value = tostring(var.max_usd_per_mission)
+      }
+
+      # Only when it is the credential actually in use. Mounting a key the
+      # service will not read is a secret handed out for nothing.
+      dynamic "env" {
+        for_each = var.use_vertex ? [] : [1]
+
+        content {
+          name = "VDS_GEMINI_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.gemini_api_key.secret_id
+              version = "latest"
+            }
+          }
+        }
       }
 
       env {

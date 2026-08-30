@@ -104,7 +104,7 @@ Nothing above is a single long LLM call. Each arrow is a persisted event.
 | Decides what happens next | `handle_vendor_updated` in `app/workflow/handlers.py` |
 | Uses external tools | Search, Places, YouTube, Gmail/SMTP — `app/adapters/` |
 | Works asynchronously | Pub/Sub push + Cloud Tasks; the browser can be closed |
-| Reacts to new events | `email.received` from a Gmail push resumes the mission |
+| Reacts to new events | `email.received` resumes a mission mid-flight — see Gmail integration for which half of that path has been run live |
 | Maintains state | Firestore; a Cloud Run restart loses nothing |
 | Produces a useful outcome | A supply network, with reasons and open risks |
 
@@ -244,6 +244,15 @@ not-comparable rather than as cheapest.
 pushes a historyId, `/webhooks/gmail` pulls the new message, matches it to the
 thread that asked for it, and the mission resumes. No polling, no open browser.
 
+**What has and has not been run.** The workflow half is exercised on every demo
+run and in the test suite: the mock provider raises real `email.received` events
+through the real bus, and the mission resumes from them. The Gmail half —
+OAuth, `users.watch`, and the push into `/webhooks/gmail` — is implemented and
+has not been run end to end against a live mailbox, because that needs a
+consent screen this project has not set up. `scripts/gmail_auth.py` is the path
+if you want to. SMTP is what sends today, and it is outbound only; `/api/health`
+says which of the two is bound rather than letting you assume.
+
 Threads keep asked/answered/unanswered questions, so a follow-up asks only what
 is still missing.
 
@@ -255,9 +264,10 @@ Vertex AI, Secret Manager, Cloud Logging. All provisioned by OpenTofu in
 
 ## Cost
 
-A mission is **40–60 model calls, roughly $0.05–$0.08** (about Rp 800–1,300) on
-`gemini-2.5-flash`, measured from the API's own token counts and readable per
-mission at `/api/missions/{id}` → `spend`.
+A mission is **about 60 model calls and $0.11** (roughly Rp 1,800) on
+`gemini-3.5-flash` — 87,000 input and 26,000 output tokens on the run this
+number comes from. Measured from the API's own token counts, not estimated, and
+readable per mission at `/api/missions/{id}` → `spend`.
 
 Every mission carries a hard stop: reaching `VDS_MAX_USD_PER_MISSION` or
 `VDS_MAX_MODEL_CALLS_PER_MISSION` fails it with a reason rather than spending
@@ -292,7 +302,7 @@ and scoring are the real ones; only the text generation is deterministic.
 ```bash
 ./run.sh            # installs what is missing, then starts the API and console
 ./run.sh demo       # one whole mission in the terminal, ~30s
-./run.sh test       # 208 tests, ~10s
+./run.sh test       # 311 tests, ~55s
 ./run.sh status     # what is running, and what it has spent
 ./run.sh stop
 ```
@@ -331,6 +341,7 @@ Everything is `VDS_`-prefixed and read only in `app/config.py`.
 | `VDS_USE_CLOUD_INFRA` | `false` | Firestore/Pub/Sub/Cloud Tasks vs in-process. Independent of `VDS_MODE` |
 | `VDS_APPROVAL_POLICY` | `external` | `autonomous` \| `external` \| `strict` |
 | `VDS_PROJECT_ID` | — | Google Cloud project for Vertex AI and Firestore |
+| `VDS_LOCATION` | `global` | Vertex endpoint. Gemini 3.x is served from `global`; a named region 404s |
 | `VDS_REASONING_MODEL` | resolved | empty = newest reachable model on the ladder |
 | `VDS_FAST_MODEL` | resolved | cheap model for extraction and classification |
 | `VDS_MAPS_API_KEY` | — | Places. Unset degrades to demo data, and says so |
@@ -352,7 +363,7 @@ to have called a Google API it did not call.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest -q     # 190 tests, ~8 seconds, no network
+.venv/bin/python -m pytest -q     # 311 tests, ~55 seconds, no network
 ```
 
 - **Unit** — evidence classification, identity resolution, quote normalisation,
@@ -385,11 +396,13 @@ invented, and every domain is under the reserved `example.com`.
 
 ## Limitations
 
-- **Model generation.** The hackathon asks for Gemini 3.5 or newer. The project
-  this was built against can only reach Gemini 2.5 on Vertex AI — run
-  `scripts/check_models.py` to see what any given project resolves to. The model
-  id is configuration, not code: a project with 3.5 access picks it up
-  automatically from the ladder in `app/config.py`, with no changes.
+- **Model reachability is per project and per location.** This runs on
+  `gemini-3.5-flash`, but on Vertex that model answers from the `global`
+  endpoint and 404s from `us-central1` — with nothing in the error to suggest it
+  exists elsewhere. `scripts/check_models.py --project X --location Y` reports
+  what any given project actually resolves to, and the ladder in
+  `app/config.py` picks the newest that answers. Which is why the model id is
+  configuration rather than a constant.
 - Live web research is only as good as what suppliers publish, which in this
   industry is often a phone number and a WhatsApp link.
 - Currencies are never converted. Quotes in different currencies are reported

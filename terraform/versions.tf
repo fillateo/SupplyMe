@@ -21,4 +21,11 @@ terraform {
 provider "google" {
   project = var.project_id
   region  = var.region
+
+  # The API Keys API bills each request to a quota project, and Application
+  # Default Credentials do not set one. Without these two lines, creating the
+  # Gemini key fails with a 403 naming a Google-owned project number rather
+  # than yours, which is a confusing way to be told to set a quota project.
+  billing_project       = var.project_id
+  user_project_override = true
 }

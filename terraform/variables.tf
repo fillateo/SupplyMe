@@ -36,6 +36,35 @@ variable "approval_policy" {
   description = "autonomous | external | strict — see app/domain/policy.py."
 }
 
+variable "use_vertex" {
+  type    = bool
+  default = true
+
+  description = <<-EOT
+    Reach Gemini through Vertex AI rather than the Gemini Developer API.
+
+    True is the right answer whenever the project has Vertex access, because
+    Vertex authenticates with the service account this deployment already has
+    and needs no separate credential. Set it false only on a project without
+    Vertex; gemini.tf then supplies an API key instead.
+  EOT
+}
+
+variable "vertex_location" {
+  type    = string
+  default = "global"
+
+  description = <<-EOT
+    Which Vertex endpoint serves the model. Deliberately separate from
+    var.region: Gemini 3.x is served from `global`, and asking a named region
+    for it returns a 404 that does not mention the model exists elsewhere.
+
+    Cloud Run, Cloud Tasks and Artifact Registry still live in var.region.
+    Run backend/scripts/check_models.py to see what a project and location
+    actually resolve to.
+  EOT
+}
+
 variable "reasoning_model" {
   type        = string
   default     = ""

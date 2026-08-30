@@ -28,6 +28,11 @@ class ApprovalPolicy(StrEnum):
 
 # Preference ladder. The first model that actually answers wins; see
 # scripts/check_models.py and app.adapters.gemini_llm.resolve_model.
+#
+# Reachability is per project and per location, not a property of the model
+# name: on one project `gemini-3.5-flash` answers from `global` and 404s from
+# `us-central1`, while `gemini-2.5-pro` does the opposite. That is why this is a
+# ladder that gets probed rather than a constant.
 MODEL_LADDER = (
     "gemini-3.5-pro",
     "gemini-3.5-flash",
@@ -61,7 +66,13 @@ class Settings(BaseSettings):
 
     # --- Google Cloud -------------------------------------------------------
     project_id: str = ""
-    location: str = "us-central1"
+
+    #: Vertex region for Gemini, which is not the same choice as the region the
+    #: service runs in. Gemini 3.x is served from the `global` endpoint; asking
+    #: a named region for it returns 404 with no hint that the model exists
+    #: somewhere else. Cloud Run, Cloud Tasks and Artifact Registry stay in a
+    #: real region — see terraform/variables.tf.
+    location: str = "global"
     use_vertex: bool = True
 
     # Model routing: cheap model for extraction/classification, strong model for

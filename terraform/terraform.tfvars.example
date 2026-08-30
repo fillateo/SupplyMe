@@ -8,8 +8,15 @@ mode            = "demo"
 approval_policy = "external"
 
 # Leave empty to resolve the newest model the project can actually reach.
+# Pinning is cheaper: probing the ladder costs two model calls per process.
+# Run backend/scripts/check_models.py --project <id> --location <loc> to see
+# what yours resolves to before you pin anything.
 reasoning_model = ""
 fast_model      = ""
+
+# Gemini 3.x is served from the global endpoint, not from a named region.
+# This is separate from `region`, which is where Cloud Run itself runs.
+vertex_location = "global"
 
 max_instances = 4
 

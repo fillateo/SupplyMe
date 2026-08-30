@@ -8,6 +8,10 @@ locals {
     "pubsub.googleapis.com",
     "cloudtasks.googleapis.com",
     "aiplatform.googleapis.com",
+    # Vertex cannot reach Gemini 3.x on this project; the Developer API can.
+    # See gemini.tf.
+    "generativelanguage.googleapis.com",
+    "apikeys.googleapis.com",
     "artifactregistry.googleapis.com",
     "secretmanager.googleapis.com",
     "logging.googleapis.com",
