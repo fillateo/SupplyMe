@@ -18,6 +18,12 @@ resource "google_cloud_run_v2_service" "api" {
   name     = var.service_name
   location = var.region
 
+  # The provider defaults this on, which turns any rename of the service into a
+  # plan that cannot apply. The data worth protecting is Firestore, and that has
+  # its own prevent_destroy; a Cloud Run service is a container and a URL, both
+  # reproducible from this file.
+  deletion_protection = false
+
   # Only the load balancer and the push identity reach it; see the IAM binding.
   ingress = "INGRESS_TRAFFIC_ALL"
 

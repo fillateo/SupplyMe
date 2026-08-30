@@ -62,7 +62,6 @@ mission.
 - **🖥️ Console** (`frontend/`) — Next.js 15 dashboard; every fact clickable back to its source excerpt
 - **📬 Mail loop** (`app/adapters/`) — SMTP out, IMAP in, or Gmail API push; replies re-enter the workflow by `In-Reply-To`
 - **☁️ Infrastructure** (`terraform/`) — OpenTofu; Cloud Run, Firestore, Pub/Sub, Cloud Tasks, Secret Manager, budgets
-- **📚 [Documentation](./docs/)** — architecture, cost, local setup, secrets, demo script
 
 ### Agent Workflow
 
@@ -114,6 +113,29 @@ supplier in any other industry who quoted one bundled price was silently
 uncomparable. What a bundle contains is now the supplier's statement, recorded
 from their reply; a bundle they did not explain is reported as uncomparable
 rather than assumed.
+
+Two live plans, from the same unchanged code:
+
+```
+Solid oak dining table, Vietnam          10,000mAh USB-C power bank
+─────────────────────────────────        ─────────────────────────────────
+fsc_oak_lumber                           battery_cell
+  Gỗ sồi FSC · KD Oak timber · Sawn oak    Li-Po cell · polymer cell
+furniture_hardware                       pcba
+  Phụ kiện ngũ kim · Connecting bolts      power bank PCB · mainboard
+protective_wood_coating                  enclosure
+  Sơn PU · Wood lacquer · Topcoat          plastic shell · aluminum housing
+flat_pack_packaging                      packaging
+  Thùng carton · PE foam inserts           gift box · color box · paper tray
+woodworking_and_assembly                 assembly_testing
+  Gia công đồ gỗ · Wood processing         EMS · contract manufacturing
+
+30 words → 5 nodes                       36 words → 6 nodes
+```
+
+Neither list appears anywhere in `app/`. `set`, `paket` and `kit` resolve to
+`package` in both, because bundling is a property of quotations rather than of
+an industry — and that is the only vocabulary the code ships with.
 
 ## ✨ Key Features
 
@@ -276,17 +298,6 @@ chain, suppliers, evidence and emails fill in live.
 
 `GET /api/health` names every adapter actually bound, and which model resolved.
 
-## 📖 Documentation
-
-| Doc | What it covers |
-| --- | --- |
-| **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Event table, Firestore collections, why the orchestrator owns durability, the dedup key |
-| **[docs/LOCAL.md](docs/LOCAL.md)** | Full walkthrough, complete environment variable reference, and what to do when something breaks |
-| **[docs/COST.md](docs/COST.md)** | Measured spend per mission and every guard that bounds it |
-| **[docs/SECRETS.md](docs/SECRETS.md)** | Where credentials live and how they reach Cloud Run |
-| **[docs/DEMO.md](docs/DEMO.md)** | The demonstration script |
-| **[backend/README.md](backend/README.md)** | Backend layout and running it without the console |
-
 ## 🔧 Environment Variables
 
 All `SUPPLYME_`-prefixed, read in exactly one place — `app/config.py`. A missing
@@ -309,8 +320,6 @@ required one is a startup failure, not a fallback.
 | `SUPPLYME_MAX_RESEARCH_LLM_CALLS` | `12` | Ceiling on one ADK tool loop — ADK's own default is 500 |
 | `SUPPLYME_MAX_CONCURRENT_RESEARCH` | `3` | Caps the widest fan-out so a mission cannot rate-limit itself |
 | `SUPPLYME_FAST_THINKING_BUDGET` | `0` | Thinking is billed as output and buys nothing on extraction |
-
-The complete table is in **[docs/LOCAL.md](docs/LOCAL.md)**.
 
 ## ☁️ Deployment
 
@@ -364,8 +373,7 @@ tens of thousands of tokens where a fixture was a paragraph.
 | Places queries | `1` / supply-chain node | The priciest single call the system makes |
 
 There is no zero-spend mode: every mission reads the live web and calls Gemini,
-so the caps are what bounds it rather than a switch. **[docs/COST.md](docs/COST.md)**
-has the measurements and every guard.
+so the caps are what bounds it rather than a switch.
 
 ## 🔐 Security & Privacy
 

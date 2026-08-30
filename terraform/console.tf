@@ -30,6 +30,12 @@ resource "google_cloud_run_v2_service" "console" {
   name     = "${var.service_name}-console"
   location = var.region
 
+  # The provider defaults this on, which turns any rename of the service into a
+  # plan that cannot apply. The data worth protecting is Firestore, and that has
+  # its own prevent_destroy; a Cloud Run service is a container and a URL, both
+  # reproducible from this file.
+  deletion_protection = false
+
   ingress = "INGRESS_TRAFFIC_ALL"
 
   template {
