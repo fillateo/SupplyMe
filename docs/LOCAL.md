@@ -262,8 +262,8 @@ and `/api/health` lists every adapter actually bound.
 | `VDS_MAX_CONCURRENT_RESEARCH` | `3` | caps the widest fan-out so a mission cannot rate-limit itself |
 | `VDS_MAX_CONCURRENT_MODEL_CALLS` | `4` | Gemini requests in flight, process-wide, ADK's included |
 | `VDS_MIN_MODEL_CALL_INTERVAL_SECONDS` | `0` | paces the queue on a small quota |
-| `VDS_MAX_USD_PER_MISSION` | `0.50` | hard stop — the mission fails with a reason rather than spending more |
-| `VDS_MAX_MODEL_CALLS_PER_MISSION` | `120` | hard stop |
+| `VDS_MAX_USD_PER_MISSION` | `1.00` | hard stop — the mission fails with a reason rather than spending more |
+| `VDS_MAX_MODEL_CALLS_PER_MISSION` | `300` | hard stop. A real mission over 8 suppliers uses about 100 |
 | `VDS_MAX_RESEARCH_LLM_CALLS` | `12` | ceiling on one ADK tool loop (ADK's own default is 500) |
 | `VDS_FAST_THINKING_BUDGET` | `0` | thinking is billed as output and buys nothing on extraction |
 | `VDS_MAX_OUTREACH_PER_MISSION` | `12` | cost guard |

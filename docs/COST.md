@@ -5,14 +5,21 @@ API's own `usage_metadata`, not estimated.
 
 ## Measured
 
-One mission — 5 suppliers, 7 supply-chain categories,
-research, brand adjudication, outreach drafting, quote extraction, follow-up
-planning — on `gemini-3.5-flash`, across several runs: **55–65 calls,
-roughly 87,000 input and 19,000–26,000 output tokens, $0.09–$0.13.**
+One mission against the live web — 8 real suppliers found and researched, 7
+supply-chain categories, brand adjudication, outreach drafting, quote
+extraction, follow-up planning — on `gemini-3.5-flash`:
 
-The spread is not measurement noise. How many suppliers reply, and how many
-follow-ups a disagreement takes to settle, differ from run to run — which is
-the point of the thing.
+**98 model calls, 562,287 input and 22,941 output tokens, $0.2937.**
+
+**Input tokens are almost the whole bill**, and reading real pages is why: a
+supplier's website runs to tens of thousands of tokens, and the research agent
+reads several per supplier. Output is a twentieth of it, because what the model
+returns is a filled-in schema.
+
+The same mission measured against fixtures came to 87,000 input tokens and
+$0.09. That threefold gap is not drift — it is the difference between reading a
+paragraph and reading a website, and it is the reason the ceilings below are
+where they are.
 
 The effect of capping thinking, measured earlier on `gemini-2.5-flash`:
 
@@ -26,8 +33,10 @@ a price out of an email, deciding whether a search result is a manufacturer —
 they buy nothing, so the fast tier gets a budget of zero and the reasoning tier
 gets a bounded allowance. That change alone cut cost per call by about 60%.
 
-A full mission lands at **55–65 model calls**, so **$0.09–$0.13**, or
-**Rp 1,500–2,100** at 16,400 IDR/USD.
+A full mission lands around **100 model calls**, so **$0.25–$0.35**, or
+**Rp 4,000–5,700** at 16,400 IDR/USD. More suppliers means more websites read,
+so a mission that discovers twelve costs proportionally more than one that
+discovers eight.
 
 Check any mission's actual spend:
 
@@ -42,8 +51,8 @@ A budget alert emails you; it does not stop anything. These do:
 
 | Guard | Default | Stops |
 | --- | --- | --- |
-| `VDS_MAX_USD_PER_MISSION` | `0.50` | the mission, with a reason on the record |
-| `VDS_MAX_MODEL_CALLS_PER_MISSION` | `120` | the mission |
+| `VDS_MAX_USD_PER_MISSION` | `1.00` | the mission, with a reason on the record |
+| `VDS_MAX_MODEL_CALLS_PER_MISSION` | `300` | the mission |
 | `VDS_MAX_RESEARCH_LLM_CALLS` | `12` | one research agent's tool loop |
 | `VDS_MAX_CONCURRENT_RESEARCH` | `3` | how many run at once |
 | `VDS_MAX_CONCURRENT_MODEL_CALLS` | `4` | Gemini requests in flight, process-wide |

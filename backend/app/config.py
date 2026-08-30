@@ -151,11 +151,16 @@ class Settings(BaseSettings):
 
     # --- spend guards ---------------------------------------------------
     #: Hard caps per mission. Reaching either fails the mission with a reason
-    #: rather than continuing to spend. A healthy perfume mission uses roughly
-    #: 40-60 model calls; the defaults leave headroom without leaving a runaway
-    #: room to matter.
-    max_model_calls_per_mission: int = Field(default=120, ge=1, le=5000)
-    max_usd_per_mission: float = Field(default=0.50, gt=0.0, le=1000.0)
+    #: rather than continuing to spend.
+    #:
+    #: Measured against the live web rather than guessed: a mission over eight
+    #: real suppliers made 98 model calls and cost $0.29, on 562,000 input
+    #: tokens. Reading real pages is what dominates that — a supplier's site is
+    #: tens of thousands of tokens where a fixture was a paragraph — so the
+    #: earlier ceiling of 120 calls, set when a mission cost $0.09, would now
+    #: fail a mission of twelve suppliers partway through discovery.
+    max_model_calls_per_mission: int = Field(default=300, ge=1, le=5000)
+    max_usd_per_mission: float = Field(default=1.00, gt=0.0, le=1000.0)
 
     #: Ceiling on one ADK research agent's tool-use loop. ADK's own default is
     #: 500, which is three orders of magnitude more than this agent needs and is

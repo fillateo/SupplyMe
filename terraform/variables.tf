@@ -145,7 +145,7 @@ variable "budget_amount_usd" {
 
 variable "max_usd_per_mission" {
   type        = number
-  default     = 0.50
+  default     = 1.00
   description = "Hard stop. A mission that reaches this fails with a reason instead of spending more."
 }
 

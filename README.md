@@ -264,11 +264,15 @@ Cloud Run (scale to zero), Firestore, Pub/Sub with dead-lettering, Cloud Tasks,
 Vertex AI, Secret Manager, Cloud Logging. All provisioned by OpenTofu in
 `terraform/` — `plan` is the review surface, nothing is created by hand.
 
-A mission is **55–65 model calls and $0.09–$0.13** (roughly Rp 1,500–2,100) on
-`gemini-3.5-flash`. Measured from the API's own token counts across several
-runs, not estimated, and readable per mission at `/api/missions/{id}` →
-`spend`. The spread is real: how many suppliers reply, and how many follow-ups
-a disagreement needs, is not the same on any two runs.
+A mission over the live web is **around 100 model calls and $0.25–$0.35** on
+`gemini-3.5-flash`: one over eight real suppliers made 98 calls on 562,000
+input tokens and cost $0.29. Measured from the API's own token counts, not
+estimated, and readable per mission at `/api/missions/{id}` → `spend`.
+
+Input tokens dominate, and reading real pages is why. A supplier's website is
+tens of thousands of tokens; the fixtures this was first measured against were
+a paragraph, and put the same mission at $0.09. That gap is the cost of the
+system being real, and it is the reason the ceilings are where they are.
 
 Reaching `VDS_MAX_USD_PER_MISSION` or `VDS_MAX_MODEL_CALLS_PER_MISSION` fails
 the mission with a reason rather than spending more, and that failure is

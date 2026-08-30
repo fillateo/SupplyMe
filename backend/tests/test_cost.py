@@ -93,9 +93,17 @@ class TestDefaults:
     """The shipped defaults have to be safe on a small credit balance."""
 
     def test_a_single_mission_cannot_spend_much(self):
+        """The ceiling has to clear a real mission and still bound a runaway.
+
+        A mission over eight suppliers read on the live web made 98 calls and
+        cost $0.29, almost all of it input tokens from real pages. So the cap
+        cannot sit at the $0.50 that a fixture-driven mission justified — it
+        would fail a real one partway through — and it must still be an amount
+        nobody minds losing to a loop.
+        """
         settings = Settings()
-        assert settings.max_usd_per_mission <= 1.0
-        assert settings.max_model_calls_per_mission <= 200
+        assert settings.max_usd_per_mission <= 2.0
+        assert settings.max_model_calls_per_mission <= 500
 
     def test_the_research_loop_is_bounded_far_below_the_adk_default(self):
         from google.adk.agents.run_config import RunConfig
