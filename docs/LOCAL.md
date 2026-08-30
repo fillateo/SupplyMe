@@ -47,7 +47,7 @@ cd backend
 ```
 
 191 tests. They cover the whole workflow end to end, including every message
-being delivered twice, a search outage, a failed call, a model timeout, a
+being delivered twice, a search outage, a model timeout, a
 mid-mission restart, and a supplier reply containing a prompt-injection payload.
 
 ## 2. Watch a whole mission in the terminal — 30 seconds, still no credentials
@@ -130,7 +130,7 @@ confuse yourself:
 | Switch | Chooses |
 | --- | --- |
 | `VDS_USE_SCRIPTED_MODEL` | scripted model vs real Gemini |
-| `VDS_MODE` | mock product integrations vs Google Search, Places, Gmail, telephony |
+| `VDS_MODE` | mock product integrations vs Google Search, Places and Gmail |
 | `VDS_USE_CLOUD_INFRA` | in-process store and bus vs Firestore, Pub/Sub, Cloud Tasks |
 
 `./run.sh live` sets the first two and leaves the third alone, so you get real
@@ -184,12 +184,11 @@ Each one is independent, and any you skip degrades to its mock and says so at
 | Programmable Search | `VDS_SEARCH_API_KEY` + `VDS_SEARCH_ENGINE_ID` (without it, Gemini search grounding is used) |
 | YouTube | `VDS_YOUTUBE_API_KEY` |
 | Gmail | `python scripts/gmail_auth.py --client-secret client_secret.json` |
-| Telephony | `VDS_TWILIO_ACCOUNT_SID`, `VDS_TWILIO_AUTH_TOKEN`, `VDS_TWILIO_FROM_NUMBER` |
 
-Gmail and telephony also need `VDS_MODE=live` and a publicly reachable
+Gmail also needs `VDS_MODE=live` and a publicly reachable
 `VDS_PUBLIC_BASE_URL` for their webhooks — a tunnel is fine for local work.
 
-**Sending real email and placing real calls reaches real businesses.** Keep
+**Sending real email reaches real businesses.** Keep
 `VDS_APPROVAL_POLICY=external` (the default) or `strict` so nothing leaves
 without you reading it first.
 

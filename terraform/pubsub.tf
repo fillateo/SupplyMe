@@ -26,7 +26,11 @@ resource "google_pubsub_subscription" "workflow_push" {
   ack_deadline_seconds = 300
 
   push_config {
-    push_endpoint = "${google_cloud_run_v2_service.api.uri}/events/pubsub"
+    # A push subscription cannot set request headers, so the shared secret the
+    # endpoint checks travels in the query string. OIDC below is the first lock;
+    # this is the second, and the one that still holds while the service is
+    # public for a demo.
+    push_endpoint = "${google_cloud_run_v2_service.api.uri}/events/pubsub?token=${random_password.push_token.result}"
 
     oidc_token {
       service_account_email = google_service_account.push.email
@@ -81,7 +85,7 @@ resource "google_pubsub_subscription" "gmail_push" {
   ack_deadline_seconds = 60
 
   push_config {
-    push_endpoint = "${google_cloud_run_v2_service.api.uri}/webhooks/gmail"
+    push_endpoint = "${google_cloud_run_v2_service.api.uri}/webhooks/gmail?token=${random_password.push_token.result}"
 
     oidc_token {
       service_account_email = google_service_account.push.email

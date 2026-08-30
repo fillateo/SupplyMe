@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import type { Call, Thread } from "@/lib/types";
+import type { Thread } from "@/lib/types";
 import { StatusChip } from "./primitives";
 
 export function Communications({
@@ -10,10 +10,6 @@ export function Communications({
 }: {
   data: {
     email: { sent: number; responded: number; awaiting: number; threads: Thread[] };
-    calls: {
-      completed: number; scheduled: number; failed: number;
-      not_attempted: number; items: Call[];
-    };
   };
 }) {
   const [open, setOpen] = useState<string | null>(null);
@@ -92,62 +88,6 @@ export function Communications({
         )}
       </section>
 
-      <section>
-        <div className="mb-3 flex items-baseline gap-6">
-          <h3 className="col-label">Calls</h3>
-          <p className="font-mono text-2xs uppercase tracking-[0.08em] text-muted">
-            {data.calls.completed} completed · {data.calls.scheduled} queued ·{" "}
-            {data.calls.failed} failed
-            {data.calls.not_attempted > 0 &&
-              ` · ${data.calls.not_attempted} skipped, budget spent elsewhere`}
-          </p>
-        </div>
-        {data.calls.items.length === 0 ? (
-          <p className="py-4 text-sm text-muted">
-            No calls. It only dials when writing will not settle a question.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {data.calls.items.map((call) => (
-              <li key={call.id} className="card overflow-hidden">
-                <button
-                  onClick={() => setOpen(open === call.id ? null : call.id)}
-                  className="flex w-full items-start justify-between gap-4 px-5 py-3.5 text-left hover:bg-paper/50"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-ink">{call.vendor_name}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted">
-                      Called because {call.reason}
-                    </p>
-                  </div>
-                  <StatusChip status={call.status} />
-                </button>
-
-                {open === call.id && call.transcript.length > 0 && (
-                  <div className="space-y-2 border-t border-rule px-5 py-4">
-                    {call.transcript.map((turn, index) => (
-                      <p key={index} className="text-xs leading-relaxed">
-                        <span className="col-label mr-2">
-                          {turn.speaker === "agent" ? "AI" : "Supplier"}
-                        </span>
-                        <span className={turn.speaker === "agent" ? "text-muted" : "text-ink"}>
-                          {turn.text}
-                        </span>
-                      </p>
-                    ))}
-                    {call.unanswered_questions.length > 0 && (
-                      <p className="pt-2 text-xs text-muted">
-                        <span className="col-label mr-2">Not answered</span>
-                        {call.unanswered_questions.join("; ")}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </div>
   );
 }

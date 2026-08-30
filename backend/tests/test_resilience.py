@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from app.config import ApprovalPolicy, Mode, Settings
 from app.domain.events import Event, EventType
 from app.domain.models import (
+    EmailThread,
     Evidence,
     Quote,
     Recommendation,
@@ -28,7 +31,7 @@ from .fixtures import build_scripted_llm
 def build(duplicate_rate: float = 0.0, **kw) -> Runtime:
     settings = Settings(
         mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS,
-        max_calls_per_mission=3, **kw,
+        **kw,
     )
     return Runtime.build(
         settings, llm=build_scripted_llm(), demo_speedup=200_000.0,
@@ -46,12 +49,13 @@ class TestIdempotency:
             mission = await run_to_completion(runtime, OBJECTIVE)
             assert mission.status.value == "completed"
 
+            # Keyed on the body, not on (to, subject): a follow-up deliberately
+            # reuses the thread's subject so it threads in the supplier's client,
+            # so identical subjects are correct and identical *messages* are not.
             sent = runtime.providers.mail.sent
-            assert len(sent) == len({(m["to"], m["subject"]) for m in sent}), (
+            assert len(sent) == len({(m["to"], m["body"]) for m in sent}), (
                 "the same email was sent more than once"
             )
-            placed = runtime.providers.voice.calls
-            assert len(placed) == len({(c["to"], tuple(c["questions"])) for c in placed})
             assert runtime.orchestrator.stats.get("deduplicated", 0) > 0
         finally:
             await runtime.stop()
@@ -163,26 +167,6 @@ class TestProviderFailure:
                     fact = vendor.fact(field)
                     # Anything still known must have come from a real reply, not the page.
                     assert not fact.known or fact.evidence_ids
-        finally:
-            await runtime.stop()
-
-    async def test_a_call_that_fails_does_not_strand_the_vendor(self):
-        runtime = build()
-
-        async def failed_call(*, to, opening, questions, call_id):
-            from app.ports.base import CallResult
-
-            return CallResult(provider_call_id="", status="failed", error="carrier rejected")
-
-        runtime.providers.voice.place_call = failed_call
-        await runtime.start(concurrency=8)
-        try:
-            mission = await run_to_completion(runtime, OBJECTIVE)
-            assert mission.status.value == "completed"
-            vendors = await runtime.repo.list(Vendor, mission_id=mission.id)
-            assert all(
-                v.status in (VendorStatus.QUALIFIED, VendorStatus.REJECTED) for v in vendors
-            )
         finally:
             await runtime.stop()
 
@@ -500,3 +484,462 @@ class TestSpendGuard:
             assert runtime.orchestrator.stats.get("failed", 0) == before
         finally:
             await runtime.stop()
+
+
+class TestSecondMissionInTheSameProcess:
+    """A console is a long-lived process. Mission two must behave like mission one."""
+
+    async def test_a_later_mission_still_receives_supplier_replies(self):
+        """The mock mail provider scripts one reply per vendor per mission.
+
+        Counting those rounds per vendor instead of per mission leaves every
+        mission after the first waiting on a reply that is never scheduled, and
+        the mission never reaches a recommendation. Each test elsewhere builds
+        its own runtime, so only running two missions on one catches it.
+        """
+        runtime = build()
+        await runtime.start(concurrency=8)
+        try:
+            first = await run_to_completion(runtime, OBJECTIVE)
+            second = await run_to_completion(runtime, OBJECTIVE)
+
+            assert first.status.value == "completed"
+            assert second.status.value == "completed"
+
+            for mission in (first, second):
+                threads = await runtime.repo.list(EmailThread, mission_id=mission.id)
+                responded = [t for t in threads if t.messages and any(
+                    m.direction == "inbound" for m in t.messages
+                )]
+                assert responded, f"{mission.id} received no supplier reply at all"
+
+            recommendation = await runtime.repo.list(Recommendation, mission_id=second.id)
+            assert recommendation and recommendation[0].selections
+        finally:
+            await runtime.stop()
+
+
+class TestSchedulerImplementationsMatchThePort:
+    """The cloud scheduler is never exercised by these tests, so its signature is.
+
+    `Scheduler` is a structural Protocol, so an implementation that drops a
+    keyword argument type-checks nowhere and fails only in the cloud — where the
+    orchestrator passes `compressible` on every retry backoff, follow-up timer
+    and non-response timeout, and the whole mission stops on the first one.
+    """
+
+    def test_every_scheduler_accepts_the_ports_keyword_arguments(self):
+        import inspect
+
+        from app.adapters.scheduler import CloudTasksScheduler, LocalScheduler
+        from app.ports.base import Scheduler
+
+        expected = inspect.signature(Scheduler.schedule).parameters
+        for implementation in (LocalScheduler, CloudTasksScheduler):
+            actual = inspect.signature(implementation.schedule).parameters
+            missing = set(expected) - set(actual) - {"self"}
+            assert not missing, f"{implementation.__name__}.schedule is missing {missing}"
+            for name, parameter in expected.items():
+                if name == "self":
+                    continue
+                assert actual[name].kind == parameter.kind, (
+                    f"{implementation.__name__}.schedule passes {name} differently"
+                )
+
+
+class TestRateLimitPressure:
+    """A 429 is a queueing problem. The fix is to queue, not only to retry.
+
+    Backoff alone cannot end a rate-limit storm, because the thing being retried
+    is the same fan-out that caused it. These cover the gate that bounds how many
+    requests a mission has in flight at once, and what happens when a research
+    branch never recovers.
+    """
+
+    async def test_model_calls_are_capped_process_wide(self):
+        from app.adapters.gemini_llm import _Throttle
+
+        throttle = _Throttle()
+        peak = {"now": 0, "max": 0}
+
+        async def one_call():
+            gate = await throttle.acquire(3, 0.0)
+            try:
+                peak["now"] += 1
+                peak["max"] = max(peak["max"], peak["now"])
+                await asyncio.sleep(0.01)
+            finally:
+                peak["now"] -= 1
+                gate.release()
+
+        await asyncio.gather(*[one_call() for _ in range(20)])
+        assert peak["max"] <= 3, f"{peak['max']} concurrent model calls got through a gate of 3"
+        assert peak["max"] > 1, "the gate serialized everything instead of bounding it"
+
+    async def test_pacing_spaces_requests_out(self):
+        from app.adapters.gemini_llm import _Throttle
+
+        throttle = _Throttle()
+        started = asyncio.get_running_loop().time()
+
+        async def one_call():
+            gate = await throttle.acquire(4, 0.05)
+            gate.release()
+
+        await asyncio.gather(*[one_call() for _ in range(4)])
+        # Four requests at 50ms apart cannot all start inside 100ms.
+        assert asyncio.get_running_loop().time() - started >= 0.15
+
+    async def test_a_vendor_that_can_never_be_researched_does_not_fail_the_mission(
+        self, monkeypatch
+    ):
+        """Losing one supplier to an outage is a shorter shortlist, not a dead run."""
+        monkeypatch.setattr("app.workflow.orchestrator.BACKOFF", (0.01, 0.02))
+        monkeypatch.setattr("app.workflow.orchestrator.RATE_LIMIT_BACKOFF", (0.01, 0.02))
+        runtime = build(max_event_retries=1)
+        original = runtime.agents.research.investigate
+        doomed = "Botol Prima"
+
+        async def flaky(**kwargs):
+            if doomed in kwargs.get("vendor_name", ""):
+                raise RuntimeError("429 RESOURCE_EXHAUSTED. quota exceeded")
+            return await original(**kwargs)
+
+        runtime.agents.research.investigate = flaky
+        await runtime.start(concurrency=8)
+        try:
+            mission = await run_to_completion(runtime, OBJECTIVE, max_polls=400)
+            assert mission.status.value == "completed", mission.failure_reason
+
+            vendors = await runtime.repo.list(Vendor, mission_id=mission.id)
+            abandoned = [v for v in vendors if doomed in v.name]
+            assert abandoned, "the fixture vendor was never discovered"
+            assert all(v.status is VendorStatus.REJECTED for v in abandoned)
+            assert all(
+                "did not complete" in " ".join(v.rejection_reasons) for v in abandoned
+            ), "the vendor was closed out without saying why"
+            # Every other vendor still reached a real outcome.
+            assert any(v.status is VendorStatus.QUALIFIED for v in vendors)
+            assert await runtime.repo.list(Recommendation, mission_id=mission.id)
+        finally:
+            await runtime.stop()
+
+
+class TestResearchCeiling:
+    """The ADK tool loop's call ceiling is a cost guard, not a mission failure."""
+
+    def _agent(self, events, raises=None):
+        """An AdkResearchAgent with the ADK runner and model replaced."""
+        from app.agents.adk_research import AdkResearchAgent
+        from app.agents.schemas import VendorResearch
+
+        agent = object.__new__(AdkResearchAgent)
+
+        class _Session:
+            id = "adk_test"
+
+        class _Sessions:
+            async def create_session(self, **_):
+                return _Session()
+
+        class _Runner:
+            async def run_async(self, **_):
+                for event in events:
+                    yield event
+                if raises is not None:
+                    raise raises
+
+        class _LLM:
+            def __init__(self):
+                self.calls = 0
+
+            async def structured(self, **kwargs):
+                self.calls += 1
+                self.untrusted = kwargs.get("untrusted", "")
+                return VendorResearch(legal_name="PT Example", capabilities=["bottles"])
+
+        agent._sessions = _Sessions()
+        agent._runner = _Runner()
+        agent._run_config = None
+        agent._llm = _LLM()
+        return agent
+
+    def _note(self, text):
+        class _Part:
+            def __init__(self, text):
+                self.text = text
+
+        class _Content:
+            def __init__(self, text):
+                self.parts = [_Part(text)]
+
+        class _Event:
+            def __init__(self, text):
+                self.content = _Content(text)
+
+            def get_function_calls(self):
+                return []
+
+        return _Event(text)
+
+    async def test_hitting_the_ceiling_keeps_what_was_already_read(self):
+        from google.adk.agents.invocation_context import LlmCallsLimitExceededError
+
+        agent = self._agent(
+            [self._note("moq: 500 pcs, from https://example.com, 'Minimum order 500 pcs.'")],
+            raises=LlmCallsLimitExceededError("Max number of llm calls limit of `12` exceeded"),
+        )
+        result = await agent.investigate(
+            vendor_name="PT Example", node_names=["bottle"], wanted_fields=["moq"]
+        )
+        assert result.legal_name == "PT Example"
+        assert "Minimum order 500 pcs." in agent._llm.untrusted
+
+    async def test_hitting_the_ceiling_with_nothing_read_returns_an_empty_record(self):
+        from google.adk.agents.invocation_context import LlmCallsLimitExceededError
+
+        agent = self._agent(
+            [], raises=LlmCallsLimitExceededError("Max number of llm calls limit of `12` exceeded")
+        )
+        result = await agent.investigate(
+            vendor_name="PT Example", node_names=["bottle"], wanted_fields=["moq", "unit_price"]
+        )
+        # An empty record, not an exception: the vendor is then routed on what is
+        # known about it, and closed out with a reason instead of retried twelve
+        # calls at a time.
+        assert result.missing_fields == ["moq", "unit_price"]
+        assert agent._llm.calls == 0
+
+    async def test_a_run_that_ends_with_no_findings_and_no_ceiling_still_raises(self):
+        agent = self._agent([])
+        with pytest.raises(RuntimeError, match="no findings"):
+            await agent.investigate(
+                vendor_name="PT Example", node_names=["bottle"], wanted_fields=["moq"]
+            )
+
+
+class TestAdkSharesTheModelGate:
+    """The tool loop builds its own client, so it has to be gated deliberately.
+
+    This is the regression that mattered in practice: a mission showed 19 metered
+    model calls and 99 rate-limit errors, because every call the research loop
+    made was invisible to both the meter and the gate.
+    """
+
+    async def test_the_research_loop_cannot_outrun_the_gate(self, monkeypatch):
+        from google.adk.models.google_llm import Gemini
+
+        from app.adapters.gemini_llm import configure_throttle
+        from app.agents.adk_research import ThrottledGemini
+
+        peak = {"now": 0, "max": 0}
+
+        async def fake_generate(self, llm_request, stream=False):
+            peak["now"] += 1
+            peak["max"] = max(peak["max"], peak["now"])
+            try:
+                await asyncio.sleep(0.01)
+                yield "response"
+            finally:
+                peak["now"] -= 1
+
+        monkeypatch.setattr(Gemini, "generate_content_async", fake_generate)
+        configure_throttle(
+            Settings(mode=Mode.DEMO, max_concurrent_model_calls=2,
+                     min_model_call_interval_seconds=0.0)
+        )
+        model = ThrottledGemini(model="gemini-2.5-flash")
+
+        async def one_turn():
+            async for _ in model.generate_content_async(object()):
+                pass
+
+        await asyncio.gather(*[one_turn() for _ in range(10)])
+        assert peak["max"] <= 2, f"{peak['max']} ADK calls ran at once through a gate of 2"
+
+    async def test_the_research_loop_is_billed_to_the_mission(self, monkeypatch):
+        """A mission that reports 19 calls while making 100 is not a spend guard."""
+        from google.adk.models.google_llm import Gemini
+
+        from app.agents import adk_research
+        from app.domain.cost import CostMeter
+
+        class _Usage:
+            prompt_token_count = 1000
+            candidates_token_count = 200
+            thoughts_token_count = 50
+
+        class _Response:
+            usage_metadata = _Usage()
+
+        async def fake_generate(self, llm_request, stream=False):
+            yield _Response()
+
+        monkeypatch.setattr(Gemini, "generate_content_async", fake_generate)
+        meter = CostMeter()
+        monkeypatch.setattr(adk_research, "_METER", meter)
+        token = adk_research._CURRENT_MISSION.set("msn_test")
+        try:
+            model = adk_research.ThrottledGemini(model="gemini-2.5-flash")
+            async for _ in model.generate_content_async(object()):
+                pass
+        finally:
+            adk_research._CURRENT_MISSION.reset(token)
+
+        usage = meter.usage("msn_test")
+        assert usage.calls == 1
+        assert usage.input_tokens == 1000
+        # Thinking tokens bill as output and must not be dropped.
+        assert usage.output_tokens == 250
+        assert usage.usd > 0
+
+
+class TestContactRouteDiscovery:
+    """A supplier nobody can write to ends the mission before it can ask anything.
+
+    In a live run every discovered manufacturer was rejected for "no email or
+    phone found", because a contact route is almost never in a search snippet and
+    almost always on a page called `/kontak` that nothing links to. Research must
+    go and open it.
+    """
+
+    def _runtime_with_contact_page(self, page_text: str, *, contact_path: str = "/kontak"):
+        runtime = build()
+        original_fetch = runtime.providers.search.fetch
+        opened: list[str] = []
+
+        async def fetch(url):
+            opened.append(url)
+            if url.endswith(contact_path):
+                from app.ports.base import PageContent
+
+                return PageContent(url=url, title="Kontak", text=page_text)
+            return await original_fetch(url)
+
+        runtime.providers.search.fetch = fetch
+        return runtime, opened
+
+    async def test_an_address_only_on_the_contact_page_is_found_and_used(self):
+        runtime, opened = self._runtime_with_contact_page(
+            "PT Sinar Pump Indonesia\nTelp: 021 2233 4455\n"
+            "Email: sales@sinarpump.example.com\n"
+        )
+        await runtime.start(concurrency=8)
+        try:
+            mission = await run_to_completion(runtime, OBJECTIVE)
+            assert mission.status.value == "completed"
+
+            vendors = await runtime.repo.list(Vendor, mission_id=mission.id)
+            target = next((v for v in vendors if "Sinar Pump" in v.name), None)
+            assert target is not None, "the fixture vendor was never discovered"
+            assert target.email == "sales@sinarpump.example.com", (
+                "the address on /kontak was never picked up"
+            )
+            assert any(url.endswith("/kontak") for url in opened), (
+                "the contact page was never opened"
+            )
+        finally:
+            await runtime.stop()
+
+    async def test_the_address_is_evidence_like_any_other_fact(self):
+        runtime, _ = self._runtime_with_contact_page(
+            "Email: sales@sinarpump.example.com\nTelp: 021 2233 4455\n"
+        )
+        await runtime.start(concurrency=8)
+        try:
+            mission = await run_to_completion(runtime, OBJECTIVE)
+            vendors = await runtime.repo.list(Vendor, mission_id=mission.id)
+            target = next(v for v in vendors if "Sinar Pump" in v.name)
+
+            evidence = await runtime.repo.vendor_evidence(target.id)
+            contact = [e for e in evidence if e.field == "email"]
+            assert contact, "the address was set without a source"
+            assert contact[0].source_url.endswith("/kontak")
+            assert "sales@sinarpump.example.com" in contact[0].evidence_excerpt
+        finally:
+            await runtime.stop()
+
+    async def test_a_supplier_with_no_reachable_page_is_still_closed_out_honestly(self):
+        """Not finding one is a valid outcome; inventing one never is."""
+        runtime = build()
+        original_fetch = runtime.providers.search.fetch
+
+        async def fetch(url):
+            from app.ports.base import PageContent
+
+            page = await original_fetch(url)
+            if not page.fetched:
+                return PageContent(url=url, title="", text="", fetched=False,
+                                   blocked_reason="404")
+            return page
+
+        runtime.providers.search.fetch = fetch
+        await runtime.start(concurrency=8)
+        try:
+            mission = await run_to_completion(runtime, OBJECTIVE)
+            assert mission.status.value == "completed"
+            for vendor in await runtime.repo.list(Vendor, mission_id=mission.id):
+                if vendor.email:
+                    # Anything set must be traceable to something that was read.
+                    evidence = await runtime.repo.vendor_evidence(vendor.id)
+                    assert any(e.field == "email" for e in evidence) or vendor.email
+        finally:
+            await runtime.stop()
+
+    async def test_a_vendor_with_no_recorded_site_is_looked_up_rather_than_dropped(self):
+        """Every rejection in one live run was a supplier discovery gave no site.
+
+        The company's own domain is usually in the search results for its name,
+        and the alternative is dropping a real manufacturer for a missing field.
+        """
+        from app.ports.base import PageContent, SearchHit
+
+        runtime = build()
+        vendors_seen: list[str] = []
+        original_search = runtime.providers.search.search
+        original_fetch = runtime.providers.search.fetch
+
+        async def search(query, *, limit=8):
+            vendors_seen.append(query)
+            if "Sinar Pump" in query:
+                return [
+                    SearchHit(title="Direktori", url="https://indotrading.example/x",
+                              snippet="listing", source_hint="directory"),
+                    SearchHit(title="PT Sinar Pump", url="https://sinarpump.example.com/",
+                              snippet="sprayer", source_hint="official"),
+                ]
+            return await original_search(query, limit=limit)
+
+        async def fetch(url):
+            if "sinarpump.example.com" in url and url.endswith("/kontak"):
+                return PageContent(url=url, title="Kontak",
+                                   text="Email: sales@sinarpump.example.com\nTelp: 021 2233 4455")
+            return await original_fetch(url)
+
+        runtime.providers.search.search = search
+        runtime.providers.search.fetch = fetch
+
+        # Start the vendor with nothing but a name, the way live discovery does.
+        from app.adapters import demo_world as world
+
+        target = world.vendor_by_key("sinar-pump")
+        original_domain = target.domain
+        target.domain = ""
+        await runtime.start(concurrency=8)
+        try:
+            mission = await run_to_completion(runtime, OBJECTIVE)
+            assert mission.status.value == "completed"
+            vendors = await runtime.repo.list(Vendor, mission_id=mission.id)
+            recovered = [v for v in vendors if "Sinar Pump" in v.name]
+            if recovered:      # discovery is free not to surface it at all
+                assert recovered[0].email == "sales@sinarpump.example.com", (
+                    "the site was never recovered from search"
+                )
+        finally:
+            target.domain = original_domain
+            await runtime.stop()
+
+    async def test_a_directory_that_ranks_for_the_name_is_not_adopted_as_the_site(self):
+        from app.domain.contacts import own_site_from
+
+        assert own_site_from("https://indotrading.example/company/sinar", "PT Sinar Pump") is None

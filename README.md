@@ -1,8 +1,8 @@
 # VendorDiscoveryShortcut
 
 Tell it what you want to make. It works out which suppliers you need, finds them,
-reads what they publish, emails them, calls when writing will not settle a
-question, and tells you what it could and could not establish.
+reads what they publish, emails them, follows up until a question is settled, and
+tells you what it could and could not establish.
 
 Built for the Google × Devpost **All Things Agentic** hackathon, category
 **The Taskmaster**.
@@ -53,9 +53,10 @@ The demo scenario turns on two moments:
   supplier's word and nothing else. The system reports them differently, and
   never as the same thing.
 - One supplier's website says MOQ 500; their email says 1,000. The system
-  notices, works out that another email will not settle it — they already
-  answered in writing — calls them, gets *"500 for a pilot, at Rp 11,000"*, and
-  re-scores them. The resolution moves that supplier from 84 to 95 out of 100.
+  notices, and rather than repeating the question it puts both numbers back to
+  them in one targeted follow-up: *"your published minimum is 500 but we were
+  quoted 1,000 — is 500 possible as a pilot?"* They confirm 500 at a higher unit
+  price, and the resolution re-scores them.
 
 ## How it works
 
@@ -75,15 +76,15 @@ The demo scenario turns on two moments:
     │                                │
   facts known                   facts missing
     │                                │
-    │                          contact strategy
-    │                          ┌─────┴──────┐
-    │                        email        call
-    │                          │            │
+    │                       outreach
+    │                          │
+    │                        email
+    │                          │
     │                    supplier replies (hours later)
     │                          │
     │                   quote extraction
     │                          │
-    │                   conflict detection ──→ follow-up or call
+    │                   conflict detection ──→ targeted follow-up
     │                          │
     └──────────┬───────────────┘
                │
@@ -101,14 +102,14 @@ Nothing above is a single long LLM call. Each arrow is a persisted event.
 | Receives a real objective | `POST /api/missions` → `mission.created` |
 | Decomposes it | `app/agents/planning.py` |
 | Decides what happens next | `handle_vendor_updated` in `app/workflow/handlers.py` |
-| Uses external tools | Search, Places, YouTube, Gmail, telephony — `app/adapters/` |
+| Uses external tools | Search, Places, YouTube, Gmail/SMTP — `app/adapters/` |
 | Works asynchronously | Pub/Sub push + Cloud Tasks; the browser can be closed |
 | Reacts to new events | `email.received` from a Gmail push resumes the mission |
 | Maintains state | Firestore; a Cloud Run restart loses nothing |
 | Produces a useful outcome | A supply network, with reasons and open risks |
 
 The routing decision is the whole product. `handle_vendor_updated` reads a
-supplier's current state and picks the next move — qualify, reject, email, call,
+supplier's current state and picks the next move — qualify, reject, email,
 or wait — and no part of that is scripted by the user.
 
 ## Architecture
@@ -123,7 +124,7 @@ Next.js console ──► Cloud Run (FastAPI)
         ┌─────────────────┼──────────────────┐
         ▼                 ▼                  ▼
    Gemini / Vertex   Google Search      Gmail API
-        │            Places, YouTube    Telephony
+        │            Places, YouTube
         ▼                 ▼                  ▼
               Firestore (missions, vendors, evidence,
               quotes, conflicts, approvals, event log)
@@ -145,10 +146,10 @@ The allowlist is the security boundary, not a comment:
 | --- | --- | --- |
 | Mission | read the objective | anything external |
 | Supply chain | decompose | any tool at all |
-| Discovery | search, Maps, read pages | email, call |
-| Research | search, read, Maps, YouTube, write evidence | **email, call, spend** |
-| Brand evidence | search, read, YouTube, write evidence | **email, call, spend** |
-| Communication | draft, send, read mail, place calls | alter scores |
+| Discovery | search, Maps, read pages | email |
+| Research | search, read, Maps, YouTube, write evidence | **email, spend** |
+| Brand evidence | search, read, YouTube, write evidence | **email, spend** |
+| Communication | draft, send, read mail | alter scores |
 | Recommendation | read evidence, compute | send anything |
 
 The two agents that read attacker-controlled content — Research and Brand
@@ -223,6 +224,15 @@ Weights shift from what you said mattered: *"minimize risk on the first batch"*
 moves weight onto MOQ fit and off price. Each component returns the sentence
 that produced it — `MOQ 500 fits an order of 500`, not a bar.
 
+**Logistics answers the question you actually asked.** You choose the scope when
+you start a mission — a named city, a country, or anywhere — and the same
+factory scores differently under each. At city scope a supplier in your city
+scores 1.0 and one three provinces away 0.7, because being able to drive over
+and look at a sample before committing is worth something real. At global scope
+importing is the premise rather than a penalty, so an overseas supplier is no
+longer marked down for being overseas. The choice is yours and not inferred: it
+shapes the search queries, the Places region, and the ranking.
+
 Quotes are normalised before comparison, so a vendor quoting `bottle + pump +
 cap = Rp 12,000` and one quoting `8,000 / 2,500 / 1,500` compare as equal. A
 vendor who has not priced every requested component is reported as
@@ -236,16 +246,6 @@ thread that asked for it, and the mission resumes. No polling, no open browser.
 
 Threads keep asked/answered/unanswered questions, so a follow-up asks only what
 is still missing.
-
-## Voice integration
-
-Telephony dials and transcribes; Gemini decides everything else. The call agent
-opens by identifying itself as an AI assistant, asks at most five questions
-ordered so an early hangup still helps, and never negotiates or commits.
-
-A call happens when the agent decides one is warranted — a conflict that email
-already failed to settle, no email address on file, or a supplier who has gone
-quiet — never as a default. Budgeted per mission and per vendor.
 
 ## Google Cloud
 
@@ -336,8 +336,6 @@ Everything is `VDS_`-prefixed and read only in `app/config.py`.
 | `VDS_MAPS_API_KEY` | — | Places. Unset degrades to demo data, and says so |
 | `VDS_SEARCH_API_KEY` / `VDS_SEARCH_ENGINE_ID` | — | Programmable Search; unset falls back to Gemini grounding |
 | `VDS_YOUTUBE_API_KEY` | — | YouTube Data API |
-| `VDS_TWILIO_*` | — | telephony; unset means calls run against the mock |
-| `VDS_MAX_CALLS_PER_MISSION` | `3` | cost guard |
 | `VDS_MAX_CONCURRENT_RESEARCH` | `3` | caps the widest fan-out so a mission cannot rate-limit itself |
 | `VDS_MAX_USD_PER_MISSION` | `0.50` | hard stop — the mission fails with a reason rather than spending more |
 | `VDS_MAX_MODEL_CALLS_PER_MISSION` | `120` | hard stop |
@@ -363,7 +361,7 @@ to have called a Google API it did not call.
 - **Integration** — the whole workflow over the real event bus, plus the HTTP
   surface with a `TestClient`.
 - **Failure** — every message delivered twice, search outage, Maps timeout,
-  blocked pages, call failure, model timeout, rate limiting, Cloud Run restart
+  blocked pages, model timeout, rate limiting, Cloud Run restart
   mid-mission, events for records that no longer exist, and a supplier reply
   containing a prompt-injection payload.
 
@@ -377,8 +375,8 @@ asserts no supplier is emailed twice.
 ```
 
 Two modes, one workflow. `demo` binds mock providers that raise **real**
-`email.received` and `call.completed` events through the real bus on a
-compressed clock; `live` binds Gmail and telephony. The agents, the events, the
+`email.received` events through the real bus on a compressed clock; `live` binds
+Gmail or SMTP. The agents, the events, the
 storage and the scoring are identical — only the adapter differs. There are no
 UI-only results anywhere in this repo.
 
@@ -394,7 +392,6 @@ invented, and every domain is under the reserved `example.com`.
   automatically from the ladder in `app/config.py`, with no changes.
 - Live web research is only as good as what suppliers publish, which in this
   industry is often a phone number and a WhatsApp link.
-- The voice agent handles a scripted question list, not an open negotiation.
 - Currencies are never converted. Quotes in different currencies are reported
   side by side and excluded from the price comparison rather than guessed at.
 - The console polls every two seconds rather than streaming; server-sent events

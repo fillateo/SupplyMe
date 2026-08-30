@@ -20,6 +20,8 @@ next-env.d.ts
 *.tfstate.*
 backend.hcl
 terraform.tfvars
+# Saved plans hold resolved values, including the generated push token.
+tfplan*
 
 # run.sh working directory: pids, logs, displaced build caches
 .run/

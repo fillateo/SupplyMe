@@ -26,7 +26,6 @@ from .mock_providers import (
     MockMapsProvider,
     MockSearchProvider,
     MockVideoProvider,
-    MockVoiceProvider,
 )
 from .scheduler import LocalScheduler
 
@@ -45,7 +44,6 @@ class Providers:
     maps: Any
     video: Any
     mail: Any
-    voice: Any
     notes: list[str] = field(default_factory=list)
 
     def describe(self) -> dict[str, str]:
@@ -59,7 +57,6 @@ class Providers:
             "maps": type(self.maps).__name__,
             "video": type(self.video).__name__,
             "mail": type(self.mail).__name__,
-            "voice": type(self.voice).__name__,
         }
 
 
@@ -137,7 +134,7 @@ def build(
             settings=settings, store=store, bus=bus, scheduler=scheduler, llm=llm,
             meter=meter,
             search=MockSearchProvider(), maps=MockMapsProvider(), video=MockVideoProvider(),
-            mail=mail, voice=MockVoiceProvider(), notes=notes,
+            mail=mail, notes=notes,
         )
 
     from .google_providers import GoogleSearchProvider, PlacesProvider, YouTubeProvider
@@ -159,20 +156,36 @@ def build(
         notes.append("VDS_YOUTUBE_API_KEY unset: video evidence comes from the demo dataset")
 
     mail_provider: Any = _build_mail(settings, bus, scheduler, notes)
-    voice_provider: Any = _build_voice(settings, notes)
 
     return Providers(
         settings=settings, store=store, bus=bus, scheduler=scheduler, llm=llm,
         meter=meter, search=search, maps=maps, video=video, mail=mail_provider,
-        voice=voice_provider, notes=notes,
+        notes=notes,
     )
 
 
 def _build_mail(settings: Settings, bus: Any, scheduler: Any, notes: list[str]) -> Any:
+    return _redirected(_real_mail(settings, bus, scheduler, notes), settings, notes)
+
+
+def _real_mail(settings: Settings, bus: Any, scheduler: Any, notes: list[str]) -> Any:
     from pathlib import Path
 
     token_path = Path("secrets/gmail_token.json")
     if not token_path.exists():
+        # No OAuth token, but an app password is enough to actually send. Chosen
+        # ahead of the mock so that "configured to send" beats "configured to
+        # pretend", and reported either way.
+        from .smtp_mail import SmtpMailProvider
+
+        smtp = SmtpMailProvider(settings)
+        if smtp.configured:
+            notes.append(
+                f"sending real email over SMTP as {settings.smtp_user}; replies are not "
+                "read back into the mission (Gmail OAuth does that — see scripts/gmail_auth.py)"
+            )
+            return smtp
+
         notes.append(
             "no Gmail credentials at secrets/gmail_token.json: outreach runs against the "
             "mock mail provider (see scripts/gmail_auth.py)"
@@ -187,11 +200,34 @@ def _build_mail(settings: Settings, bus: Any, scheduler: Any, notes: list[str]) 
     return GmailProvider(settings, credentials_from_dict(json.loads(token_path.read_text())))
 
 
-def _build_voice(settings: Settings, notes: list[str]) -> Any:
-    from .twilio_voice import TwilioVoiceProvider
+def _redirected(provider: Any, settings: Settings, notes: list[str]) -> Any:
+    """Wrap the mail provider when a test recipient is configured.
 
-    provider = TwilioVoiceProvider(settings)
-    if provider.configured:
+    Applied here rather than inside a provider so it holds whichever one is
+    bound, and so `/api/health` can state plainly where mail is going. An
+    operator who cannot tell from the health endpoint whether the next approval
+    writes to a supplier will eventually find out the hard way.
+    """
+    target = settings.mail_redirect_to.strip()
+    if not target:
         return provider
-    notes.append("telephony not configured: calls run against the mock voice provider")
-    return MockVoiceProvider()
+
+    if isinstance(provider, MockMailProvider):
+        # The mock decides whether to schedule a scripted reply by looking at who
+        # the message was addressed to. Redirecting it would send every demo
+        # supplier's reply into the void and leave the mission waiting on an
+        # answer that cannot arrive — and the mock reaches nobody anyway, so
+        # there is nothing here to protect.
+        notes.append(
+            f"VDS_MAIL_REDIRECT_TO={target} is set but mail is mocked, so nothing "
+            "is sent at all and the redirect does nothing"
+        )
+        return provider
+
+    from .mail_redirect import RedirectingMailProvider
+
+    notes.append(
+        f"VDS_MAIL_REDIRECT_TO is set: every outbound email really sends, but to "
+        f"{target} rather than to the supplier"
+    )
+    return RedirectingMailProvider(provider, target)

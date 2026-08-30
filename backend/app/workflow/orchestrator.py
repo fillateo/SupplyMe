@@ -60,6 +60,19 @@ BACKOFF = (5.0, 15.0, 60.0, 300.0, 900.0)
 RATE_LIMIT_BACKOFF = (30.0, 90.0, 240.0, 600.0, 1800.0)
 RATE_LIMIT_MARKERS = ("429", "resource_exhausted", "resource exhausted", "quota")
 
+#: Events the mission genuinely cannot continue without. Anything else that
+#: exhausts its retries costs the mission one supplier, not the whole run — a
+#: rate limit while researching the fifth vendor should produce a shorter
+#: shortlist with the gap explained, not a failed mission.
+MISSION_CRITICAL_EVENTS = frozenset(
+    {
+        EventType.MISSION_CREATED,
+        EventType.REQUIREMENTS_CREATED,
+        EventType.SUPPLY_CHAIN_PLANNED,
+        EventType.RECOMMENDATION_READY,
+    }
+)
+
 
 class Orchestrator:
     def __init__(self, providers: Any, agents: Any) -> None:
@@ -224,7 +237,10 @@ class Orchestrator:
         if attempt > self.settings.max_event_retries:
             await self.store.complete(f"evt:{event.key}", {"error": str(exc), "exhausted": True})
             await self._record(event, status="exhausted", error=str(exc))
-            await self._fail_mission(event.mission_id, f"{event.type.value}: {exc}")
+            if event.type in MISSION_CRITICAL_EVENTS:
+                await self._fail_mission(event.mission_id, f"{event.type.value}: {exc}")
+            else:
+                await self._abandon_branch(event, exc)
             return
 
         # Release the key so the retry can claim it, then reschedule with backoff.
@@ -241,6 +257,50 @@ class Orchestrator:
             compressible=False,
         )
         await self._record(event, status="retrying", error=str(exc))
+
+    async def _abandon_branch(self, event: Event, exc: Exception) -> None:
+        """Close out the supplier a failed branch was about; keep the mission.
+
+        The vendor is rejected with the real reason, so the recommendation
+        reports a gap it can name instead of quietly ranking a supplier nobody
+        managed to research. If that was the last vendor in play, the mission
+        moves on to its recommendation rather than waiting for a branch that is
+        never coming back.
+        """
+        vendor_id = event.payload.get("vendor_id")
+        if not vendor_id:
+            return
+
+        from ..domain.models import Vendor, VendorStatus
+
+        vendor = await self.repo.load(Vendor, vendor_id)
+        if vendor is None or vendor.status in (VendorStatus.QUALIFIED, VendorStatus.REJECTED):
+            return
+
+        reason = (
+            f"{event.type.value} did not complete after "
+            f"{self.settings.max_event_retries} retries: {str(exc)[:180]}"
+        )
+
+        def _close_out(record: Vendor) -> None:
+            record.status = VendorStatus.REJECTED
+            record.rejection_reasons = [reason]
+
+        # Mutated rather than saved: a parallel branch may be writing to the same
+        # vendor, and a plain put would drop whichever landed first.
+        await self.repo.mutate(Vendor, vendor_id, _close_out)
+        self._count("branch_abandoned")
+        log.warning(
+            "branch_abandoned",
+            extra={"event_type": event.type.value, "mission_id": event.mission_id,
+                   "vendor_id": vendor_id, "error": str(exc)[:200]},
+        )
+
+        # Imported here rather than at module scope: handlers imports this module.
+        from .handlers import _maybe_finish
+
+        for follow_up in await _maybe_finish(self, event):
+            await self.emit(follow_up)
 
     async def _fail_mission(self, mission_id: str, reason: str) -> None:
         mission = await self.repo.load(Mission, mission_id)

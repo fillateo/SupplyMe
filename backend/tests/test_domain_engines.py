@@ -143,7 +143,7 @@ class TestConflicts:
         ])
         assert found is not None
         assert found.preferred_value == 1000        # direct supplier statement wins
-        assert found.action == "call"               # email already gave one answer
+        assert found.action == "email"              # writing is the only way to ask
         assert "500" in found.question
 
     def test_small_numeric_variation_is_not_a_conflict(self):

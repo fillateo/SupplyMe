@@ -11,10 +11,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from typing import Any
 
 from ..domain import conflicts as conflict_engine
+from ..domain import contacts as contact_finder
 from ..domain import evidence as evidence_engine
 from ..domain import identity, numbers, scoring, trust
 from ..domain import quotes as quote_engine
@@ -24,8 +24,6 @@ from ..domain.models import (
     Approval,
     ApprovalStatus,
     BrandRelationship,
-    Call,
-    CallStatus,
     Conflict,
     ConflictStatus,
     EmailThread,
@@ -38,13 +36,14 @@ from ..domain.models import (
     Provenance,
     Quote,
     Recommendation,
+    SearchScope,
     SourceType,
     SupplyChainNode,
     ThreadStatus,
     Vendor,
     VendorStatus,
 )
-from ..domain.policy import ActionType, approval_for, should_call
+from ..domain.policy import ActionType, approval_for
 from ..security import sanitize
 from .orchestrator import Orchestrator, on
 
@@ -64,20 +63,17 @@ CONTACTABLE_FIELDS = (
 FOLLOW_UP_DELAY_SECONDS = 48 * 3600
 MAX_FOLLOW_UPS = 2
 
-#: Per-vendor attempt ceilings. Beyond these the vendor is closed out with a
-#: reason rather than left in play: a supplier who has not answered two emails
-#: and a phone call is not going to, and a mission that waits for them forever
-#: never produces a recommendation.
+#: Per-vendor attempt ceiling. Beyond it the vendor is closed out with a reason
+#: rather than left in play: a supplier who has not answered two threads is not
+#: going to, and a mission that waits forever never produces a recommendation.
 MAX_THREADS_PER_VENDOR = 2
-MAX_CALLS_PER_VENDOR = 2
 
-#: Calls reserved for settling disagreements. A call that resolves a conflict is
-#: worth more than one that merely fills a blank: the blank can be asked by
-#: email, and the disagreement — by definition — already survived being asked in
-#: writing. Without this reserve a mission spends its whole call budget
-#: cold-calling suppliers who never published an email address, and then has
-#: nothing left when the MOQ on its best candidate turns out to be disputed.
-CALLS_RESERVED_FOR_CONFLICTS = 1
+#: Outreach slots held back for settling disagreements. Writing is the only
+#: channel, so a mission that spends its whole budget on first contact has
+#: nothing left when the MOQ on its best candidate turns out to be disputed —
+#: and a disagreement is worth more than a blank, because a blank was never
+#: asked and a disagreement already survived being asked once.
+EMAILS_RESERVED_FOR_CONFLICTS = 1
 
 
 # ==========================================================================
@@ -93,7 +89,15 @@ async def handle_mission_created(orc: Orchestrator, event: Event) -> list[Event]
     mission.product = brief.product
     mission.quantity = brief.quantity
     mission.unit_spec = brief.unit_spec
-    mission.market = brief.market
+    # What the user chose outranks what the model read into the objective. A
+    # scope of COUNTRY means the location they typed *is* the market; otherwise
+    # the brief fills it in, and a city they named keeps its own field.
+    if mission.search_scope is SearchScope.COUNTRY and mission.location:
+        mission.market = mission.location
+    else:
+        mission.market = mission.market or brief.market
+        if mission.search_scope is SearchScope.CITY and not mission.market:
+            mission.market = brief.market
     mission.budget_note = brief.budget_note
     mission.priorities = brief.priorities
     mission.success_criteria = brief.success_criteria
@@ -184,10 +188,13 @@ async def handle_discovery_started(orc: Orchestrator, event: Event) -> list[Even
         node_description=node.description,
         search_terms=node.search_terms,
         market=mission.market,
+        scope_note=_scope_note(mission),
         mission_id=mission.id,
     )
 
-    hits, places = await _gather_sources(orc, plan.queries, plan.maps_queries, mission.market)
+    hits, places = await _gather_sources(
+        orc, plan.queries, plan.maps_queries, mission.market, mission.search_scope
+    )
     if not hits and not places:
         node.status = NodeStatus.BLOCKED
         await orc.repo.save(node)
@@ -195,7 +202,7 @@ async def handle_discovery_started(orc: Orchestrator, event: Event) -> list[Even
 
     result = await orc.agents.discovery.extract(
         node_key=node.key, node_name=node.name, hits=hits[:12], places=places[:8],
-        market=mission.market, mission_id=mission.id,
+        market=mission.market, scope_note=_scope_note(mission), mission_id=mission.id,
     )
 
     # Identity resolution runs against everything already found for this mission,
@@ -207,11 +214,18 @@ async def handle_discovery_started(orc: Orchestrator, event: Event) -> list[Even
 
     for found in result.vendors[: orc.settings.max_vendors_per_category]:
         place = place_by_name.get(found.name.lower())
+        # A supplier with no website cannot be researched for a contact route,
+        # and half of what discovery returns has none — the model read a listing
+        # and copied the name across. The page it read is often the company's own
+        # site, so adopt it when the domain carries the company's name.
+        site = found.website or (place.website if place else None) or contact_finder.own_site_from(
+            found.source_url, found.name
+        )
         candidate = Vendor(
             mission_id=mission.id,
             name=found.name.strip(),
-            website=found.website or (place.website if place else None),
-            domain=identity.normalize_domain(found.website or (place.website if place else None)),
+            website=site,
+            domain=identity.normalize_domain(site),
             city=found.city or (_city_from(place.address) if place else None),
             country=found.country or mission.market,
             phone=place.phone if place else None,
@@ -274,11 +288,29 @@ async def handle_vendor_discovered(orc: Orchestrator, event: Event) -> list[Even
     return [event.child(EventType.VENDOR_RESEARCH_STARTED, vendor_id=event.payload["vendor_id"])]
 
 
+def _scope_note(mission: Mission) -> str:
+    """The buyer's geographic choice, in the words the agents are prompted on."""
+    if mission.search_scope is SearchScope.CITY and mission.location:
+        return (
+            f"city — only suppliers in or around {mission.location}"
+            + (f", {mission.market}" if mission.market else "")
+        )
+    if mission.search_scope is SearchScope.GLOBAL:
+        return "global — anywhere in the world; importing is acceptable"
+    return f"country — anywhere in {mission.market or mission.location or 'the target market'}"
+
+
 async def _gather_sources(
-    orc: Orchestrator, queries: list[str], maps_queries: list[str], market: str | None
+    orc: Orchestrator,
+    queries: list[str],
+    maps_queries: list[str],
+    market: str | None,
+    scope: SearchScope = SearchScope.COUNTRY,
 ) -> tuple[list[Any], list[Any]]:
     """Run web and Maps lookups in parallel; a failing source costs its results only."""
-    region = _region_code(market)
+    # A region code biases Places towards one country, which is the whole point
+    # at city and country scope and exactly wrong at global.
+    region = "" if scope is SearchScope.GLOBAL else _region_code(market)
     search_tasks = [orc.providers.search.search(q, limit=6) for q in queries[:4]]
     # Places costs an order of magnitude more per call than web search, so it is
     # capped tightly and used to confirm a business exists, not to find one.
@@ -323,7 +355,6 @@ async def _gather_sources(
 async def handle_research_started(orc: Orchestrator, event: Event) -> list[Event]:
     mission = await orc.repo.mission(event.mission_id)
     vendor = await orc.repo.vendor(event.payload["vendor_id"])
-    await _set_status(orc, vendor, VendorStatus.RESEARCHING)
 
     node_names = await _node_names(orc, mission.id, vendor.node_keys)
     wanted = list(CONTACTABLE_FIELDS)
@@ -331,6 +362,11 @@ async def handle_research_started(orc: Orchestrator, event: Event) -> list[Event
     # Research is the widest fan-out and the most model calls per branch. Hold a
     # slot for the duration so a mission does not rate-limit itself.
     async with orc.research_slots:
+        # Marked only once the slot is held. Setting it on the way in showed
+        # eight suppliers being researched at once when seven were queued behind
+        # one, which is the kind of invented progress this console exists not to
+        # show.
+        await _set_status(orc, vendor, VendorStatus.RESEARCHING)
         research = await _run_research(orc, mission, vendor, node_names, wanted)
 
     if research.suspicious_content:
@@ -343,6 +379,11 @@ async def handle_research_started(orc: Orchestrator, event: Event) -> list[Event
         value = getattr(research, field, None)
         if value and not getattr(vendor, field, None):
             setattr(vendor, field, value)
+
+    # Whatever the research agent read, a supplier with no contact route cannot
+    # be asked anything, and the rest of the mission is about asking. Go and look
+    # on the pages that actually carry one.
+    await _find_contact_route(orc, mission, vendor)
     vendor.capabilities = list(dict.fromkeys(vendor.capabilities + research.capabilities))
     vendor.node_keys = list(dict.fromkeys(vendor.node_keys + [slug(k) for k in research.node_keys]))
 
@@ -408,6 +449,110 @@ async def _run_research(
         place=place, videos=videos, wanted_fields=wanted,
         mission_id=mission.id, vendor_id=vendor.id,
     )
+
+
+#: How many of a supplier's own pages to open looking for a contact route.
+#: The homepage footer or `/kontak` answers almost every time; opening eight
+#: pages to find an address that was on the first two is a slower mission for no
+#: extra suppliers.
+MAX_CONTACT_PAGES = 4
+
+
+async def _find_contact_route(orc: Orchestrator, mission: Mission, vendor: Vendor) -> None:
+    """Read an email address and phone number off the supplier's own site.
+
+    Discovery finds companies; search snippets almost never carry a contact
+    route. Without this step a live mission researches five real manufacturers
+    and then rejects all five for "no email or phone found" — every downstream
+    capability the product has is gated on this one field.
+
+    Deliberately not a model call. It runs on whichever research agent is bound,
+    it cannot invent an address, and it costs nothing but a page fetch.
+    """
+    if vendor.email and vendor.phone:
+        return
+
+    urls = contact_finder.candidate_urls(vendor.website, vendor.domain)[:MAX_CONTACT_PAGES]
+    if not urls:
+        # Discovery recorded a company but nothing openable — which used to be
+        # the end of it, and was every rejection in one live run. The supplier's
+        # own domain is usually in the search results for their name.
+        await _adopt_site_from_search(orc, mission, vendor)
+        urls = contact_finder.candidate_urls(vendor.website, vendor.domain)[:MAX_CONTACT_PAGES]
+    if not urls:
+        return
+
+    # Opened together rather than one after another. Most candidates are 404s on
+    # a 15-second timeout, and four of those in series is a minute per supplier
+    # spent learning that `/contact-us` does not exist.
+    fetched = await asyncio.gather(*(_fetch(orc, url) for url in urls))
+
+    own_domain = identity.normalize_domain(vendor.domain or vendor.website)
+    for url, result in zip(urls, fetched, strict=True):
+        page = _ok(result, None)
+        if page is None or not getattr(page, "fetched", False) or not page.text:
+            continue
+
+        for finding in contact_finder.find_in_page(
+            page.text, page.url or url, prefer_domain=own_domain
+        ):
+            # Candidates are in priority order, so the first answer of each kind
+            # is the best one: the homepage before `/about`, the supplier's own
+            # domain before anyone else's.
+            if getattr(vendor, finding.kind, None):
+                continue
+            setattr(vendor, finding.kind, finding.value)
+            await _record_evidence(
+                orc, mission.id, vendor.id,
+                claim=f"{vendor.name} publishes the {finding.kind} {finding.value}",
+                field=finding.kind, value=finding.value,
+                source_type=SourceType.OFFICIAL_WEBSITE, source_url=finding.source_url,
+                source_title=page.title or None, excerpt=finding.excerpt,
+            )
+            log.info(
+                "contact_route_found",
+                extra={"mission_id": mission.id, "vendor_id": vendor.id,
+                       "status": finding.kind, "stage": finding.source_url},
+            )
+
+
+async def _adopt_site_from_search(orc: Orchestrator, mission: Mission, vendor: Vendor) -> None:
+    """Search for the supplier's own site, and take it only if it is theirs.
+
+    Run only for a vendor that has no site at all, because that vendor is
+    otherwise finished: nothing can be read about it and nobody can be written
+    to. `own_site_from` is what keeps this from adopting the first directory
+    that happens to rank for the company's name.
+    """
+    query = f"{vendor.name} {mission.market or ''}".strip()
+    try:
+        hits = await orc.providers.search.search(query, limit=6)
+    except Exception as exc:  # a search outage costs this vendor, not the mission
+        log.warning(
+            "contact_search_failed",
+            extra={"mission_id": mission.id, "vendor_id": vendor.id, "error": str(exc)[:200]},
+        )
+        return
+
+    for hit in hits:
+        site = contact_finder.own_site_from(getattr(hit, "url", None), vendor.name)
+        if site is None:
+            continue
+        vendor.website = site
+        vendor.domain = identity.normalize_domain(site)
+        log.info(
+            "vendor_site_recovered",
+            extra={"mission_id": mission.id, "vendor_id": vendor.id, "stage": site},
+        )
+        return
+
+
+async def _fetch(orc: Orchestrator, url: str) -> Any:
+    """Fetch that returns the exception instead of raising, like the gathers do."""
+    try:
+        return await orc.providers.search.fetch(url)
+    except Exception as exc:  # a dead contact page must not fail the research
+        return exc
 
 
 async def _research_sources(
@@ -580,12 +725,19 @@ async def handle_vendor_updated(orc: Orchestrator, event: Event) -> list[Event]:
     vendor = await orc.repo.vendor(event.payload["vendor_id"])
 
     vendor_conflicts = await orc.repo.vendor_conflicts(vendor.id)
-    # A conflict already being resolved has an email or a call in flight against
-    # it; handle_conflict_detected owns that. Only untouched conflicts belong to
-    # this handler, or the two paths both dial the same supplier.
     open_conflicts = [c for c in vendor_conflicts if c.status is ConflictStatus.OPEN]
+    threads = await orc.repo.list(EmailThread, vendor_id=vendor.id)
+
+    # A conflict being resolved has a follow-up in flight against it, and
+    # handle_conflict_detected owns that — stepping in here would write to the
+    # same supplier twice. But only while there is still a way to ask: once
+    # every thread has spent its follow-ups, waiting is waiting for nothing, and
+    # this vendor would sit in `contacted` forever holding the mission open.
     if any(c.status is ConflictStatus.RESOLVING for c in vendor_conflicts):
-        return []
+        if _can_still_ask(mission, vendor, threads, orc.settings.max_outreach_per_mission):
+            return []
+        await _abandon_conflicts(orc, vendor, "there was no way left to ask the supplier")
+
     missing_critical = [f for f in CRITICAL_FIELDS if not vendor.fact(f).known]
 
     # A vendor that cannot serve this order at all is rejected now, with the
@@ -608,7 +760,6 @@ async def handle_vendor_updated(orc: Orchestrator, event: Event) -> list[Event]:
             *await _maybe_finish(orc, event),
         ]
 
-    threads = await orc.repo.list(EmailThread, vendor_id=vendor.id)
     # The supplier has the ball only while a follow-up is still owed to them. A
     # thread that has used its whole follow-up budget and still has no reply is
     # not "in progress" — waiting on it forever is how a mission never finishes.
@@ -619,28 +770,6 @@ async def handle_vendor_updated(orc: Orchestrator, event: Event) -> list[Event]:
     ]
     if awaiting:
         return []
-
-    call_wanted, call_reason = should_call(
-        missing_critical_fields=missing_critical,
-        has_open_conflict=bool(open_conflicts),
-        email_unanswered_days=_days_since_last_outbound(threads),
-        has_email=bool(vendor.email),
-        has_phone=bool(vendor.phone),
-    )
-
-    # Attempts are counted per vendor, including the ones that failed. A carrier
-    # that rejects the call still used the vendor's patience and our budget, and
-    # counting only completed calls would retry a bad number forever.
-    calls = await orc.repo.list(Call, vendor_id=vendor.id)
-    if call_wanted and len(calls) < MAX_CALLS_PER_VENDOR:
-        return [
-            event.child(
-                EventType.CALL_REQUIRED, vendor_id=vendor.id,
-                version=f"{vendor.id}:call:{len(calls)}",
-                reason=call_reason,
-                conflict_id=open_conflicts[0].id if open_conflicts else None,
-            )
-        ]
 
     if (
         vendor.email
@@ -655,16 +784,34 @@ async def handle_vendor_updated(orc: Orchestrator, event: Event) -> list[Event]:
             )
         ]
 
-    # Every route has been tried. Close the vendor out with the reason, so the
-    # recommendation can explain the gap instead of the mission stalling.
+    # Writing was the only route and it is spent. Close the vendor out with the
+    # reason, so the recommendation can explain the gap instead of the mission
+    # stalling.
     await _set_status(
         orc, vendor, VendorStatus.REJECTED,
-        _no_route_reasons(vendor, missing_critical, len(threads), len(calls)),
+        _no_route_reasons(vendor, missing_critical, len(threads)),
     )
     return [
         event.child(EventType.VENDOR_REJECTED, vendor_id=vendor.id, version=vendor.version),
         *await _maybe_finish(orc, event),
     ]
+
+
+def _can_still_ask(
+    mission: Mission, vendor: Vendor, threads: list[EmailThread], outreach_cap: int
+) -> bool:
+    """Whether a disagreement can still be put to this supplier.
+
+    Deliberately narrower than "could we contact them at all". A conflict is
+    pursued by following up on the thread that produced it, never by opening a
+    fresh one — a new thread would re-introduce the project to someone already
+    mid-conversation. So room for another thread is not room to ask this
+    question, and treating it as though it were leaves the vendor waiting on a
+    follow-up that no path will ever send.
+    """
+    if not vendor.email or mission.emails_sent >= outreach_cap:
+        return False
+    return any(t.follow_up_count < MAX_FOLLOW_UPS for t in threads)
 
 
 async def _abandon_conflicts(orc: Orchestrator, vendor: Vendor, why: str) -> None:
@@ -698,7 +845,7 @@ async def _take_budget(
 
     The check has to happen in the same transaction as the increment. Doing it
     from a mission snapshot read earlier lets a dozen parallel vendor branches
-    all observe `calls_made = 2` and all decide they are within a cap of three.
+    all observe `emails_sent = 11` and all decide they are within a cap of 12.
 
     `reserve` withholds the last N units from lower-priority callers.
     """
@@ -727,32 +874,13 @@ async def handle_vendor_rejected(orc: Orchestrator, event: Event) -> list[Event]
     return []
 
 
-def _no_route_reasons(
-    vendor: Vendor, missing: list[str], threads: int = 0, calls: int = 0
-) -> list[str]:
-    if not vendor.email and not vendor.phone:
-        return ["no email or phone found, so nothing could be confirmed"]
+def _no_route_reasons(vendor: Vendor, missing: list[str], threads: int = 0) -> list[str]:
+    if not vendor.email:
+        return ["no email address found, so nothing could be confirmed"]
     if not missing:
         return ["no remaining route, though the required facts were obtained"]
-    attempted = ", ".join(
-        filter(None, [
-            f"{threads} email thread(s)" if threads else "",
-            f"{calls} call(s)" if calls else "",
-        ])
-    )
-    return [
-        f"still missing {', '.join(missing)} after {attempted or 'no reachable contact'}"
-    ]
-
-
-def _days_since_last_outbound(threads: list[EmailThread]) -> float | None:
-    outbound = [
-        m.sent_at for t in threads for m in t.messages if m.direction == "outbound"
-    ]
-    if not outbound:
-        return None
-    latest = max(outbound)
-    return (datetime.now(UTC) - latest).total_seconds() / 86400.0
+    attempted = f"{threads} email thread(s)" if threads else "no reachable contact"
+    return [f"still missing {', '.join(missing)} after {attempted}"]
 
 
 # ==========================================================================
@@ -884,6 +1012,23 @@ async def handle_email_sent(orc: Orchestrator, event: Event) -> list[Event]:
     if not claimed:
         return []  # already sent; a redelivery must not send it again
 
+    # A follow-up raised to settle a disagreement may draw on the reserve; an
+    # ordinary send may not.
+    if not await _take_budget(
+        orc, mission.id, "emails_sent", orc.settings.max_outreach_per_mission,
+        reserve=0 if event.payload.get("settles_conflict") else EMAILS_RESERVED_FOR_CONFLICTS,
+    ):
+        thread.status = ThreadStatus.DRAFT
+        await orc.repo.save(thread)
+        if event.payload.get("settles_conflict"):
+            await _abandon_conflicts(orc, vendor, "the mission's outreach budget is exhausted")
+        return [
+            event.child(
+                EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="outreach_budget",
+                version=action_version,
+            )
+        ]
+
     outbound = thread.messages[-1]
     sent = await orc.providers.mail.send(
         to=thread.to_address, subject=thread.subject, body=outbound.body,
@@ -901,11 +1046,10 @@ async def handle_email_sent(orc: Orchestrator, event: Event) -> list[Event]:
 
     await _set_status(orc, vendor, VendorStatus.CONTACTED)
 
-    def _mark_sent(record: Mission) -> None:
-        record.emails_sent += 1
+    def _awaiting(record: Mission) -> None:
         record.status = MissionStatus.AWAITING_RESPONSE
 
-    await orc.repo.mutate(Mission, mission.id, _mark_sent)
+    await orc.repo.mutate(Mission, mission.id, _awaiting)
 
     await orc.confirm_action(
         mission.id, vendor.id, "send_email", action_version,
@@ -1014,6 +1158,8 @@ async def handle_email_received(orc: Orchestrator, event: Event) -> list[Event]:
     thread.commitments = list(dict.fromkeys(thread.commitments + extraction.commitments))
     await orc.repo.save(thread)
 
+    await _settle_conflicts_from_reply(orc, vendor, extraction)
+
     all_evidence = await orc.repo.vendor_evidence(vendor.id)
     _apply_facts(vendor, all_evidence, await orc.repo.vendor_conflicts(vendor.id))
     vendor.currency = quote.currency
@@ -1088,15 +1234,6 @@ async def handle_conflict_detected(orc: Orchestrator, event: Event) -> list[Even
     await orc.repo.save(conflict)
 
     question = event.payload.get("question") or ""
-    if conflict.resolution_action == "call" and vendor.phone:
-        return [
-            event.child(
-                EventType.CALL_REQUIRED, vendor_id=vendor.id, version=conflict.id,
-                reason=f"sources disagree on {conflict.field}",
-                conflict_id=conflict.id, question=question,
-            )
-        ]
-
     if vendor.email:
         return [
             event.child(
@@ -1129,7 +1266,15 @@ async def handle_follow_up(orc: Orchestrator, event: Event) -> list[Event]:
     # A silence timer that fires after the supplier already answered is stale.
     if event.payload.get("reason") == "no response" and thread.status is ThreadStatus.RESPONDED:
         return []
+    settles_conflict = bool(event.payload.get("conflict_id"))
+
+    # Both ceilings end the disagreement as well as the follow-up. Writing is the
+    # only way to ask, so a question that can no longer be asked will not be
+    # answered, and saying so beats waiting forever.
     if thread.follow_up_count >= MAX_FOLLOW_UPS:
+        await _abandon_conflicts(
+            orc, vendor, "the supplier did not answer the follow-up that asked about it"
+        )
         return [
             event.child(
                 EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="follow_up_exhausted",
@@ -1137,7 +1282,13 @@ async def handle_follow_up(orc: Orchestrator, event: Event) -> list[Event]:
             )
         ]
     if mission.emails_sent >= orc.settings.max_outreach_per_mission:
-        return []
+        await _abandon_conflicts(orc, vendor, "the mission's outreach budget is exhausted")
+        return [
+            event.child(
+                EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="outreach_budget",
+                version=f"{thread.id}:{thread.follow_up_count}",
+            )
+        ]
 
     # Two follow-ups can be triggered at once — the scheduled silence timer and a
     # reply that answered nothing. Claim the slot before drafting, so the vendor
@@ -1170,6 +1321,7 @@ async def handle_follow_up(orc: Orchestrator, event: Event) -> list[Event]:
     send_event = event.child(
         EventType.EMAIL_SENT, vendor_id=vendor.id, thread_id=thread.id,
         version=f"{thread.id}:followup:{thread.follow_up_count}",
+        settles_conflict=settles_conflict,
     )
     if not decision.requires_approval:
         return [send_event]
@@ -1202,219 +1354,7 @@ def _summarize_thread(thread: EmailThread) -> str:
 
 
 # ==========================================================================
-# 9. Voice
-# ==========================================================================
-
-
-@on(EventType.CALL_REQUIRED)
-async def handle_call_required(orc: Orchestrator, event: Event) -> list[Event]:
-    mission = await orc.repo.mission(event.mission_id)
-    vendor = await orc.repo.vendor(event.payload["vendor_id"])
-    if not vendor.phone:
-        return []
-
-    conflict = None
-    if event.payload.get("conflict_id"):
-        conflict = await orc.repo.load(Conflict, event.payload["conflict_id"])
-
-    question = event.payload.get("question")
-    if conflict is not None and not question:
-        found = conflict_engine.detect(
-            conflict.field, await orc.repo.vendor_evidence(vendor.id)
-        )
-        question = found.question if found else None
-
-    plan = await orc.agents.communication.plan_call(
-        vendor_name=vendor.name, reason=event.payload.get("reason", "missing information"),
-        missing_fields=[f for f in CRITICAL_FIELDS if not vendor.fact(f).known],
-        conflict_question=question, product=mission.product or mission.objective,
-        quantity=mission.quantity, mission_id=mission.id, vendor_id=vendor.id,
-    )
-
-    call = Call(
-        id=stable_id("call", mission.id, vendor.id, str(event.payload.get("version", ""))),
-        mission_id=mission.id, vendor_id=vendor.id, to_number=vendor.phone,
-        reason=event.payload.get("reason", ""), questions=plan.questions,
-        status=CallStatus.REQUIRED,
-    )
-    await orc.repo.save(call)
-    await orc.repo.mutate(Vendor, vendor.id, lambda v: _append_unique(v.call_ids, call.id))
-
-    start_event = event.child(
-        EventType.CALL_STARTED, vendor_id=vendor.id, call_id=call.id,
-        version=call.id, opening=plan.opening,
-    )
-    decision = approval_for(ActionType.MAKE_CALL, orc.settings.approval_policy)
-    if not decision.requires_approval:
-        return [start_event]
-
-    approval = Approval(
-        id=stable_id("apr", mission.id, vendor.id, "make_call", call.id),
-        mission_id=mission.id, vendor_id=vendor.id, action_type=ActionType.MAKE_CALL.value,
-        summary=f"Call {vendor.name} at {vendor.phone}",
-        preview={"to": vendor.phone, "opening": plan.opening, "questions": plan.questions,
-                 "reason": call.reason, "reason_for_approval": decision.reason},
-        resume_event=start_event.model_dump(mode="json"),
-    )
-    await orc.repo.save(approval)
-    call.status = CallStatus.AWAITING_APPROVAL
-    await orc.repo.save(call)
-    return [
-        event.child(
-            EventType.APPROVAL_REQUESTED, vendor_id=vendor.id, approval_id=approval.id,
-            action=ActionType.MAKE_CALL.value, version=approval.id,
-        )
-    ]
-
-
-@on(EventType.CALL_STARTED)
-async def handle_call_started(orc: Orchestrator, event: Event) -> list[Event]:
-    mission = await orc.repo.mission(event.mission_id)
-    vendor = await orc.repo.vendor(event.payload["vendor_id"])
-    call = await orc.repo.load(Call, event.payload["call_id"])
-    if call is None:
-        return []
-
-    claimed = await orc.reserve_action(mission.id, vendor.id, "make_call", call.id)
-    if not claimed:
-        return []
-
-    # A call raised to settle a disagreement may draw on the reserve; a call to
-    # fill in a missing field may not.
-    settles_conflict = any(
-        c.status is ConflictStatus.RESOLVING for c in await orc.repo.vendor_conflicts(vendor.id)
-    )
-    if not await _take_budget(
-        orc, mission.id, "calls_made", orc.settings.max_calls_per_mission,
-        reserve=0 if settles_conflict else CALLS_RESERVED_FOR_CONFLICTS,
-    ):
-        call.status = CallStatus.NOT_ATTEMPTED
-        call.reason = (
-            f"{call.reason}; not placed — the mission's call budget was already spent "
-            "on higher-priority calls"
-        )
-        await orc.repo.save(call)
-        await _abandon_conflicts(orc, vendor, "the mission's call budget is exhausted")
-        return [
-            event.child(
-                EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="call_budget",
-                version=call.id,
-            )
-        ]
-
-    call.status = CallStatus.DIALING
-    await orc.repo.save(call)
-
-    result = await orc.providers.voice.place_call(
-        to=call.to_number, opening=event.payload.get("opening", ""),
-        questions=call.questions, call_id=call.id,
-    )
-    call.provider_call_id = result.provider_call_id
-    await orc.confirm_action(
-        mission.id, vendor.id, "make_call", call.id, {"provider_call_id": result.provider_call_id}
-    )
-
-    if result.status == "dialing":
-        # Live telephony: the transcript arrives through /webhooks/voice.
-        await orc.repo.save(call)
-        return []
-
-    if result.status != "completed":
-        call.status = CallStatus.FAILED if result.status == "failed" else CallStatus.NO_ANSWER
-        await orc.repo.save(call)
-        # A call placed to settle a disagreement that never connected leaves that
-        # disagreement open. Say so, or the vendor waits on an answer that is
-        # never coming.
-        await _abandon_conflicts(
-            orc, vendor, f"the call to resolve it {result.status.replace('_', ' ')}"
-        )
-        return [
-            event.child(
-                EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="call_failed",
-                version=call.id,
-            )
-        ]
-
-    call.transcript = result.transcript
-    call.duration_seconds = result.duration_seconds
-    await orc.repo.save(call)
-    return [
-        event.child(EventType.CALL_COMPLETED, vendor_id=vendor.id, call_id=call.id, version=call.id)
-    ]
-
-
-@on(EventType.CALL_COMPLETED)
-async def handle_call_completed(orc: Orchestrator, event: Event) -> list[Event]:
-    mission = await orc.repo.mission(event.mission_id)
-    vendor = await orc.repo.vendor(event.payload["vendor_id"])
-    call = await orc.repo.load(Call, event.payload["call_id"])
-    if call is None:
-        return []
-
-    extraction = await orc.agents.communication.extract_call(
-        transcript=call.transcript, questions=call.questions,
-        mission_id=mission.id, vendor_id=vendor.id,
-    )
-    call.status = CallStatus.COMPLETED
-    call.answered_questions = extraction.answered
-    call.unanswered_questions = extraction.unanswered
-    await orc.repo.save(call)
-
-    spoken = " ".join(f"{q} — {a}" for q, a in extraction.answered.items())
-    quote = Quote(
-        id=stable_id("qte", mission.id, vendor.id, call.id),
-        mission_id=mission.id, vendor_id=vendor.id, source="call",
-        currency=vendor.currency or _currency_for(mission.market),
-        line_items={"package": extraction.unit_price} if extraction.unit_price else {},
-        moq=extraction.moq, lead_time_days=extraction.lead_time_days,
-        raw_text=spoken,
-    )
-    if quote.line_items or quote.moq or quote.lead_time_days:
-        await orc.repo.save(quote)
-        await _evidence_from_supplier(
-            orc, mission, vendor, quote, source_type=SourceType.SUPPLIER_CALL,
-            source_title=f"Call with {vendor.name}", excerpt=sanitize.excerpt(spoken),
-        )
-
-    # A call was made to settle something; record that it did.
-    for conflict in await orc.repo.vendor_conflicts(vendor.id):
-        if conflict.status is not ConflictStatus.RESOLVING:
-            continue
-        resolved = _resolved_value(conflict.field, extraction)
-        if resolved is None:
-            conflict.status = ConflictStatus.UNRESOLVABLE
-            conflict.preferred_reason += "; the supplier did not answer on the call"
-        else:
-            conflict.status = ConflictStatus.RESOLVED
-            conflict.resolved_value = resolved
-            conflict.resolution_action = "call"
-            conflict.preferred_value = resolved
-            conflict.preferred_reason = "confirmed directly by the supplier on a recorded call"
-        await orc.repo.save(conflict)
-
-    all_evidence = await orc.repo.vendor_evidence(vendor.id)
-    _apply_facts(vendor, all_evidence, await orc.repo.vendor_conflicts(vendor.id))
-    vendor.missing_fields = [f for f in CONTACTABLE_FIELDS if not vendor.fact(f).known]
-    vendor.version += 1
-    await orc.repo.save(vendor)
-
-    return [
-        event.child(
-            EventType.VENDOR_UPDATED, vendor_id=vendor.id, stage="call", version=call.id
-        )
-    ]
-
-
-def _resolved_value(field: str, extraction: Any) -> Any:
-    return {
-        "moq": extraction.moq,
-        "unit_price": extraction.unit_price,
-        "lead_time_days": extraction.lead_time_days,
-    }.get(field)
-
-
-# ==========================================================================
-# 10. Recommendation
+# 9. Recommendation
 # ==========================================================================
 
 
@@ -1534,7 +1474,8 @@ async def rank_vendors(
                 vendor, weights=mission.weights, trust=profile, quote=packaged[vendor.id],
                 cheapest_price=cheapest, quantity=mission.quantity,
                 target_lead_days=_target_lead_days(mission), required_nodes=[node.key],
-                market=mission.market, conflicts=vendor_conflicts,
+                market=mission.market, location=mission.location,
+                scope=mission.search_scope, conflicts=vendor_conflicts,
             )
             rows.append(
                 {
@@ -1725,6 +1666,52 @@ async def _evidence_from_supplier(
     return records
 
 
+async def _settle_conflicts_from_reply(
+    orc: Orchestrator, vendor: Vendor, extraction: Any
+) -> None:
+    """Close out every disagreement this reply was sent to settle.
+
+    Writing is the only channel, so this reply is the answer. Either it states
+    the disputed value — in which case the supplier's own words win over
+    anything they published — or it does not, in which case the disagreement is
+    unresolvable and the recommendation reports it as an open risk. What it must
+    not do is stay `resolving` forever: the vendor never reaches a terminal
+    state, and the mission waits on an answer that has already arrived.
+    """
+    resolved_from = {
+        "moq": extraction.moq,
+        "unit_price": _package_price(extraction),
+        "lead_time_days": extraction.lead_time_days,
+        "payment_terms": extraction.payment_terms,
+        "customization": extraction.customization,
+    }
+
+    for conflict in await orc.repo.vendor_conflicts(vendor.id):
+        if conflict.status is not ConflictStatus.RESOLVING:
+            continue
+        answer = resolved_from.get(conflict.field)
+        if answer is None:
+            conflict.status = ConflictStatus.UNRESOLVABLE
+            conflict.preferred_reason += "; the supplier's reply did not settle it"
+        else:
+            conflict.status = ConflictStatus.RESOLVED
+            conflict.resolved_value = answer
+            conflict.resolution_action = "email"
+            conflict.preferred_value = answer
+            conflict.preferred_reason = "confirmed directly by the supplier in writing"
+        await orc.repo.save(conflict)
+
+
+def _package_price(extraction: Any) -> float | None:
+    """What one unit costs, however the supplier chose to break it down."""
+    items = getattr(extraction, "line_items", None) or {}
+    if not items:
+        return None
+    if "package" in items:
+        return items["package"]
+    return round(sum(items.values()), 4)
+
+
 def _apply_facts(
     vendor: Vendor, all_evidence: list[Evidence], conflicts: Sequence[Conflict] = ()
 ) -> None:
@@ -1734,10 +1721,10 @@ def _apply_facts(
     provenance of a field depends on everything known about it, so a new email
     can promote a field from `publicly_listed` to `direct_quote` and must.
 
-    A settled conflict wins over the raw evidence. When the supplier told us on a
-    recorded call that 500 is possible as a pilot, that answer is the MOQ — not
-    the 1,000 their sales desk emailed. Skipping this step is how a system does
-    the work of resolving a disagreement and then scores as if it never had.
+    A settled conflict wins over the raw evidence. When the supplier confirms in
+    writing that 500 is possible as a pilot, that answer is the MOQ — not the
+    1,000 their first reply quoted. Skipping this step is how a system does the
+    work of resolving a disagreement and then scores as if it never had.
     """
     resolved = {
         c.field: c

@@ -44,8 +44,8 @@ class Settings(BaseSettings):
     )
 
     #: Which product integrations to bind: DEMO uses the mock providers, LIVE
-    #: uses Google Search, Places, YouTube, Gmail and telephony for whichever
-    #: have credentials.
+    #: uses Google Search, Places, YouTube and Gmail for whichever have
+    #: credentials.
     mode: Mode = Mode.DEMO
     approval_policy: ApprovalPolicy = ApprovalPolicy.EXTERNAL_ACTIONS
 
@@ -84,9 +84,21 @@ class Settings(BaseSettings):
     youtube_api_key: str = ""
     gmail_sender: str = ""
     gmail_topic: str = ""                  # Gmail watch -> Pub/Sub topic
-    twilio_account_sid: str = ""
-    twilio_auth_token: str = ""
-    twilio_from_number: str = ""
+
+    #: SMTP, as the short path to real delivery. Gmail accepts an app password
+    #: here, which needs no OAuth client and no consent screen. Outbound only:
+    #: replies land in the inbox, not back in the mission.
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+
+    #: Send every outbound email here instead of to the supplier. The addresses
+    #: in a live mission belong to real businesses, so this is how you prove the
+    #: mail path works without writing to one. Empty means mail goes where the
+    #: workflow addressed it.
+    mail_redirect_to: str = ""
 
     # --- Cost / depth guards ------------------------------------------------
     max_vendors_per_category: int = Field(default=8, ge=1, le=50)
@@ -100,8 +112,21 @@ class Settings(BaseSettings):
     max_vendors_per_mission: int = Field(default=12, ge=1, le=200)
     max_research_depth: int = Field(default=3, ge=1, le=10)
     max_outreach_per_mission: int = Field(default=12, ge=0, le=200)
-    max_calls_per_mission: int = Field(default=3, ge=0, le=50)
     max_event_retries: int = Field(default=5, ge=0, le=20)
+
+    #: Ceiling on Gemini requests in flight from this process, across every
+    #: agent. `max_concurrent_research` bounds research branches, but discovery
+    #: fans out over every supply-chain node at once and each branch calls the
+    #: model, so without a gate here a mission opens a dozen simultaneous
+    #: requests and Vertex answers 429 to most of them. Rate limits are a
+    #: queueing problem: the cheapest fix is to queue.
+    max_concurrent_model_calls: int = Field(default=4, ge=1, le=64)
+
+    #: Minimum seconds between the start of one model request and the next.
+    #: 0 disables pacing. On a project with no provisioned throughput, a small
+    #: value (0.5-1.0) turns a burst that mostly 429s into a queue that mostly
+    #: succeeds.
+    min_model_call_interval_seconds: float = Field(default=0.0, ge=0.0, le=30.0)
 
     #: How many vendors may be researched at once. Discovery fans out over every
     #: supply-chain node simultaneously, and each research branch is a tool loop

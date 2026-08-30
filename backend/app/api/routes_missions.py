@@ -11,13 +11,13 @@ from ..domain.events import Event, EventType
 from ..domain.models import (
     Approval,
     ApprovalStatus,
-    Call,
     Conflict,
     EmailThread,
     Evidence,
     Mission,
     Recommendation,
     ScoringWeights,
+    SearchScope,
     SupplyChainNode,
     Vendor,
 )
@@ -32,6 +32,10 @@ router = APIRouter(prefix="/api", tags=["missions"])
 class CreateMission(BaseModel):
     objective: str = Field(min_length=10, max_length=4000)
     user_id: str = "demo-user"
+    #: Where to look. `location` is a city for "city" scope and a country for
+    #: "country" scope; "global" ignores it.
+    location: str | None = Field(default=None, max_length=120)
+    scope: SearchScope = SearchScope.COUNTRY
 
 
 class Decision(BaseModel):
@@ -68,7 +72,6 @@ async def health(rt: Runtime = Depends(runtime)) -> dict[str, Any]:
                 "model_calls": rt.settings.max_model_calls_per_mission,
                 "usd": rt.settings.max_usd_per_mission,
                 "outreach_emails": rt.settings.max_outreach_per_mission,
-                "calls": rt.settings.max_calls_per_mission,
                 "research_llm_calls": rt.settings.max_research_llm_calls,
             },
         },
@@ -77,7 +80,9 @@ async def health(rt: Runtime = Depends(runtime)) -> dict[str, Any]:
 
 @router.post("/missions", status_code=201)
 async def create_mission(body: CreateMission, rt: Runtime = Depends(runtime)) -> dict[str, Any]:
-    mission = await rt.create_mission(body.objective, user_id=body.user_id)
+    mission = await rt.create_mission(
+        body.objective, user_id=body.user_id, location=body.location, scope=body.scope
+    )
     return mission.model_dump(mode="json")
 
 
@@ -96,7 +101,6 @@ async def get_mission(mission_id: str, rt: Runtime = Depends(runtime)) -> dict[s
     conflicts = await rt.repo.list(Conflict, mission_id=mission_id)
     approvals = await rt.repo.list(Approval, mission_id=mission_id)
     threads = await rt.repo.list(EmailThread, mission_id=mission_id)
-    calls = await rt.repo.list(Call, mission_id=mission_id)
 
     return {
         "mission": mission.model_dump(mode="json"),
@@ -113,7 +117,6 @@ async def get_mission(mission_id: str, rt: Runtime = Depends(runtime)) -> dict[s
             "emails_sent": mission.emails_sent,
             "emails_responded": sum(1 for t in threads if t.status.value == "responded"),
             "emails_awaiting": sum(1 for t in threads if t.status.value == "sent"),
-            "calls_completed": sum(1 for c in calls if c.status.value == "completed"),
             "pending_approvals": sum(1 for a in approvals if a.status.value == "pending"),
         },
         "spend": {
@@ -171,9 +174,6 @@ async def vendor_detail(
         "threads": [
             t.model_dump(mode="json") for t in await rt.repo.list(EmailThread, vendor_id=vendor_id)
         ],
-        "calls": [
-            c.model_dump(mode="json") for c in await rt.repo.list(Call, vendor_id=vendor_id)
-        ],
     }
 
 
@@ -195,7 +195,6 @@ async def mission_communications(
 ) -> dict[str, Any]:
     await _mission(rt, mission_id)
     threads = await rt.repo.list(EmailThread, mission_id=mission_id)
-    calls = await rt.repo.list(Call, mission_id=mission_id)
     vendors = {v.id: v.name for v in await rt.repo.list(Vendor, mission_id=mission_id)}
     return {
         "email": {
@@ -205,16 +204,6 @@ async def mission_communications(
             "threads": [
                 {**t.model_dump(mode="json"), "vendor_name": vendors.get(t.vendor_id, "")}
                 for t in threads
-            ],
-        },
-        "calls": {
-            "completed": sum(1 for c in calls if c.status.value == "completed"),
-            "scheduled": sum(1 for c in calls if c.status.value in ("required", "dialing")),
-            "failed": sum(1 for c in calls if c.status.value in ("failed", "no_answer")),
-            "not_attempted": sum(1 for c in calls if c.status.value == "not_attempted"),
-            "items": [
-                {**c.model_dump(mode="json"), "vendor_name": vendors.get(c.vendor_id, "")}
-                for c in calls
             ],
         },
     }

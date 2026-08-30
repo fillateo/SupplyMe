@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from .models import Conflict, ScoringWeights, Vendor
+from .models import Conflict, ScoringWeights, SearchScope, Vendor
 from .numbers import as_number
 from .quotes import PackageQuote
 from .trust import TrustProfile
@@ -158,18 +158,59 @@ def _evidence_component(weight: float, trust: TrustProfile) -> Component:
     )
 
 
-def _logistics_component(weight: float, vendor: Vendor, market: str | None) -> Component:
+def _logistics_component(
+    weight: float,
+    vendor: Vendor,
+    market: str | None,
+    location: str | None = None,
+    scope: SearchScope = SearchScope.COUNTRY,
+) -> Component:
+    """How well this supplier's location answers the question that was asked.
+
+    The same factory is a different proposition under each scope. Someone who
+    asked for suppliers in their own city can drive over and look at a sample
+    before committing, so a supplier three provinces away is a worse answer even
+    when it is the better factory — and someone who chose global scope has
+    already accepted importing, so charging them for it twice is wrong.
+    """
     if not vendor.country:
         return Component("logistics", weight, 0.3, "location unknown")
-    if market and vendor.country.strip().lower() == market.strip().lower():
-        detail = f"located in the target market ({vendor.country})"
-        raw = 1.0
+
+    in_market = bool(market) and vendor.country.strip().lower() == market.strip().lower()
+    in_city = bool(location) and _same_place(vendor.city, location)
+
+    if scope is SearchScope.CITY:
+        if in_city:
+            raw, detail = 1.0, f"in {vendor.city} — the city you asked for"
+        elif in_market:
+            raw, detail = 0.7, f"in {vendor.country}, outside {location}"
+        else:
+            raw, detail = 0.35, f"located in {vendor.country}; import required"
+    elif scope is SearchScope.GLOBAL:
+        # Importing is the premise, not a penalty. Distance still costs
+        # something, so a domestic supplier keeps a modest edge.
+        raw = 1.0 if in_market else 0.8
+        detail = (
+            f"located in the target market ({vendor.country})" if in_market
+            else f"located in {vendor.country}; importing was accepted"
+        )
+    elif in_market:
+        raw, detail = 1.0, f"located in the target market ({vendor.country})"
     else:
-        detail = f"located in {vendor.country}; import required"
-        raw = 0.5
-    if vendor.city:
+        raw, detail = 0.5, f"located in {vendor.country}; import required"
+
+    if vendor.city and vendor.city not in detail:
         detail += f" — {vendor.city}"
     return Component("logistics", weight, raw, detail)
+
+
+def _same_place(left: str | None, right: str | None) -> bool:
+    """City names travel with their province attached: "Bekasi, Jawa Barat"."""
+    a = (left or "").strip().lower()
+    b = (right or "").strip().lower()
+    if not a or not b:
+        return False
+    return a == b or a in b or b in a
 
 
 def score_vendor(
@@ -183,6 +224,8 @@ def score_vendor(
     target_lead_days: int | None = None,
     required_nodes: Sequence[str] = (),
     market: str | None = None,
+    location: str | None = None,
+    scope: SearchScope = SearchScope.COUNTRY,
     conflicts: Sequence[Conflict] = (),
 ) -> VendorScore:
     w = weights.as_dict()
@@ -192,7 +235,7 @@ def score_vendor(
         _capability_component(w["capability"], vendor, required_nodes, trust),
         _lead_time_component(w["lead_time"], vendor, target_lead_days),
         _evidence_component(w["evidence"], trust),
-        _logistics_component(w["logistics"], vendor, market),
+        _logistics_component(w["logistics"], vendor, market, location, scope),
     ]
     total = round(sum(c.contribution for c in components) * 100, 2)
 

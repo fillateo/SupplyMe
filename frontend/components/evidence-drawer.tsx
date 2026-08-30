@@ -15,7 +15,6 @@ const SOURCE_LABEL: Record<string, string> = {
   youtube: "a YouTube video",
   search_result: "a search result",
   supplier_email: "an email from the supplier",
-  supplier_call: "a recorded call with the supplier",
   unknown: "an unidentified source",
 };
 
@@ -34,7 +33,6 @@ const SOURCE_CAVEAT: Record<string, string> = {
   official_website: "The supplier describing itself. Not independent confirmation.",
   search_result: "A snippet only — the page itself was not read.",
   supplier_email: "Stated to us directly, and binding in the way an email is.",
-  supplier_call: "Stated to us on a call. The transcript is on the vendor record.",
 };
 
 export function EvidenceDrawer({

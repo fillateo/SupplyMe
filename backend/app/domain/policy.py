@@ -27,7 +27,6 @@ class Tool(StrEnum):
     DRAFT_EMAIL = "draft_email"
     SEND_EMAIL = "send_email"
     READ_MAIL = "read_mail"
-    PLACE_CALL = "place_call"
     WRITE_SCORE = "write_score"
     SPEND_MONEY = "spend_money"
 
@@ -53,7 +52,7 @@ AGENT_TOOLS: dict[str, frozenset[Tool]] = {
         {Tool.SEARCH_WEB, Tool.READ_PAGE, Tool.SEARCH_YOUTUBE, Tool.WRITE_EVIDENCE}
     ),
     "communication": frozenset(
-        {Tool.DRAFT_EMAIL, Tool.SEND_EMAIL, Tool.READ_MAIL, Tool.PLACE_CALL, Tool.WRITE_EVIDENCE}
+        {Tool.DRAFT_EMAIL, Tool.SEND_EMAIL, Tool.READ_MAIL, Tool.WRITE_EVIDENCE}
     ),
     "recommendation": frozenset({Tool.WRITE_SCORE}),
 }
@@ -95,7 +94,6 @@ def allowed(agent: str, tool: Tool) -> bool:
 class ActionType(StrEnum):
     SEND_EMAIL = "send_email"
     SEND_FOLLOW_UP = "send_follow_up"
-    MAKE_CALL = "make_call"
     ACCEPT_QUOTE = "accept_quote"
     PLACE_ORDER = "place_order"
 
@@ -105,7 +103,6 @@ EXTERNAL_ACTIONS = frozenset(
     {
         ActionType.SEND_EMAIL,
         ActionType.SEND_FOLLOW_UP,
-        ActionType.MAKE_CALL,
         ActionType.ACCEPT_QUOTE,
         ActionType.PLACE_ORDER,
     }
@@ -136,53 +133,8 @@ def approval_for(
 
     # EXTERNAL_ACTIONS: the first approach to a vendor is reviewed; once a human
     # has opened that relationship, follow-ups within it continue unattended.
-    if action is ActionType.MAKE_CALL:
-        return Decision(True, "a phone call is always reviewed before dialling")
     if action is ActionType.SEND_EMAIL and first_contact_with_vendor:
         return Decision(True, "first email to this vendor is reviewed")
     if action in EXTERNAL_ACTIONS:
         return Decision(False, "continuing an outreach a human already approved")
     return Decision(False, "internal action")
-
-
-# --------------------------------------------------------------------------
-# Call policy
-# --------------------------------------------------------------------------
-
-#: What the voice agent may and may not say. Enforced in the prompt and asserted
-#: in tests; see app/agents/communication.py.
-CALL_DISCLOSURE = (
-    "I'm an AI sourcing assistant calling on behalf of a perfume startup."
-)
-CALL_PROHIBITIONS = (
-    "never claim to be human",
-    "never agree a price or place an order",
-    "never share the buyer's budget or other suppliers' quotes",
-    "end the call if asked to speak to a person and record the request",
-)
-
-
-def should_call(
-    *,
-    missing_critical_fields: list[str],
-    has_open_conflict: bool,
-    email_unanswered_days: float | None,
-    has_email: bool,
-    has_phone: bool,
-    user_requested: bool = False,
-) -> tuple[bool, str]:
-    """A call is a decision, not a default. Returns (call?, why)."""
-    if not has_phone:
-        return False, "no phone number on file"
-    if user_requested:
-        return True, "the user asked for phone verification"
-    if has_open_conflict:
-        return True, "sources disagree and email already gave one of the answers"
-    if not has_email:
-        return True, "no email address, so the phone is the only route"
-    if missing_critical_fields and email_unanswered_days is not None and email_unanswered_days >= 2:
-        return True, (
-            f"still missing {', '.join(missing_critical_fields)} "
-            f"{email_unanswered_days:.0f} days after emailing"
-        )
-    return False, "email outreach has not been exhausted"

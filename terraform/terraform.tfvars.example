@@ -3,7 +3,7 @@ region     = "us-central1"
 image      = "us-central1-docker.pkg.dev/your-project-id/vendor-discovery/api:latest"
 
 # demo binds the mock providers and makes the service publicly readable so a
-# judge can open the link. live binds Gmail, Places and telephony and does not.
+# judge can open the link. live binds Gmail, Search and Places and does not.
 mode            = "demo"
 approval_policy = "external"
 
@@ -21,4 +21,3 @@ alert_email       = ""
 
 # Hard stops, applied per mission inside the application.
 max_usd_per_mission   = 0.50
-max_calls_per_mission = 3

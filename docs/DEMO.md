@@ -10,7 +10,7 @@
 | 1:10–1:40 | A supplier claims a major brand. Open it: **supplier's word only, no independent source**. Open the other: **verified, brand's own site** | Suppliers tab → expand |
 | 1:40–2:10 | The email it wrote, and what it personalised from | Approvals bar, "Read it first" |
 | 2:10–2:45 | Reply arrives on its own. Quote extracted. **Sources differ on MOQ: 500 vs 1,000** | Activity feed, then the vendor's conflict panel |
-| 2:45–3:15 | It decides email won't settle it — they already answered in writing — and calls. Transcript: *"500 for a pilot, at Rp 11,000."* | Communications tab |
+| 2:45–3:15 | It puts both numbers back to them in one targeted follow-up. Their reply: *"minimum turun ke 500 pcs untuk pilot, Rp 11.000/pcs."* | Communications tab |
 | 3:15–3:40 | The supplier is re-scored. 84 → 95, because MOQ now fits | Recommendation tab → "How the score was reached" |
 | 3:40–4:00 | Click any number on screen: excerpt, URL, retrieval time | Evidence drawer |
 

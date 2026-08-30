@@ -21,7 +21,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.config import ApprovalPolicy, Mode, Settings
 from app.domain.models import (
     BrandRelationship,
-    Call,
     Conflict,
     EmailThread,
     Evidence,
@@ -58,7 +57,6 @@ async def main(argv: list[str] | None = None) -> int:
         # own test in tests/test_workflow.py.
         approval_policy=ApprovalPolicy.AUTONOMOUS,
         project_id=args.project,
-        max_calls_per_mission=3,
     )
 
     if args.live_model:
@@ -120,7 +118,6 @@ async def report(runtime: Runtime, mission_id: str) -> None:
     relationships = await repo.list(BrandRelationship, mission_id=mission_id)
     conflicts = await repo.list(Conflict, mission_id=mission_id)
     threads = await repo.list(EmailThread, mission_id=mission_id)
-    calls = await repo.list(Call, mission_id=mission_id)
 
     print("\n" + "-" * 78)
     print(f"SUPPLY CHAIN ({len(nodes)} categories)")
@@ -169,7 +166,7 @@ async def report(runtime: Runtime, mission_id: str) -> None:
             print(f"      resolved to {conflict.resolved_value} — {conflict.preferred_reason}")
 
     print("\n" + "-" * 78)
-    print(f"COMMUNICATIONS — {len(threads)} email thread(s), {len(calls)} call(s)")
+    print(f"COMMUNICATIONS — {len(threads)} email thread(s)")
     print("-" * 78)
     for thread in threads:
         print(
@@ -177,10 +174,6 @@ async def report(runtime: Runtime, mission_id: str) -> None:
             f"[{thread.status.value}] {len(thread.messages)} message(s), "
             f"{len(thread.answered)}/{len(thread.asked)} questions answered"
         )
-    for call in calls:
-        print(f"  CALL {by_id.get(call.vendor_id, '?')} [{call.status.value}] — {call.reason}")
-        for question, answer in call.answered_questions.items():
-            print(f"      Q: {question}\n      A: {answer}")
 
     recommendations = await repo.list(Recommendation, mission_id=mission_id)
     if recommendations:
@@ -209,8 +202,7 @@ async def report(runtime: Runtime, mission_id: str) -> None:
 
     print("\n" + "=" * 78)
     print(f"mission status: {mission.status.value}")
-    print(f"evidence records: {len(evidence)}   emails sent: {mission.emails_sent}   "
-          f"calls: {mission.calls_made}")
+    print(f"evidence records: {len(evidence)}   emails sent: {mission.emails_sent}")
     print("orchestrator counters:", runtime.orchestrator.stats)
     print("=" * 78)
 

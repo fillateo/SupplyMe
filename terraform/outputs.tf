@@ -18,13 +18,11 @@ output "app_service_account" {
 
 output "next_steps" {
   value = join("\n", [
-    "1. Set the service's own URL so it can build webhook callbacks:",
-    "     gcloud run services update ${var.service_name} --region ${var.region} \\",
-    "       --update-env-vars VDS_PUBLIC_BASE_URL=${google_cloud_run_v2_service.api.uri}",
-    "2. Confirm which Gemini model the deployment resolved:",
+    "1. Confirm which Gemini model the deployment resolved:",
     "     curl -s ${google_cloud_run_v2_service.api.uri}/api/health | jq .providers",
+    "     (/healthz is the container's own probe; the public health endpoint is /api/health.)",
     var.mode == "live" ?
-    "3. Start Gmail push: python scripts/gmail_watch.py --topic ${google_pubsub_topic.gmail[0].id}" :
-    "3. Demo mode: mock providers are bound. Nothing will email or call a real supplier.",
+    "2. Start Gmail push: python scripts/gmail_watch.py --topic ${google_pubsub_topic.gmail[0].id}" :
+    "2. Demo mode: mock providers are bound. Nothing will email or call a real supplier.",
   ])
 }

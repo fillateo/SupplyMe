@@ -11,8 +11,6 @@ from app.domain.models import (
     ApprovalStatus,
     BrandEvidenceClass,
     BrandRelationship,
-    Call,
-    CallStatus,
     Conflict,
     ConflictStatus,
     EmailThread,
@@ -127,7 +125,7 @@ class TestEvidenceDiscipline:
 
 
 class TestConflictResolution:
-    async def test_the_moq_disagreement_is_found_and_settled_by_a_call(self, completed):
+    async def test_the_moq_disagreement_is_found_and_settled_in_writing(self, completed):
         runtime, mission = completed
         conflicts = await runtime.repo.list(Conflict, mission_id=mission.id)
         moq_conflicts = [c for c in conflicts if c.field == "moq"]
@@ -136,21 +134,8 @@ class TestConflictResolution:
         conflict = moq_conflicts[0]
         assert {v["value"] for v in conflict.values} == {500.0, 1000}
         assert conflict.status is ConflictStatus.RESOLVED
-        assert conflict.resolution_action == "call"
+        assert conflict.resolution_action == "email"
         assert conflict.resolved_value == 500
-
-    async def test_the_call_was_placed_for_that_reason(self, completed):
-        runtime, mission = completed
-        calls = await runtime.repo.list(Call, mission_id=mission.id)
-        assert any("disagree" in c.reason for c in calls)
-
-    async def test_calls_identify_themselves_as_an_ai(self, completed):
-        runtime, mission = completed
-        for call in await runtime.repo.list(Call, mission_id=mission.id):
-            if call.status is not CallStatus.COMPLETED or not call.transcript:
-                continue
-            opening = call.transcript[0]["text"].lower()
-            assert "ai" in opening, f"call {call.id} did not disclose it was an AI"
 
 
 class TestCommunication:
@@ -177,7 +162,6 @@ class TestCommunication:
 
     async def test_budgets_are_respected(self, completed):
         runtime, mission = completed
-        assert mission.calls_made <= runtime.settings.max_calls_per_mission
         assert mission.emails_sent <= runtime.settings.max_outreach_per_mission
 
 
@@ -190,7 +174,7 @@ class TestActivityTimeline:
             EventType.MISSION_CREATED, EventType.SUPPLY_CHAIN_PLANNED,
             EventType.VENDOR_DISCOVERED, EventType.EMAIL_SENT,
             EventType.EMAIL_RECEIVED, EventType.QUOTE_EXTRACTED,
-            EventType.CONFLICT_DETECTED, EventType.CALL_COMPLETED,
+            EventType.CONFLICT_DETECTED, EventType.FOLLOW_UP_REQUIRED,
             EventType.RECOMMENDATION_READY, EventType.MISSION_COMPLETED,
         ):
             assert expected.value in types, f"{expected.value} never happened"
@@ -215,8 +199,7 @@ class TestApprovalGate:
             approvals = await runtime.repo.list(Approval, mission_id=mission.id)
             pending = [a for a in approvals if a.status is ApprovalStatus.PENDING]
             assert pending, "no approval was requested for first contact"
-            # Both outbound channels are gated under this policy.
-            assert {a.action_type for a in pending} >= {"send_email", "make_call"}
+            assert {a.action_type for a in pending} >= {"send_email"}
 
             threads = await runtime.repo.list(EmailThread, mission_id=mission.id)
             assert all(len(t.messages) == 1 for t in threads)
@@ -235,35 +218,6 @@ class TestApprovalGate:
 
             assert runtime.providers.mail.sent, "granting approval did not send the email"
             assert runtime.providers.mail.sent[0]["to"] == approval.preview["to"]
-        finally:
-            await runtime.stop()
-
-    async def test_a_call_is_not_dialled_until_it_is_approved(self):
-        settings = Settings(mode=Mode.DEMO, approval_policy=ApprovalPolicy.EXTERNAL_ACTIONS)
-        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
-        await runtime.start(concurrency=8)
-        try:
-            mission = await runtime.create_mission(OBJECTIVE)
-            await runtime.drain(timeout=120)
-
-            approvals = await runtime.repo.list(Approval, mission_id=mission.id)
-            approval = next(
-                a for a in approvals
-                if a.action_type == "make_call" and a.status is ApprovalStatus.PENDING
-            )
-            assert not runtime.providers.voice.calls, "a call was placed without approval"
-            assert approval.preview["questions"]
-
-            approval.status = ApprovalStatus.GRANTED
-            await runtime.repo.save(approval)
-            await runtime.orchestrator.emit(
-                Event(
-                    type=EventType.APPROVAL_GRANTED, mission_id=mission.id,
-                    payload={"approval_id": approval.id},
-                )
-            )
-            await runtime.drain(timeout=120)
-            assert runtime.providers.voice.calls, "granting approval did not place the call"
         finally:
             await runtime.stop()
 
@@ -326,35 +280,3 @@ class TestResolvedConflictsAffectTheOutcome:
         )
         assert "fits" in moq_component["explanation"]
         assert moq_component["raw"] == 1.0
-
-
-class TestCallBudgetPriority:
-    """A disputed fact outranks a blank one when calls are scarce."""
-
-    async def test_a_conflict_call_may_draw_on_the_reserve(self):
-        from app.domain.models import Mission as MissionModel
-        from app.workflow.handlers import CALLS_RESERVED_FOR_CONFLICTS, _take_budget
-
-        settings = Settings(mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS,
-                            max_calls_per_mission=2)
-        runtime = Runtime.build(settings, llm=build_scripted_llm(), demo_speedup=200_000.0)
-        mission = MissionModel(objective="x", mode="demo")
-        await runtime.repo.save(mission)
-
-        cap = settings.max_calls_per_mission
-        # Ordinary calls may take everything except the reserve.
-        for _ in range(cap - CALLS_RESERVED_FOR_CONFLICTS):
-            assert await _take_budget(
-                runtime.orchestrator, mission.id, "calls_made", cap,
-                reserve=CALLS_RESERVED_FOR_CONFLICTS,
-            )
-        # The next ordinary call is refused...
-        assert not await _take_budget(
-            runtime.orchestrator, mission.id, "calls_made", cap,
-            reserve=CALLS_RESERVED_FOR_CONFLICTS,
-        )
-        # ...but a conflict call still gets through.
-        assert await _take_budget(runtime.orchestrator, mission.id, "calls_made", cap, reserve=0)
-        # And the hard cap still holds.
-        assert not await _take_budget(runtime.orchestrator, mission.id, "calls_made", cap, reserve=0)
-        await runtime.stop()

@@ -31,9 +31,18 @@ information the objective already gives.
 SUPPLY_CHAIN_INSTRUCTION = """
 You decompose a product into the supplier categories needed to actually make it.
 
-Think about the physical bill of materials and the services around it: the
-components, the thing that combines them, and anything legally required to sell
-it in the stated market.
+Think about the physical bill of materials and the manufacturing services around
+it: the components, and the thing that combines them.
+
+Every node must be something a supplier can put a price on. The system will go
+and ask each one for a minimum order quantity, a unit price and a lead time, and
+rank the answers — so a node has to be a thing you buy by the unit. Certification,
+regulatory registration, legal advice and brand design are real obligations and
+real costs, but they are not purchase orders with an MOQ, and making them nodes
+sends the mission to consultancies that can never answer the questions it asks.
+When the market requires something like that, put it in the plan's
+consolidation_note or leave it to the brief's success criteria; do not make it a
+supplier category.
 
 Two judgments matter more than completeness:
 

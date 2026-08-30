@@ -14,7 +14,6 @@ from typing import Any, TypeVar
 from ..domain.models import (
     Approval,
     BrandRelationship,
-    Call,
     Conflict,
     EmailThread,
     Evidence,
@@ -36,7 +35,6 @@ COLLECTIONS: dict[type, str] = {
     Evidence: "evidence",
     BrandRelationship: "brand_relationships",
     EmailThread: "email_threads",
-    Call: "calls",
     Quote: "quotes",
     Conflict: "conflicts",
     Approval: "approvals",

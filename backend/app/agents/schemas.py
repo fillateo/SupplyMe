@@ -212,20 +212,6 @@ class QuoteExtraction(BaseModel):
     suspicious_content: bool = False
 
 
-class CallPlan(BaseModel):
-    opening: str = Field(description="Opening line. Must identify the caller as an AI assistant.")
-    questions: list[str] = Field(description="Ordered, each answerable in one sentence")
-
-
-class CallExtraction(BaseModel):
-    answered: dict[str, str] = Field(default_factory=dict, description="question -> answer")
-    unanswered: list[str] = Field(default_factory=list)
-    moq: int | None = None
-    unit_price: float | None = None
-    lead_time_days: int | None = None
-    notes: str = ""
-
-
 # --------------------------------------------------------------------------
 # Recommendation
 # --------------------------------------------------------------------------

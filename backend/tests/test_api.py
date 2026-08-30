@@ -144,3 +144,61 @@ class TestEventIngress:
         encoded = base64.b64encode(event.model_dump_json().encode()).decode()
         response = client.post("/events/pubsub", json={"message": {"data": encoded}})
         assert response.status_code == 204
+
+
+class TestPushTokenReachesTheEndpoint:
+    """The shared secret has to be checkable the way each caller can send it.
+
+    Cloud Tasks sets a header. A Pub/Sub push subscription cannot set headers at
+    all, so it can only carry the secret in the endpoint's query string —
+    accepting the header alone means every published workflow event comes back
+    403 and the deployed mission never advances past `created`.
+    """
+
+    TOKEN = "s3cret-push-token"
+
+    @pytest.fixture
+    def guarded(self, monkeypatch):
+        # The guard reads the environment-derived settings, exactly as the
+        # deployed service does, so configure the token the same way.
+        from app.config import reset_settings_cache
+
+        monkeypatch.setenv("VDS_PUBSUB_PUSH_TOKEN", self.TOKEN)
+        reset_settings_cache()
+
+        original = deps.startup
+
+        async def scripted(settings=None, **kw):
+            return await original(
+                Settings(mode=Mode.DEMO, approval_policy=ApprovalPolicy.AUTONOMOUS),
+                llm=build_scripted_llm(), demo_speedup=200_000.0,
+            )
+
+        deps.startup = scripted
+        with TestClient(app) as test_client:
+            yield test_client
+        deps.startup = original
+        reset_settings_cache()
+
+    def test_the_header_form_is_accepted(self, guarded):
+        response = guarded.post(
+            "/events/task", json={"nonsense": True}, headers={"X-VDS-Token": self.TOKEN}
+        )
+        assert response.status_code == 204
+
+    def test_the_query_string_form_is_accepted(self, guarded):
+        response = guarded.post(
+            f"/events/pubsub?token={self.TOKEN}", json={"message": {}}
+        )
+        assert response.status_code == 204
+
+    def test_no_token_is_rejected(self, guarded):
+        assert guarded.post("/events/pubsub", json={"message": {}}).status_code == 403
+
+    def test_a_wrong_token_is_rejected(self, guarded):
+        assert guarded.post(
+            "/events/pubsub?token=wrong", json={"message": {}}
+        ).status_code == 403
+        assert guarded.post(
+            "/events/pubsub", json={"message": {}}, headers={"X-VDS-Token": "wrong"}
+        ).status_code == 403

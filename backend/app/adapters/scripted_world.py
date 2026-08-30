@@ -22,8 +22,6 @@ import re
 from ..agents.schemas import (
     BrandFinding,
     BrandInvestigation,
-    CallExtraction,
-    CallPlan,
     DiscoveredVendor,
     DiscoveryResult,
     EmailDraft,
@@ -227,11 +225,34 @@ def _brand(prompt: str, untrusted: str | None) -> BrandInvestigation:
 def _communication(prompt: str, untrusted: str | None):
     if "Extract what the reply below commits to" in prompt:
         return _extract_quote(prompt, untrusted or "")
-    if "Questions the call was meant to answer" in prompt:
-        return _extract_call(prompt, untrusted or "")
-    if "Why we are calling instead of emailing" in prompt:
-        return _plan_call(prompt)
+    if "This is a follow-up on an existing thread" in prompt:
+        return _draft_follow_up(prompt)
     return _draft_email(prompt)
+
+
+def _draft_follow_up(prompt: str) -> EmailDraft:
+    """A follow-up asks the one thing still outstanding.
+
+    Settling a disagreement is now entirely this email's job, so when the
+    workflow supplies the specific point, that point is the whole message rather
+    than a line inside a repeat of the original request.
+    """
+    vendor_name = _after(prompt, "Supplier:")
+    specific = _after(prompt, "Specific point to resolve:")
+    unanswered = [
+        q.strip() for q in (_after(prompt, "Still unanswered:") or "").split(",") if q.strip()
+    ]
+    questions = [specific] if specific else [q for q in unanswered if q != "none"][:3]
+    if not questions:
+        questions = ["Could you confirm your minimum order quantity?"]
+    body = (
+        f"Hello {vendor_name},\n\nFollowing up on our earlier message.\n\n"
+        + "\n".join(f"- {q}" for q in questions)
+        + "\n\nThank you."
+    )
+    return EmailDraft(
+        subject="Re: quotation request", body=body, questions_asked=questions,
+    )
 
 
 def _draft_email(prompt: str) -> EmailDraft:
@@ -356,62 +377,6 @@ def _extract_quote(prompt: str, body: str) -> QuoteExtraction:
         answered_questions=answered, still_unanswered=unanswered,
         commitments=[line.strip() for line in body.splitlines() if "Rp" in line][:3],
         not_a_quote=declines and not line_items,
-    )
-
-
-def _plan_call(prompt: str) -> CallPlan:
-    conflict = _after(prompt, "Disagreement to resolve:")
-    questions = [conflict] if conflict else []
-    for field in ("moq", "unit_price", "lead_time_days"):
-        if field in prompt:
-            questions.append(
-                {
-                    "moq": "What is your minimum order quantity?",
-                    "unit_price": "What is the price per unit at that quantity?",
-                    "lead_time_days": "What is the production lead time in days?",
-                }[field]
-            )
-    return CallPlan(
-        opening=(
-            "Hi, I'm an AI sourcing assistant calling on behalf of a perfume startup. "
-            "We're evaluating suppliers for a 500-unit first batch — do you have a moment?"
-        ),
-        questions=questions[:5] or ["Could you confirm your minimum order quantity?"],
-    )
-
-
-def _extract_call(prompt: str, transcript: str) -> CallExtraction:
-    asked = [line[2:] for line in prompt.splitlines() if line.startswith("- ")]
-    answered: dict[str, str] = {}
-    unanswered: list[str] = []
-
-    turns = [line.split(":", 1) for line in transcript.splitlines() if ":" in line]
-    supplier_lines = [t[1].strip() for t in turns if t[0].strip() == "supplier"]
-    joined = " ".join(supplier_lines)
-
-    for index, question in enumerate(asked):
-        reply = supplier_lines[index + 1] if index + 1 < len(supplier_lines) else ""
-        if reply and "harus cek dulu" not in reply:
-            answered[question] = reply
-        else:
-            unanswered.append(question)
-
-    moq = None
-    for pattern in (r"pilot order\s*([\d.,]+)\s*pcs", r"[Mm]inimum\s*([\d.,]+)\s*pcs",
-                    r"([\d.,]+)\s*pcs\s*(?:bisa|untuk pilot)"):
-        if match := re.search(pattern, joined):
-            moq = int(_money(match.group(1)))
-            break
-    price = _money(match.group(1)) if (match := re.search(rf"Rp\s*{_NUM}\s*per", joined)) else None
-    lead = None
-    for pattern in (r"(\d+)\s*hari kerja", r"kirim\s*(\d+)\s*hari", r"(\d+)\s*(?:working )?days"):
-        if match := re.search(pattern, joined):
-            lead = int(match.group(1))
-            break
-
-    return CallExtraction(
-        answered=answered, unanswered=unanswered, moq=moq, unit_price=price,
-        lead_time_days=lead, notes="extracted from call transcript",
     )
 
 

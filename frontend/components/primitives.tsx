@@ -18,7 +18,7 @@ const PROVENANCE: Record<Provenance, { label: string; className: string; hint: s
   direct_quote: {
     label: "direct",
     className: "bg-petrol-light text-petrol-deep",
-    hint: "the supplier told us, in writing or on a recorded call",
+    hint: "the supplier told us, in writing",
   },
   publicly_listed: {
     label: "published",

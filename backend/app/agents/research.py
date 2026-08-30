@@ -33,6 +33,14 @@ stamping, contract filling), not the categories it lists in a menu.
 brand_claims: copy any brand the supplier says it works with. Copy the name
 only. Do not assess it — a separate agent investigates those claims.
 
+email and phone are the two fields the rest of the mission depends on: a
+supplier nobody can write to cannot be asked for a quotation, and drops out
+however good it looked. Take them from a contact page, an imprint, or a page
+footer — wherever the supplier published them — and set `field` to email or
+phone so they become evidence like any other fact. Never construct an address
+from the company name, and never carry over one that belongs to a directory,
+a marketplace, or the agency that built the site.
+
 missing_fields: name every tracked field no source answered. This list is how
 the system decides what to ask the supplier, so an omission here costs a real
 email.

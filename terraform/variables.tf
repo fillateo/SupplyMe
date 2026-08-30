@@ -22,7 +22,7 @@ variable "service_name" {
 variable "mode" {
   type        = string
   default     = "demo"
-  description = "demo binds the mock providers; live binds Gmail, Places and telephony."
+  description = "demo binds the mock providers; live binds Gmail, Search and Places."
 
   validation {
     condition     = contains(["demo", "live"], var.mode)
@@ -65,12 +65,6 @@ variable "budget_amount_usd" {
     and in the caps below. Set this well under your remaining credit so the
     warning arrives while you can still act on it.
   EOT
-}
-
-variable "max_calls_per_mission" {
-  type        = number
-  default     = 3
-  description = "Telephony is the one line item that can cost real money per unit."
 }
 
 variable "max_usd_per_mission" {

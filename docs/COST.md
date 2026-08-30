@@ -6,7 +6,7 @@ API's own `usage_metadata`, not estimated.
 ## Measured
 
 One mission over the demo dataset — 5 suppliers, 7 supply-chain categories,
-research, brand adjudication, outreach drafting, quote extraction, call
+research, brand adjudication, outreach drafting, quote extraction, follow-up
 planning — on `gemini-2.5-flash`:
 
 | | output tokens per call | USD per call |
@@ -39,8 +39,9 @@ A budget alert emails you; it does not stop anything. These do:
 | `VDS_MAX_MODEL_CALLS_PER_MISSION` | `120` | the mission |
 | `VDS_MAX_RESEARCH_LLM_CALLS` | `12` | one research agent's tool loop |
 | `VDS_MAX_CONCURRENT_RESEARCH` | `3` | how many run at once |
+| `VDS_MAX_CONCURRENT_MODEL_CALLS` | `4` | Gemini requests in flight, process-wide |
+| `VDS_MIN_MODEL_CALL_INTERVAL_SECONDS` | `0` | how fast the queue drains |
 | `VDS_MAX_OUTREACH_PER_MISSION` | `12` | emails |
-| `VDS_MAX_CALLS_PER_MISSION` | `3` | phone calls |
 | `VDS_MAX_VENDORS_PER_CATEGORY` | `8` | how many suppliers get researched |
 | `VDS_MAX_EVENT_RETRIES` | `5` | retrying a failing handler forever |
 
@@ -57,6 +58,32 @@ silently. `VDS_MAX_RESEARCH_LLM_CALLS=12` is the ceiling that prevents it, and
 `tests/test_cost.py` asserts the shipped default stays an order of magnitude
 below ADK's.
 
+Hitting that ceiling is **not a failure**. The loop stops, whatever it already
+read becomes the record, and the supplier is scored on a thinner set of sources.
+An earlier version raised instead, which meant the orchestrator retried the
+event — spending another twelve calls to reach the same wall, five times over,
+before failing the whole mission over one chatty agent.
+
+### Counting what the tool loop spends
+
+ADK's research loop builds its own client, so for a while its calls were
+invisible to the meter: a mission would report fifteen model calls having made a
+hundred and fifty. Both halves of that are now closed —
+`app/agents/adk_research.py` routes ADK through the same throttle **and** the
+same `CostMeter`, attributing each turn to the mission that caused it. If your
+`estimated_cost_usd` looks implausibly low, that is the first thing to check.
+
+### Rate limits are a queueing problem
+
+A project with no provisioned Vertex throughput answers 429 to most of a burst,
+and retrying the burst reproduces it. `VDS_MAX_CONCURRENT_MODEL_CALLS` bounds
+how many requests exist at once across every agent, and
+`VDS_MIN_MODEL_CALL_INTERVAL_SECONDS` spreads what is left. On a small quota,
+`2` and `1.0` turn a storm into a queue. If a mission still cannot finish, set
+`VDS_USE_ADK_RESEARCH=false`: the pre-fetching research agent makes **one**
+metered call per supplier instead of up to twelve, at the cost of the agent
+choosing its own sources.
+
 ## Costs that are not the model
 
 | Service | On this workload |
@@ -66,7 +93,6 @@ below ADK's.
 | Pub/Sub | Tens of messages per mission. Free tier. |
 | Cloud Tasks | One task per follow-up. Free tier. |
 | Cloud Build | A few minutes per deploy. Free tier covers roughly 100 builds/month. |
-| **Telephony** | **Not Google, and not free.** Per-minute, billed by your provider. `VDS_MAX_CALLS_PER_MISSION=3`. |
 
 The realistic risk on a small balance is Vertex AI. Everything else stays in the
 free tier at anything resembling demo volume.
@@ -96,7 +122,7 @@ Set `alert_email` and `billing_account` or no alert is created at all.
 
 Cloud Run in `demo` mode is deliberately public so a judge can open the link.
 That is safe for spend because demo mode binds mock providers — it cannot send
-mail or place calls — but the model still runs, so keep the per-mission caps on.
+mail — but the model still runs, so keep the per-mission caps on.
 
 ## If you are close to the limit
 
@@ -104,7 +130,6 @@ mail or place calls — but the model still runs, so keep the per-mission caps o
 2. `VDS_FAST_MODEL=gemini-2.5-flash-lite` — roughly a third of flash.
 3. Lower `VDS_MAX_VENDORS_PER_CATEGORY` to 3 and
    `VDS_MAX_MODEL_CALLS_PER_MISSION` to 40.
-4. `VDS_MAX_CALLS_PER_MISSION=0` — no telephony.
 5. Check `curl -s localhost:8080/api/health | jq .spend.since_startup` after any
    live run.
 

@@ -8,7 +8,7 @@ path that production would run.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from ..domain.events import Event
@@ -128,27 +128,6 @@ class MailProvider(Protocol):
         ...
     async def fetch_thread(self, provider_thread_id: str) -> list[InboundMail]: ...
     async def history(self, since_token: str | None = None) -> tuple[list[InboundMail], str]: ...
-
-
-# --------------------------------------------------------------------------
-# Voice
-# --------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class CallResult:
-    provider_call_id: str
-    status: str                    # completed | no_answer | failed
-    transcript: list[dict[str, str]] = field(default_factory=list)
-    duration_seconds: int | None = None
-    error: str | None = None
-
-
-@runtime_checkable
-class VoiceProvider(Protocol):
-    async def place_call(
-        self, *, to: str, opening: str, questions: list[str], call_id: str
-    ) -> CallResult: ...
 
 
 # --------------------------------------------------------------------------

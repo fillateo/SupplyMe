@@ -30,7 +30,7 @@ class TestPermissionGuard:
     def test_the_research_tools_are_permitted(self, name):
         assert _guard(FakeTool(name), {}, None) is None
 
-    @pytest.mark.parametrize("name", ["send_email", "place_call", "spend_money", "transfer_funds"])
+    @pytest.mark.parametrize("name", ["send_email", "spend_money", "transfer_funds"])
     def test_anything_not_granted_is_refused(self, name):
         result = _guard(FakeTool(name), {}, None)
         assert result is not None and "error" in result
@@ -45,7 +45,7 @@ class TestPermissionGuard:
         assert set(TOOL_PERMISSIONS.values()) <= AGENT_TOOLS["research"]
 
     def test_the_agent_holds_nothing_that_reaches_the_outside_world(self):
-        for forbidden in (Tool.SEND_EMAIL, Tool.PLACE_CALL, Tool.SPEND_MONEY):
+        for forbidden in (Tool.SEND_EMAIL, Tool.SPEND_MONEY):
             assert forbidden not in AGENT_TOOLS["research"]
 
 

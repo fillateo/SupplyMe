@@ -48,18 +48,21 @@ export type SupplyChainNode = {
   search_terms: string[]; rationale: string;
 };
 
+export type SearchScope = "city" | "country" | "global";
+
 export type Mission = {
   id: string; objective: string; status: string; product: string | null;
   quantity: number | null; unit_spec: string | null; market: string | null;
+  location: string | null; search_scope: SearchScope;
   priorities: string[]; success_criteria: string[]; mode: string;
-  emails_sent: number; calls_made: number; created_at: string;
+  emails_sent: number; created_at: string;
   weights: Record<string, number>; failure_reason: string | null;
 };
 
 export type MissionCounts = {
   vendors: number; qualified: number; rejected: number; in_progress: number;
   evidence: number; open_conflicts: number; emails_sent: number;
-  emails_responded: number; emails_awaiting: number; calls_completed: number;
+  emails_responded: number; emails_awaiting: number;
   pending_approvals: number;
 };
 
@@ -95,14 +98,6 @@ export type Thread = {
   subject: string; status: string; follow_up_count: number;
   asked: string[]; answered: string[]; unanswered: string[]; commitments: string[];
   messages: { id: string; direction: string; subject: string; body: string; sent_at: string }[];
-};
-
-export type Call = {
-  id: string; vendor_id: string; vendor_name: string; to_number: string;
-  status: string; reason: string; questions: string[];
-  transcript: { speaker: string; text: string }[];
-  answered_questions: Record<string, string>; unanswered_questions: string[];
-  duration_seconds: number | null;
 };
 
 export type Approval = {

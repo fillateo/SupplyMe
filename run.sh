@@ -273,15 +273,32 @@ print_banner() {
   printf '%s\n' "  ${BOLD}API docs${OFF}  ${CYAN}http://localhost:$API_PORT/docs${OFF}"
   echo
   printf '%s\n' "  model     $model"
-  printf '%s\n' "  approvals $policy${DIM}   (it will ask before the first email to each supplier)${OFF}"
+  # The gate's own description has to follow the gate, or the line reassures you
+  # about a review that is not going to happen.
+  local approval_note
+  case "$policy" in
+    autonomous) approval_note="it sends without asking; only quotes and orders stop for a human" ;;
+    strict)     approval_note="every outbound action is reviewed" ;;
+    external)   approval_note="it will ask before the first email to each supplier" ;;
+    *)          approval_note="" ;;
+  esac
+  printf '%s\n' "  approvals $policy${DIM}   ($approval_note)${OFF}"
+
+  local mail_note
+  mail_note="$("$PY" -c "
+import json, sys
+notes = json.loads(sys.argv[1]).get('notes', [])
+print(next((n for n in notes if 'REDIRECT' in n or 'real email over SMTP' in n), ''))
+" "$health" 2>/dev/null || echo "")"
+  [ -n "$mail_note" ] && printf '%s\n' "  ${YELLOW}mail${OFF}      ${DIM}$mail_note${OFF}"
 
   local bound
   bound="$("$PY" -c "
 import json, sys
 d = json.loads(sys.argv[1])
 p = d.get('providers', {})
-real = [k for k in ('search','maps','video','mail','voice') if not p.get(k,'').startswith('Mock')]
-mock = [k for k in ('search','maps','video','mail','voice') if p.get(k,'').startswith('Mock')]
+real = [k for k in ('search','maps','video','mail') if not p.get(k,'').startswith('Mock')]
+mock = [k for k in ('search','maps','video','mail') if p.get(k,'').startswith('Mock')]
 print(('real: ' + ', '.join(real) if real else 'real: none') + '   |   mock: ' + (', '.join(mock) or 'none'))
 " "$health" 2>/dev/null || echo "")"
   [ -n "$bound" ] && printf '%s\n' "  tools     $bound"
@@ -293,7 +310,7 @@ print(('real: ' + ', '.join(real) if real else 'real: none') + '   |   mock: ' +
   echo
   printf '%s\n' "  ${DIM}Press ${OFF}Start sourcing${DIM}, then look for:${OFF}"
   printf '%s\n' "  ${DIM}  · the supplier with the red 'disagreement' badge — website said MOQ 500,${OFF}"
-  printf '%s\n' "  ${DIM}    their email said 1,000, so it called them${OFF}"
+  printf '%s\n' "  ${DIM}    their email said 1,000, so it put both numbers back to them${OFF}"
   printf '%s\n' "  ${DIM}  · two suppliers claiming the same brand, judged differently${OFF}"
   printf '%s\n' "  ${DIM}  · click any number — it opens the source behind it${OFF}"
   echo
@@ -374,9 +391,8 @@ if total:
     print("  spent    {} model calls, ${:.4f} (about Rp {:,.0f}) since startup".format(
         total.get("calls", 0), usd, usd * 16400))
 if caps:
-    print("  caps     ${}/mission, {} model calls, {} emails, {} phone calls".format(
-        caps.get("usd"), caps.get("model_calls"),
-        caps.get("outreach_emails"), caps.get("calls")))
+    print("  caps     ${}/mission, {} model calls, {} emails".format(
+        caps.get("usd"), caps.get("model_calls"), caps.get("outreach_emails")))
 for note in d.get("notes", []):
     print("  note     " + note)
 ' 2>/dev/null || warn "the API is up but did not answer /api/health"

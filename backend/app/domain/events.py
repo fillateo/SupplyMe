@@ -37,9 +37,6 @@ class EventType(StrEnum):
     APPROVAL_DENIED = "approval.denied"
     EMAIL_SENT = "email.sent"
     EMAIL_RECEIVED = "email.received"
-    CALL_REQUIRED = "call.required"
-    CALL_STARTED = "call.started"
-    CALL_COMPLETED = "call.completed"
     QUOTE_EXTRACTED = "quote.extracted"
     CONFLICT_DETECTED = "conflict.detected"
     FOLLOW_UP_REQUIRED = "followup.required"
@@ -51,9 +48,7 @@ class EventType(StrEnum):
 
 #: Events that represent an irreversible outward-facing action. The orchestrator
 #: refuses to execute these without an idempotency reservation.
-EXTERNAL_ACTION_EVENTS = frozenset(
-    {EventType.EMAIL_SENT, EventType.CALL_STARTED}
-)
+EXTERNAL_ACTION_EVENTS = frozenset({EventType.EMAIL_SENT})
 
 
 class Event(BaseModel):

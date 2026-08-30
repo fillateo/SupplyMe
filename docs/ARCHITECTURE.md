@@ -17,7 +17,6 @@ Only components that exist are drawn here.
                  │  /events/pubsub    Pub/Sub push               │
                  │  /events/task      Cloud Tasks                │
                  │  /webhooks/gmail   Gmail watch notification   │
-                 │  /webhooks/voice   telephony turn + status    │
                  └───────────────────┬──────────────────────────┘
                                      │
                  ┌───────────────────▼──────────────────────────┐
@@ -35,7 +34,7 @@ Only components that exist are drawn here.
                      │                             │
         ┌────────────▼─────────────────────────────▼─────────────┐
         │ Ports (app/ports/base.py) — the LIVE/DEMO seam          │
-        │  Search  Maps  Video  Mail  Voice  Store  Bus  Tasks    │
+        │  Search   Maps   Video   Mail   Store   Bus   Tasks      │
         └────────────┬─────────────────────────────┬─────────────┘
                      │                             │
         ┌────────────▼───────────┐     ┌───────────▼─────────────┐
@@ -43,7 +42,7 @@ Only components that exist are drawn here.
         │ Programmable Search /  │     │ demo_world.py fixtures  │
         │ Gemini grounding,      │     │ raise real events on a  │
         │ Places, YouTube,       │     │ compressed clock        │
-        │ Gmail, Twilio          │     │                         │
+        │ Gmail / SMTP           │     │                         │
         └────────────┬───────────┘     └───────────┬─────────────┘
                      └──────────────┬──────────────┘
                                     ▼
@@ -90,7 +89,7 @@ discriminator: `version=call.id`, `version=quote.id`, `version=f"{thread.id}:fol
 | `supply_chain.planned` | supply chain | Fans out one discovery branch per node |
 | `vendor.discovery.started` | fan-out | Search + Places, identity resolution |
 | `vendor.discovered` | discovery | Starts research on a new vendor |
-| `vendor.research.started` | discovery | Reads sources, records evidence, applies facts |
+| `vendor.research.started` | discovery | Reads sources, finds a contact route, records evidence, applies facts |
 | `evidence.found` | research | Timeline marker |
 | `brand.claim.found` | research | Investigates a claimed customer |
 | `brand.claim.adjudicated` | brand evidence | Classification recorded |
@@ -103,11 +102,8 @@ discriminator: `version=call.id`, `version=quote.id`, `version=f"{thread.id}:fol
 | `email.sent` | routing | **External action** — reserved before sending |
 | `email.received` | Gmail push / mock | Extracts the quote, re-derives facts |
 | `quote.extracted` | comms | Timeline marker |
-| `conflict.detected` | evidence engine | Routes to a follow-up or a call |
+| `conflict.detected` | evidence engine | Routes to a targeted follow-up |
 | `followup.required` | conflict / timer | Asks only what is still missing |
-| `call.required` | routing / conflict | Plans the questions |
-| `call.started` | routing | **External action** — reserved and budgeted |
-| `call.completed` | telephony / mock | Extracts answers, settles conflicts |
 | `recommendation.ready` | completion check | Scores everything, writes the report |
 | `mission.completed` / `mission.failed` | terminal | — |
 
@@ -138,8 +134,18 @@ can email, call or spend.
 
 **Is not:** deciding what a claim is worth, deciding whether sources conflict,
 deciding what to do about a conflict, computing confidence, computing scores,
-ranking vendors, deciding whether to send or call, or deciding when a mission is
-done. All of that is deterministic and unit-tested — see `app/domain/`.
+ranking vendors, deciding whether to send or call, deciding when a mission is
+done — or finding a supplier's email address. All of that is deterministic and
+unit-tested; see `app/domain/`.
+
+That last one earns its place there by experience. A supplier the system cannot
+write to drops out of the mission whatever else is known about it, and a live
+run rejected every manufacturer it found for "no email or phone found" —
+contact details are rarely in a search snippet and usually on a page called
+`/kontak` that nothing links to. `app/domain/contacts.py` opens the supplier's
+own pages and reads the address off them. Pattern matching is cheaper and more
+reliable here than a model call, and it cannot invent an address that almost
+looks right.
 
 The recommendation agent receives a ranking that is already computed and is told
 it may not reorder it. If it could, the scores would be decoration.

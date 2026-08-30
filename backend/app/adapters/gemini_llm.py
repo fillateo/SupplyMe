@@ -51,6 +51,61 @@ def _is_retryable(exc: Exception) -> bool:
     return any(marker in text for marker in RETRYABLE_MARKERS)
 
 
+class _Throttle:
+    """Process-wide gate on concurrent model requests, with optional pacing.
+
+    Retrying a 429 fixes one request; not making the twelfth simultaneous
+    request fixes the storm. Backoff alone cannot, because the fan-out that
+    caused the overload is still the thing being retried.
+
+    Built lazily and per event loop: a semaphore belongs to the loop that
+    awaits it, and the test suite runs many loops in one process.
+    """
+
+    def __init__(self) -> None:
+        self._gates: dict[Any, tuple[int, asyncio.Semaphore, asyncio.Lock]] = {}
+        self._next_allowed: dict[Any, float] = {}
+
+    def _for_loop(self, limit: int) -> tuple[asyncio.Semaphore, asyncio.Lock]:
+        loop = asyncio.get_running_loop()
+        found = self._gates.get(loop)
+        if found is None or found[0] != limit:
+            found = (limit, asyncio.Semaphore(limit), asyncio.Lock())
+            self._gates[loop] = found
+        return found[1], found[2]
+
+    async def acquire(self, limit: int, interval: float) -> asyncio.Semaphore:
+        gate, pace = self._for_loop(limit)
+        await gate.acquire()
+        if interval > 0:
+            loop = asyncio.get_running_loop()
+            async with pace:
+                now = loop.time()
+                wait = self._next_allowed.get(loop, 0.0) - now
+                if wait > 0:
+                    await asyncio.sleep(wait)
+                self._next_allowed[loop] = loop.time() + interval
+        return gate
+
+
+_THROTTLE = _Throttle()
+
+#: Set once at startup so code that does not hold a Settings — notably ADK's own
+#: model wrapper — can use the same gate. A module-level value is enough: the
+#: gate is per process by definition.
+_GATE_CONFIG: dict[str, float] = {"limit": 4, "interval": 0.0}
+
+
+def configure_throttle(settings: Settings) -> None:
+    _GATE_CONFIG["limit"] = settings.max_concurrent_model_calls
+    _GATE_CONFIG["interval"] = settings.min_model_call_interval_seconds
+
+
+async def acquire_model_slot() -> asyncio.Semaphore:
+    """Take a slot on the process-wide model gate. Caller must release it."""
+    return await _THROTTLE.acquire(int(_GATE_CONFIG["limit"]), _GATE_CONFIG["interval"])
+
+
 def _client(settings: Settings) -> genai.Client:
     if settings.use_vertex and settings.project_id:
         return genai.Client(
@@ -96,6 +151,7 @@ async def resolve_model(settings: Settings, *, prefer_fast: bool = False) -> str
 class GeminiLLM:
     def __init__(self, settings: Settings, meter: Any = None) -> None:
         self._settings = settings
+        configure_throttle(settings)
         self._client = _client(settings)
         self.calls = 0
         #: Records what each call actually cost, from the API's own token counts.
@@ -176,6 +232,10 @@ class GeminiLLM:
         last: Exception | None = None
         for attempt in range(MAX_ATTEMPTS):
             self.calls += 1
+            gate = await _THROTTLE.acquire(
+                self._settings.max_concurrent_model_calls,
+                self._settings.min_model_call_interval_seconds,
+            )
             try:
                 return await asyncio.wait_for(
                     self._client.aio.models.generate_content(
@@ -191,6 +251,10 @@ class GeminiLLM:
                 last = exc
                 if not _is_retryable(exc) or attempt == MAX_ATTEMPTS - 1:
                     raise LLMError(f"{agent}: {model} failed: {exc}") from exc
+            finally:
+                # Released before the backoff sleep, so a waiting request takes
+                # the slot instead of the gate idling for the whole delay.
+                gate.release()
 
             delay = BASE_BACKOFF * (2**attempt) * (0.5 + random.random())
             log.warning(

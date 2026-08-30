@@ -11,7 +11,7 @@ research, adjudication, conflict and outreach code paths — including the two
 cases the product is really about:
 
 * `kemasan-wangi` publishes "MOQ 500" but quotes 1,000 by email. The workflow has
-  to notice, decide email will not settle it, and call.
+  to notice, put both numbers back to them, and get it settled in writing.
 * `aroma-nusantara` and `botol-prima` both claim a major-brand customer. One is
   corroborated by the brand's own site and trade press; the other is the
   supplier's word and nothing else.
@@ -62,9 +62,6 @@ class DemoVendor:
     #: Reply template keyed by outreach round: 0 = first request, 1 = follow-up.
     replies: dict[int, str] = field(default_factory=dict)
     reply_delay_seconds: float = 6.0
-    #: Answers the voice agent gets, keyed by a substring of the question.
-    call_answers: dict[str, str] = field(default_factory=dict)
-    call_outcome: str = "completed"
 
 
 VENDORS: list[DemoVendor] = [
@@ -122,14 +119,16 @@ VENDORS: list[DemoVendor] = [
                 "Pembayaran 50% DP, 50% sebelum pengiriman.\n\n"
                 "Salam,\nRina — Sales\nPT Kemasan Wangi Nusantara"
             ),
-        },
-        call_answers={
-            "500": "Untuk pilot order 500 pcs bisa kami kerjakan, harganya Rp 11.000 per botol. "
-                   "Kalau ambil 1.000 baru turun ke Rp 8.500.",
-            "pilot": "Bisa, 500 pcs untuk pilot kami terima.",
-            "lead time": "Produksi 21 hari kerja setelah sample disetujui.",
-            "produksi": "21 hari kerja.",
-            "customization": "Hot stamping logo bisa, tambahan Rp 900 per pcs.",
+            # The follow-up puts both numbers to them, and this is the answer
+            # that settles it: 500 is possible, at a higher unit price. Written
+            # rather than spoken, because writing is the only channel now.
+            1: (
+                "Selamat siang,\n\n"
+                "Betul, minimum order kami turun ke 500 pcs untuk pilot order. "
+                "Harga di 500 pcs adalah Rp 11.000/pcs; di 1.000 pcs baru Rp 8.500/pcs.\n\n"
+                "Produksi 21 hari kerja setelah sample disetujui.\n\n"
+                "Salam,\nRina — Sales\nPT Kemasan Wangi Nusantara"
+            ),
         },
     ),
     DemoVendor(
@@ -187,7 +186,6 @@ VENDORS: list[DemoVendor] = [
                 "Best regards,\nAgus Prasetyo\nPT Aroma Nusantara Manufaktur"
             ),
         },
-        call_answers={},
     ),
     DemoVendor(
         key="botol-prima",
@@ -274,7 +272,7 @@ VENDORS: list[DemoVendor] = [
         domain="sinarpump.example.com",
         city="Tangerang",
         phone="+62 21 2233 4455",
-        email=None,  # no email on file: this vendor forces the phone route
+        email=None,  # no email on file: this vendor has no contact route at all
         address="Kawasan Industri Cikupa Blok C9, Tangerang",
         lat=-6.2200, lng=106.5100,
         place_id="ChIJdemo0005SinarPump",
@@ -292,11 +290,6 @@ VENDORS: list[DemoVendor] = [
                 ),
             )
         ],
-        call_answers={
-            "minimum": "Minimum 1.000 pcs untuk sprayer standar, ada stok.",
-            "price": "Rp 2.200 per pcs untuk sprayer aluminium.",
-            "lead time": "Kalau stok ada, kirim 3 hari.",
-        },
     ),
 ]
 

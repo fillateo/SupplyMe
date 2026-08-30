@@ -1,3 +1,14 @@
+# A Cloud Run v2 URL is derivable before the service exists — service name,
+# project number and region — so the service can be told its own address at
+# creation time. Reading it back off the resource would be a cycle, and setting
+# it afterwards with `gcloud run services update` leaves the value out of the
+# configuration, so the next apply removes it and the Gmail push callback breaks.
+data "google_project" "current" {}
+
+locals {
+  service_url = "https://${var.service_name}-${data.google_project.current.number}.${var.region}.run.app"
+}
+
 # The Cloud Run service. Scale-to-zero is deliberate: a mission's progress lives
 # in Firestore and arrives as Pub/Sub pushes, so there is nothing to keep warm
 # between events — which is also what makes the cost of a long-running mission
@@ -70,6 +81,10 @@ resource "google_cloud_run_v2_service" "api" {
         value = var.fast_model
       }
       env {
+        name  = "VDS_PUBLIC_BASE_URL"
+        value = local.service_url
+      }
+      env {
         name  = "VDS_PUBSUB_TOPIC"
         value = google_pubsub_topic.workflow.name
       }
@@ -81,10 +96,6 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "VDS_MAX_USD_PER_MISSION"
         value = tostring(var.max_usd_per_mission)
-      }
-      env {
-        name  = "VDS_MAX_CALLS_PER_MISSION"
-        value = tostring(var.max_calls_per_mission)
       }
 
       env {
@@ -114,9 +125,6 @@ resource "google_cloud_run_v2_service" "api" {
   ]
 }
 
-# The service URL is needed by the push subscription and by the service itself
-# (it builds voice webhook URLs from it), which is circular. Setting it after
-# creation breaks the cycle.
 resource "google_cloud_run_v2_service_iam_member" "public_read" {
   count = var.mode == "demo" ? 1 : 0
 

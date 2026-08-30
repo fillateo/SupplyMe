@@ -18,6 +18,7 @@ import asyncio
 import logging
 import re
 import urllib.robotparser
+from dataclasses import replace
 from html.parser import HTMLParser
 from typing import ClassVar
 
@@ -28,7 +29,32 @@ from ..ports.base import PageContent, Place, SearchHit, Video
 
 log = logging.getLogger(__name__)
 
-USER_AGENT = "VendorDiscoveryShortcut/0.1 (sourcing research agent; +https://github.com/)"
+#: The `Mozilla/5.0 (compatible; …)` shape is the crawler convention — it is what
+#: Googlebot and bingbot send — and it still names this tool and where to
+#: complain about it. The plainer `VendorDiscoveryShortcut/0.1 (…)` form was
+#: being 403'd outright by supplier sites behind a WAF, which is a large part of
+#: why live research read nothing. robots.txt is still obeyed either way: that,
+#: not the header, is where a site says whether it wants to be read.
+#: Search grounding hands back links to Google's own redirector rather than to
+#: the page it read. Every downstream judgement is made on a URL — is this the
+#: supplier's own site, is this source independent of them, which domain does
+#: this evidence come from — and all of them are meaningless against a redirect.
+#: Left unresolved, a mission's evidence cites `vertexaisearch.cloud.google.com`
+#: for every fact it holds.
+GROUNDING_REDIRECT_HOST = "vertexaisearch.cloud.google.com"
+RESOLVE_TIMEOUT = 8.0
+
+USER_AGENT = (
+    "Mozilla/5.0 (compatible; VendorDiscoveryShortcut/0.1; +https://github.com/nesso-labs)"
+)
+
+#: Sent with every page fetch. A request with no Accept header looks like a
+#: scraper to a WAF, and this market's sites serve Indonesian when asked.
+FETCH_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+}
 FETCH_TIMEOUT = 15.0
 MAX_PAGE_BYTES = 800_000
 
@@ -40,6 +66,20 @@ class _TextExtractor(HTMLParser):
         {"script", "style", "noscript", "svg", "head"}
     )
 
+    #: Elements that never close. Pushing them onto the stack is what made this
+    #: return an empty string for every real page on the web: `<head>` contains
+    #: `<meta>` and `<link>`, so `</head>` found one of those on top, never
+    #: popped `head`, and every byte of the body was then skipped as being
+    #: inside the head. Demo pages are plain text, so nothing caught it.
+    _VOID: ClassVar[frozenset[str]] = frozenset(
+        {"area", "base", "br", "col", "embed", "hr", "img", "input",
+         "keygen", "link", "meta", "param", "source", "track", "wbr"}
+    )
+
+    #: Where a supplier's address usually is: in the href, not the link text,
+    #: which reads "Email us".
+    _CONTACT_SCHEMES: ClassVar[tuple[str, ...]] = ("mailto:", "tel:")
+
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
@@ -48,16 +88,44 @@ class _TextExtractor(HTMLParser):
         self._in_title = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._capture_href(tag, attrs)
+        if tag in self._VOID:
+            if tag == "br":
+                self.parts.append("\n")
+            return
         self._stack.append(tag)
         if tag == "title":
             self._in_title = True
 
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """`<br/>` and friends, which never reach handle_endtag."""
+        self._capture_href(tag, attrs)
+        if tag == "br":
+            self.parts.append("\n")
+
+    def _capture_href(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a" or any(t in self._SKIP for t in self._stack):
+            return
+        for name, value in attrs:
+            if name != "href" or not value:
+                continue
+            target = value.strip()
+            for scheme in self._CONTACT_SCHEMES:
+                if target.lower().startswith(scheme):
+                    self.parts.append(target[len(scheme) :].split("?", 1)[0])
+                    return
+
     def handle_endtag(self, tag: str) -> None:
         if tag == "title":
             self._in_title = False
-        if self._stack and self._stack[-1] == tag:
-            self._stack.pop()
-        if tag in {"p", "div", "li", "br", "tr", "h1", "h2", "h3"}:
+        if tag in self._stack:
+            # Unwind to the matching tag rather than only checking the top, so a
+            # page that leaves a `<p>` or `<li>` open does not strand everything
+            # after it inside a section this parser thinks it is still in.
+            while self._stack:
+                if self._stack.pop() == tag:
+                    break
+        if tag in {"p", "div", "li", "tr", "h1", "h2", "h3"}:
             self.parts.append("\n")
 
     def handle_data(self, data: str) -> None:
@@ -83,7 +151,7 @@ class GoogleSearchProvider:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._client = httpx.AsyncClient(
-            timeout=FETCH_TIMEOUT, headers={"User-Agent": USER_AGENT}, follow_redirects=True
+            timeout=FETCH_TIMEOUT, headers=dict(FETCH_HEADERS), follow_redirects=True
         )
         self._robots: dict[str, urllib.robotparser.RobotFileParser | None] = {}
         self._lock = asyncio.Lock()
@@ -146,7 +214,31 @@ class GoogleSearchProvider:
                         source_hint="grounding",
                     )
                 )
-        return hits[:limit]
+        return await self._resolve_redirects(hits[:limit])
+
+    async def _resolve_redirects(self, hits: list[SearchHit]) -> list[SearchHit]:
+        """Turn grounding redirects into the URLs they point at.
+
+        One HEAD each, run together, and a failure keeps the redirect rather
+        than dropping the result — a hit whose destination we could not confirm
+        is still a hit, and the agents read the snippet either way.
+        """
+
+        async def resolve(hit: SearchHit) -> SearchHit:
+            if GROUNDING_REDIRECT_HOST not in hit.url:
+                return hit
+            try:
+                response = await self._client.head(
+                    hit.url, follow_redirects=True, timeout=RESOLVE_TIMEOUT
+                )
+            except Exception:  # a slow redirector costs one URL, not the search
+                return hit
+            final = str(response.url)
+            if not final or GROUNDING_REDIRECT_HOST in final:
+                return hit
+            return replace(hit, url=final)
+
+        return list(await asyncio.gather(*(resolve(hit) for hit in hits)))
 
     async def _allowed(self, url: str) -> tuple[bool, str]:
         """Check robots.txt once per host. A fetch failure means 'do not fetch'."""
@@ -199,7 +291,11 @@ class GoogleSearchProvider:
             )
         parser = _TextExtractor()
         parser.feed(response.text)
-        return PageContent(url=url, title=parser.title, text=parser.text[:20_000])
+        # The URL that answered, not the one asked for: a redirect is where the
+        # content actually came from, and that is what the evidence should cite.
+        return PageContent(
+            url=str(response.url) or url, title=parser.title, text=parser.text[:20_000]
+        )
 
     async def close(self) -> None:
         await self._client.aclose()

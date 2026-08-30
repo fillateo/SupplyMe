@@ -66,7 +66,15 @@ class CloudTasksScheduler:
         self._target_url = target_url
         self._token = token
 
-    async def schedule(self, event: Event, *, delay_seconds: float) -> str:
+    async def schedule(
+        self, event: Event, *, delay_seconds: float, compressible: bool = True
+    ) -> str:
+        # `compressible` belongs to the demo clock, which only the local
+        # scheduler runs; Cloud Tasks always waits the real delay. It is still
+        # part of the Scheduler protocol and the orchestrator passes it on every
+        # call, so omitting it made every scheduled event in the cloud — retry
+        # backoff, follow-up timer, non-response timeout — raise TypeError.
+        del compressible
         import time
 
         from google.cloud import tasks_v2

@@ -36,12 +36,14 @@ export default function MissionConsole() {
     ReturnType<typeof api.communications>
   > | null>(null);
 
+  const [loadError, setLoadError] = useState<{ status?: number } | null>(null);
   const [tab, setTab] = useState<Tab>("Supply chain");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<{ title: string; records: Evidence[] } | null>(null);
 
   const refresh = useCallback(async () => {
     if (!id) return;
+    setLoadError(null);
     const [overview, vendorList, activityLog, evidenceList, approvalList, comms] =
       await Promise.all([
         api.mission(id), api.vendors(id), api.activity(id),
@@ -65,14 +67,17 @@ export default function MissionConsole() {
   }, [id]);
 
   useEffect(() => {
-    refresh().catch(() => {});
+    refresh().catch((error) => setLoadError({ status: error?.status }));
   }, [refresh]);
 
   // While a mission is live the workflow is running somewhere else entirely, so
   // the console polls rather than assuming its own state is current.
   useEffect(() => {
     if (!mission || TERMINAL.has(mission.status)) return;
-    const timer = setInterval(() => refresh().catch(() => {}), 2000);
+    const timer = setInterval(
+      () => refresh().catch((error) => setLoadError({ status: error?.status })),
+      2000,
+    );
     return () => clearInterval(timer);
   }, [mission, refresh]);
 
@@ -103,6 +108,33 @@ export default function MissionConsole() {
   }
 
   if (!mission || !counts) {
+    if (loadError) {
+      // A failure that reads as "loading" is the console lying about what it
+      // knows. Say which failure it was, because the two have different fixes.
+      const gone = loadError.status === 404;
+      return (
+        <main className="mx-auto max-w-2xl px-8 py-16">
+          <h1 className="font-serif text-2xl text-ink">
+            {gone ? "This mission is no longer here." : "Cannot reach the API."}
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-muted">
+            {gone
+              ? "Missions are held in memory, so restarting the API clears them. The " +
+                "record is gone rather than hidden — set VDS_USE_CLOUD_INFRA=true with " +
+                "a Firestore database to keep missions across restarts."
+              : "The console reached the browser but not the API. Check that it is " +
+                "running on :8080, then reload."}
+          </p>
+          <Link
+            href="/"
+            className="mt-6 inline-block rounded-md border border-rule px-4 py-2 font-mono
+                       text-2xs uppercase tracking-[0.08em] text-muted hover:border-petrol"
+          >
+            All missions
+          </Link>
+        </main>
+      );
+    }
     return <main className="px-8 py-16 text-sm text-muted">Loading mission…</main>;
   }
 
@@ -136,7 +168,6 @@ export default function MissionConsole() {
             <Metric label="Ruled out" value={counts.rejected} />
             <Metric label="Emails" value={`${counts.emails_responded}/${counts.emails_sent}`}
               hint="replied / sent" />
-            <Metric label="Calls" value={counts.calls_completed} />
             <Metric label="Disagreements" value={counts.open_conflicts}
               tone={counts.open_conflicts > 0 ? "rose" : undefined} />
             <Metric label="Sources" value={counts.evidence} />

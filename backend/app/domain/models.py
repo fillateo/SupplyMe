@@ -50,7 +50,6 @@ class SourceType(StrEnum):
     YOUTUBE = "youtube"
     SEARCH_RESULT = "search_result"
     SUPPLIER_EMAIL = "supplier_email"
-    SUPPLIER_CALL = "supplier_call"
     UNKNOWN = "unknown"
 
 
@@ -149,6 +148,22 @@ class MissionStatus(StrEnum):
     FAILED = "failed"
 
 
+class SearchScope(StrEnum):
+    """How wide to cast the net when looking for suppliers.
+
+    This is the user's call, not the model's. "A bottle factory in Surabaya" and
+    "a bottle factory anywhere" are different sourcing problems with different
+    right answers, and inferring which one someone meant from the wording of an
+    objective gets it wrong often enough to matter: a founder who can drive to a
+    factory and inspect a sample before committing is buying something different
+    from one importing a container.
+    """
+
+    CITY = "city"          # the named city and the industrial belt around it
+    COUNTRY = "country"    # anywhere in the market
+    GLOBAL = "global"      # anywhere at all; importing is expected
+
+
 class ScoringWeights(BaseModel):
     """Weights must sum to 1.0; `normalized()` enforces it."""
 
@@ -187,9 +202,14 @@ class Mission(Base):
     success_criteria: list[str] = Field(default_factory=list)
     weights: ScoringWeights = Field(default_factory=ScoringWeights)
 
+    #: Where to look, as the user chose it. `location` is whatever they typed —
+    #: a city for CITY, a country for COUNTRY, ignored for GLOBAL — and it
+    #: outranks anything the mission agent infers from the objective.
+    location: str | None = None
+    search_scope: SearchScope = SearchScope.COUNTRY
+
     #: Counters, kept on the mission so cost guards do not need a collection scan.
     emails_sent: int = 0
-    calls_made: int = 0
     #: Admitted for research. Counted atomically so parallel discovery branches
     #: cannot collectively overshoot the mission's ceiling.
     vendors_admitted: int = 0
@@ -291,7 +311,6 @@ class Vendor(Base):
     brand_relationship_ids: list[str] = Field(default_factory=list)
     open_conflicts: list[str] = Field(default_factory=list)
     thread_ids: list[str] = Field(default_factory=list)
-    call_ids: list[str] = Field(default_factory=list)
 
     #: Fields the workflow still needs before this vendor can be scored.
     missing_fields: list[str] = Field(default_factory=list)
@@ -344,40 +363,12 @@ class EmailThread(Base):
     follow_up_count: int = 0
 
 
-class CallStatus(StrEnum):
-    REQUIRED = "required"
-    AWAITING_APPROVAL = "awaiting_approval"
-    DIALING = "dialing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    NO_ANSWER = "no_answer"
-    #: Wanted, but the mission's call budget was spent on higher-priority calls.
-    #: Distinct from FAILED so a reader is not told the carrier rejected a call
-    #: that was never placed.
-    NOT_ATTEMPTED = "not_attempted"
-
-
-class Call(Base):
-    id: str = Field(default_factory=lambda: new_id("call"))
-    mission_id: str
-    vendor_id: str
-    to_number: str
-    reason: str = ""
-    questions: list[str] = Field(default_factory=list)
-    status: CallStatus = CallStatus.REQUIRED
-    transcript: list[dict[str, str]] = Field(default_factory=list)
-    answered_questions: dict[str, str] = Field(default_factory=dict)
-    unanswered_questions: list[str] = Field(default_factory=list)
-    provider_call_id: str | None = None
-    duration_seconds: int | None = None
-
-
 class Quote(Base):
     id: str = Field(default_factory=lambda: new_id("qte"))
     mission_id: str
     vendor_id: str
     node_key: str | None = None
-    source: str = "email"                   # email | call | website
+    source: str = "email"                   # email | website
     currency: str = "IDR"
     quantity: int | None = None
     #: Component -> unit price. A vendor quoting a bundle uses the key "package".
@@ -417,7 +408,7 @@ class Conflict(Base):
     preferred_value: Any | None = None
     preferred_reason: str = ""
     status: ConflictStatus = ConflictStatus.OPEN
-    resolution_action: str | None = None    # "email" | "call" | "none"
+    resolution_action: str | None = None    # "email" | "none"
     resolved_value: Any | None = None
 
 
@@ -432,7 +423,7 @@ class Approval(Base):
     id: str = Field(default_factory=lambda: new_id("apr"))
     mission_id: str
     vendor_id: str | None = None
-    action_type: str                        # "send_email" | "make_call"
+    action_type: str                        # "send_email" | "send_follow_up"
     summary: str = ""
     preview: dict[str, Any] = Field(default_factory=dict)
     status: ApprovalStatus = ApprovalStatus.PENDING

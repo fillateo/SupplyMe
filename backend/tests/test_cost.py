@@ -102,10 +102,9 @@ class TestDefaults:
 
         assert Settings().max_research_llm_calls < RunConfig().max_llm_calls / 10
 
-    def test_outreach_and_calls_are_capped(self):
+    def test_outreach_is_capped(self):
         settings = Settings()
         assert settings.max_outreach_per_mission <= 20
-        assert settings.max_calls_per_mission <= 5
 
 
 class TestPlacesCost:
@@ -128,8 +127,8 @@ class TestPlacesCost:
         assert Settings().max_maps_queries_per_node <= 2
 
     async def test_the_cap_is_enforced_during_discovery(self):
-        from app.config import ApprovalPolicy, Mode
         from app.adapters.scripted_world import build_scripted_llm
+        from app.config import ApprovalPolicy, Mode
         from app.runtime import Runtime
 
         settings = Settings(

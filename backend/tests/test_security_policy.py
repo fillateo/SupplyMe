@@ -13,7 +13,6 @@ from app.domain.policy import (
     allowed,
     approval_for,
     check,
-    should_call,
 )
 from app.security import sanitize
 
@@ -21,11 +20,11 @@ from app.security import sanitize
 class TestToolPermissions:
     """§35: an agent that reads untrusted content must not be able to act on it."""
 
-    @pytest.mark.parametrize("tool", [Tool.SEND_EMAIL, Tool.PLACE_CALL, Tool.SPEND_MONEY])
+    @pytest.mark.parametrize("tool", [Tool.SEND_EMAIL, Tool.SPEND_MONEY])
     def test_research_agent_cannot_reach_the_outside_world(self, tool):
         assert not allowed("research", tool)
 
-    @pytest.mark.parametrize("tool", [Tool.SEND_EMAIL, Tool.PLACE_CALL, Tool.SPEND_MONEY])
+    @pytest.mark.parametrize("tool", [Tool.SEND_EMAIL, Tool.SPEND_MONEY])
     def test_brand_agent_cannot_reach_the_outside_world(self, tool):
         assert not allowed("brand_evidence", tool)
 
@@ -68,9 +67,6 @@ class TestApprovalBoundary:
             ActionType.SEND_FOLLOW_UP, ApprovalPolicy.EXTERNAL_ACTIONS
         ).requires_approval
 
-    def test_calls_are_always_reviewed_under_the_default_policy(self):
-        assert approval_for(ActionType.MAKE_CALL, ApprovalPolicy.EXTERNAL_ACTIONS).requires_approval
-
     @pytest.mark.parametrize("policy", list(ApprovalPolicy))
     @pytest.mark.parametrize("action", [ActionType.PLACE_ORDER, ActionType.ACCEPT_QUOTE])
     def test_no_policy_can_auto_approve_spending(self, policy, action):
@@ -85,45 +81,6 @@ class TestApprovalBoundary:
         assert not approval_for(
             ActionType.SEND_EMAIL, ApprovalPolicy.AUTONOMOUS, first_contact_with_vendor=True
         ).requires_approval
-
-
-class TestCallPolicy:
-    """§19: a call is a decision the agent has to justify."""
-
-    def test_no_phone_means_no_call(self):
-        called, _ = should_call(
-            missing_critical_fields=["moq"], has_open_conflict=True,
-            email_unanswered_days=9, has_email=False, has_phone=False,
-        )
-        assert not called
-
-    def test_a_conflict_justifies_a_call(self):
-        called, why = should_call(
-            missing_critical_fields=[], has_open_conflict=True,
-            email_unanswered_days=0, has_email=True, has_phone=True,
-        )
-        assert called and "disagree" in why
-
-    def test_no_email_makes_the_phone_the_only_route(self):
-        called, why = should_call(
-            missing_critical_fields=["moq"], has_open_conflict=False,
-            email_unanswered_days=None, has_email=False, has_phone=True,
-        )
-        assert called and "no email" in why
-
-    def test_email_is_exhausted_before_dialling(self):
-        called, why = should_call(
-            missing_critical_fields=["moq"], has_open_conflict=False,
-            email_unanswered_days=0.5, has_email=True, has_phone=True,
-        )
-        assert not called and "not been exhausted" in why
-
-    def test_silence_eventually_justifies_a_call(self):
-        called, _ = should_call(
-            missing_critical_fields=["moq"], has_open_conflict=False,
-            email_unanswered_days=4, has_email=True, has_phone=True,
-        )
-        assert called
 
 
 class TestIdempotencyKeys:

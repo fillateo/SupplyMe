@@ -13,7 +13,6 @@ def settings() -> Settings:
     return Settings(
         mode=Mode.DEMO,
         approval_policy=ApprovalPolicy.AUTONOMOUS,
-        max_calls_per_mission=3,
         max_outreach_per_mission=12,
     )
 

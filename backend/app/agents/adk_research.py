@@ -27,9 +27,12 @@ Two things make that safe rather than alarming:
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncGenerator
+from contextvars import ContextVar
 from typing import Any
 
 from google.adk.agents import LlmAgent
+from google.adk.agents.invocation_context import LlmCallsLimitExceededError
 from google.adk.agents.run_config import RunConfig
 from google.adk.models.google_llm import Gemini
 from google.adk.runners import Runner
@@ -47,6 +50,55 @@ log = logging.getLogger(__name__)
 
 APP_NAME = "vendor-discovery-research"
 
+#: Which mission the tool loop is currently running for. ADK owns the call
+#: stack between `investigate` and the model, so the attribution has to travel
+#: out of band; a ContextVar is the one channel that survives that and still
+#: keeps concurrent branches apart.
+_CURRENT_MISSION: ContextVar[str] = ContextVar("adk_mission_id", default="")
+#: The process's cost meter, set when the agent is built.
+_METER: Any = None
+
+
+class ThrottledGemini(Gemini):
+    """ADK's model wrapper, on the same gate and the same meter as everything else.
+
+    The tool loop builds its own client, so without this it is invisible twice
+    over. Invisible to the gate, one mission still opens a dozen simultaneous
+    requests and Vertex answers 429 to most of them — retrying inside ADK cannot
+    help, because the burst is the cause. Invisible to the meter, a mission
+    reports the handful of calls made around the loop and none of the ones made
+    inside it, which is the majority of what it actually spends.
+    """
+
+    async def generate_content_async(
+        self, llm_request: Any, stream: bool = False
+    ) -> AsyncGenerator[Any, None]:
+        from ..adapters.gemini_llm import acquire_model_slot
+
+        gate = await acquire_model_slot()
+        try:
+            async for response in super().generate_content_async(llm_request, stream=stream):
+                self._record(response)
+                yield response
+        finally:
+            gate.release()
+
+    def _record(self, response: Any) -> None:
+        """Bill a tool-loop turn to the mission that caused it."""
+        if _METER is None:
+            return
+        usage = getattr(response, "usage_metadata", None)
+        if usage is None:
+            return
+        # A streamed turn reports usage on its final chunk only, so partials
+        # contribute zero rather than being counted repeatedly.
+        input_tokens = int(getattr(usage, "prompt_token_count", 0) or 0)
+        output_tokens = int(getattr(usage, "candidates_token_count", 0) or 0)
+        output_tokens += int(getattr(usage, "thoughts_token_count", 0) or 0)
+        if not input_tokens and not output_tokens:
+            return
+        _METER.record(_CURRENT_MISSION.get(), self.model, input_tokens, output_tokens)
+
 TOOL_PERMISSIONS: dict[str, Tool] = {
     "search_web": Tool.SEARCH_WEB,
     "read_page": Tool.READ_PAGE,
@@ -62,6 +114,11 @@ You have tools. Use them deliberately, not exhaustively:
 - `search_web` to find the supplier's own pages and anything written about them.
 - `read_page` on a URL a search result gave you. Read the supplier's own site
   first; it is where MOQ, lead time and customization are usually stated.
+- `read_page` on the supplier's contact page when you have not found an email
+  address. Search results rarely link to it, but it is nearly always one hop
+  from the homepage — `/contact`, `/kontak`, `/hubungi-kami` — or in the footer
+  of the page you already read. A supplier with no contact route cannot be
+  asked anything, so this is worth one page on its own.
 - `query_maps` to confirm the business exists at an address and to pick up a
   published phone number.
 - `search_videos` only when a factory's capability is genuinely in question.
@@ -193,8 +250,11 @@ class AdkResearchAgent:
     name = "research"
 
     def __init__(self, providers: Any, model: str, store: Any = None, llm: Any = None) -> None:
+        global _METER
+
         self._llm = llm or providers.llm
         self._store = store
+        _METER = getattr(providers, "meter", None)
         # ADK defaults this to 500. A research agent that needs more than a
         # dozen calls is looping, not investigating, and 500 of them is the
         # largest single way this system could waste money unattended.
@@ -208,7 +268,7 @@ class AdkResearchAgent:
 
         self._agent = LlmAgent(
             name="vendor_research",
-            model=Gemini(
+            model=ThrottledGemini(
                 model=model,
                 client=_client(providers.settings),
                 # Vertex returns 429 under the parallel load a mission produces.
@@ -240,7 +300,16 @@ class AdkResearchAgent:
             app_name=APP_NAME, agent=self._agent, session_service=self._sessions
         )
 
-    async def investigate(
+    async def investigate(self, **kwargs: Any) -> VendorResearch:
+        """Name the mission on the context, so every call the tool loop makes
+        inside ADK is billed to the mission that asked for it."""
+        token = _CURRENT_MISSION.set(kwargs.get("mission_id") or "")
+        try:
+            return await self._investigate(**kwargs)
+        finally:
+            _CURRENT_MISSION.reset(token)
+
+    async def _investigate(
         self,
         *,
         vendor_name: str,
@@ -268,21 +337,40 @@ class AdkResearchAgent:
 
         tool_calls: list[str] = []
         notes: list[str] = []
-        async for event in self._runner.run_async(
-            user_id=user_id,
-            session_id=session.id,
-            new_message=types.Content(role="user", parts=[types.Part(text=prompt)]),
-            run_config=self._run_config,
-        ):
-            for call in event.get_function_calls() or []:
-                if call.name in TOOL_PERMISSIONS:
-                    tool_calls.append(call.name)
-            if event.content and event.content.parts:
-                text = "".join(part.text or "" for part in event.content.parts)
-                if text.strip():
-                    notes.append(text)
+        truncated = False
+        try:
+            async for event in self._runner.run_async(
+                user_id=user_id,
+                session_id=session.id,
+                new_message=types.Content(role="user", parts=[types.Part(text=prompt)]),
+                run_config=self._run_config,
+            ):
+                for call in event.get_function_calls() or []:
+                    if call.name in TOOL_PERMISSIONS:
+                        tool_calls.append(call.name)
+                if event.content and event.content.parts:
+                    text = "".join(part.text or "" for part in event.content.parts)
+                    if text.strip():
+                        notes.append(text)
+        except LlmCallsLimitExceededError as exc:
+            # The ceiling did its job: this agent was looping rather than
+            # investigating. Retrying would spend the same twelve calls to reach
+            # the same wall, so the loop ends here and whatever it already read
+            # becomes the answer. A supplier researched from four pages instead
+            # of eight is a thinner record, not a failed mission.
+            truncated = True
+            log.warning(
+                "adk_research_truncated",
+                extra={"agent": "research", "mission_id": mission_id, "vendor_id": vendor_id,
+                       "status": str(exc), "tool_call_id": ",".join(tool_calls) or "none"},
+            )
 
         if not notes:
+            if truncated:
+                # Nothing was read before the ceiling. Say so as an empty record
+                # rather than raising: the vendor is then routed on what is known
+                # about it, which is nothing, and closed out with a reason.
+                return VendorResearch(missing_fields=list(wanted_fields))
             raise RuntimeError(f"research agent produced no findings for {vendor_name}")
 
         # Second call: notes in, schema out. The notes are the agent's own
@@ -303,6 +391,7 @@ class AdkResearchAgent:
             extra={
                 "agent": "research", "mission_id": mission_id, "vendor_id": vendor_id,
                 "tool_call_id": ",".join(tool_calls) or "none",
+                "status": "truncated" if truncated else "complete",
             },
         )
         return result

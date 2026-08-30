@@ -114,22 +114,23 @@ def detect(field: str, items: Sequence[Evidence]) -> Disagreement | None:
         if is_direct
         else f"highest-weighted source is {best.source_type.value}"
     )
-    action, question = _resolution_for(field, groups, best)
     return Disagreement(
         field=field,
         values=values,
         preferred_value=best.value,
         preferred_reason=reason,
-        action=action,
-        question=question,
+        action="email",
+        question=_question_for(field, groups),
     )
 
 
-def _resolution_for(
-    field: str, groups: list[list[Evidence]], best: Evidence
-) -> tuple[str, str]:
-    """Pick how to settle a disagreement, and the exact question to ask."""
-    already_asked_directly = best.source_type in DIRECT_SOURCES
+def _question_for(field: str, groups: list[list[Evidence]]) -> str:
+    """The exact question that would settle this disagreement.
+
+    Writing is the only way to ask, so the question has to do the work a second
+    channel would otherwise do: name both values back to the supplier and ask
+    which applies, rather than repeating what they already answered.
+    """
     values = [g[0].value for g in groups]
 
     if field == "moq":
@@ -153,10 +154,7 @@ def _resolution_for(
     else:
         question = f"Our sources disagree on {field.replace('_', ' ')}. Could you confirm?"
 
-    # A conflict that already involves the supplier's own written answer will not
-    # be settled by another email asking the same thing.
-    action = "call" if already_asked_directly else "email"
-    return action, question
+    return question
 
 
 def detect_all(mission_id: str, vendor_id: str, items: Sequence[Evidence]) -> list[Conflict]:

@@ -22,7 +22,6 @@ from .models import (
 #: Base weight of a source type when it supports a claim about the supplier.
 SOURCE_WEIGHT: dict[SourceType, float] = {
     SourceType.SUPPLIER_EMAIL: 0.90,
-    SourceType.SUPPLIER_CALL: 0.85,
     SourceType.OFFICIAL_WEBSITE: 0.75,
     SourceType.BRAND_WEBSITE: 0.85,
     SourceType.INDUSTRY_PUBLICATION: 0.70,
@@ -49,13 +48,13 @@ INDEPENDENT_SOURCES = frozenset(
 SUPPLIER_SOURCES = frozenset(
     {
         SourceType.SUPPLIER_EMAIL,
-        SourceType.SUPPLIER_CALL,
         SourceType.OFFICIAL_WEBSITE,
         SourceType.YOUTUBE,
     }
 )
 
-DIRECT_SOURCES = frozenset({SourceType.SUPPLIER_EMAIL, SourceType.SUPPLIER_CALL})
+#: The supplier answering us directly, rather than publishing something.
+DIRECT_SOURCES = frozenset({SourceType.SUPPLIER_EMAIL})
 
 
 def strength_for(source_type: SourceType, excerpt: str) -> EvidenceStrength:

@@ -1,15 +1,17 @@
-"""Communication agent: email drafting, reply parsing, call planning, call parsing.
+"""Communication agent: email drafting, follow-ups, and reply parsing.
 
-This is the only agent permitted to touch the outside world, and the only one
-whose output is checked twice — once by its schema and once by the workflow,
-which will not send anything the approval policy has not cleared.
+Writing is the only channel this system has, so every question it needs
+answered — including settling a disagreement between two sources — has to be
+asked in writing. This is the only agent permitted to touch the outside world,
+and the only one whose output is checked twice: once by its schema and once by
+the workflow, which will not send anything the approval policy has not cleared.
 """
 
 from __future__ import annotations
 
-from ..domain.policy import CALL_DISCLOSURE, CALL_PROHIBITIONS, Tool
+from ..domain.policy import Tool
 from .base import Agent
-from .schemas import CallExtraction, CallPlan, EmailDraft, QuoteExtraction
+from .schemas import EmailDraft, QuoteExtraction
 
 EMAIL_INSTRUCTION = """
 You write the first email a small buyer sends to a supplier they have never
@@ -54,35 +56,27 @@ supplier acknowledged it.
 
 Record commitments verbatim ("we can do 500 as a pilot at Rp 11,000").
 """.strip()
+FOLLOW_UP_INSTRUCTION = """
+You write a short follow-up on a thread this supplier has already seen.
 
-CALL_PLAN_INSTRUCTION = f"""
-You plan a short phone call to a supplier to obtain specific missing facts.
+Do not re-introduce the project, do not thank them at length, and never re-ask
+anything they have already answered — a supplier asked the same question twice
+stops replying.
 
-The opening must identify the caller as an AI assistant in the first sentence.
-Use this disclosure, adapted only to fit naturally: "{CALL_DISCLOSURE}"
+When a specific point has to be resolved, that point is the email. Put both
+values we hold in front of them and ask which one applies, in one or two
+sentences; that is the whole message. Writing is the only way this system can
+settle a disagreement, so a vague nudge wastes the only attempt available.
 
-Constraints on the call, which the opening and questions must respect:
-{chr(10).join('- ' + p for p in CALL_PROHIBITIONS)}
-
-Ask at most five questions, each answerable in one sentence, ordered so the
-call is still useful if it ends early. Ask only for facts that are actually
-missing or disputed — never re-ask something already answered in writing.
-""".strip()
-
-CALL_EXTRACT_INSTRUCTION = """
-You read a call transcript and record what the supplier said.
-
-Match answers to the questions asked. A question the supplier deflected,
-promised to check, or answered with a range that does not resolve it stays in
-unanswered. Put numbers in the numeric fields only when the supplier stated
-them plainly on the call.
+questions_asked must contain one entry per distinct question in the body,
+phrased as the system will later match replies against.
 """.strip()
 
 
 class CommunicationAgent(Agent):
     name = "communication"
     tools = frozenset(
-        {Tool.DRAFT_EMAIL, Tool.SEND_EMAIL, Tool.READ_MAIL, Tool.PLACE_CALL, Tool.WRITE_EVIDENCE}
+        {Tool.DRAFT_EMAIL, Tool.SEND_EMAIL, Tool.READ_MAIL, Tool.WRITE_EVIDENCE}
     )
     instruction = EMAIL_INSTRUCTION
 
@@ -139,7 +133,7 @@ class CommunicationAgent(Agent):
         )
         return await self.call(
             prompt=prompt, schema=EmailDraft, mission_id=mission_id, vendor_id=vendor_id,
-            event_type="followup.required",
+            event_type="followup.required", instruction=FOLLOW_UP_INSTRUCTION,
         )
 
     async def extract_quote(
@@ -157,41 +151,4 @@ class CommunicationAgent(Agent):
             prompt=prompt, schema=QuoteExtraction, untrusted=body, fast=True,
             mission_id=mission_id, vendor_id=vendor_id, event_type="quote.extracted",
             instruction=QUOTE_INSTRUCTION,
-        )
-
-    async def plan_call(
-        self, *, vendor_name: str, reason: str, missing_fields: list[str],
-        conflict_question: str | None, product: str, quantity: int | None,
-        mission_id: str = "", vendor_id: str | None = None,
-    ) -> CallPlan:
-        self.may(Tool.PLACE_CALL)
-        prompt = (
-            f"Supplier to call: {vendor_name}\n"
-            f"Why we are calling instead of emailing: {reason}\n"
-            f"Product: {product}, first batch "
-            f"{quantity if quantity is not None else 'unspecified'}\n"
-            f"Facts still missing: {', '.join(missing_fields) or 'none'}\n"
-            + (f"Disagreement to resolve: {conflict_question}\n" if conflict_question else "")
-        )
-        return await self.call(
-            prompt=prompt, schema=CallPlan, mission_id=mission_id, vendor_id=vendor_id,
-            event_type="call.required", instruction=CALL_PLAN_INSTRUCTION,
-        )
-
-    async def extract_call(
-        self, *, transcript: list[dict[str, str]], questions: list[str],
-        mission_id: str = "", vendor_id: str | None = None,
-    ) -> CallExtraction:
-        rendered = "\n".join(
-            f"{turn.get('speaker', '?')}: {turn.get('text', '')}" for turn in transcript
-        )
-        prompt = (
-            "Questions the call was meant to answer:\n"
-            + "\n".join(f"- {q}" for q in questions)
-            + "\n\nTranscript follows."
-        )
-        return await self.call(
-            prompt=prompt, schema=CallExtraction, untrusted=rendered, fast=True,
-            mission_id=mission_id, vendor_id=vendor_id, event_type="call.completed",
-            instruction=CALL_EXTRACT_INSTRUCTION,
         )

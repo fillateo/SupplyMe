@@ -3,7 +3,6 @@
 import type { Conflict } from "@/lib/types";
 
 const ACTION_COPY: Record<string, string> = {
-  call: "Calling the supplier to settle it",
   email: "Asking the supplier to confirm",
   none: "No route to settle it",
 };

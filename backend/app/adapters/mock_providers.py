@@ -1,9 +1,9 @@
 """Demo-mode adapters.
 
 Each one implements the same port as its Google counterpart and returns data
-from app/adapters/demo_world.py. The mail and voice providers are the important
-ones: they do not return a reply inline. They schedule a real
-`email.received` / `call.completed` event on the bus, minutes or seconds later,
+from app/adapters/demo_world.py. The mail provider is the important one: it does
+not return a reply inline. It schedules a real `email.received` event on the
+bus, minutes or seconds later,
 so a demo run exercises the same asynchronous resumption path that a supplier
 answering at 2am would — §44's requirement that mock providers produce events
 through the real workflow rather than fake results in the UI.
@@ -18,7 +18,6 @@ from typing import Any
 from ..domain.events import Event, EventType
 from ..domain.ids import new_id
 from ..ports.base import (
-    CallResult,
     InboundMail,
     PageContent,
     Place,
@@ -161,7 +160,11 @@ class MockMailProvider:
         self._scheduler = scheduler
         self.sent: list[dict[str, str]] = []
         self._threads: dict[str, list[InboundMail]] = {}
-        self._round: dict[str, int] = {}
+        # Keyed by (mission_id, vendor) — a vendor's scripted replies restart for
+        # every mission. Keying by vendor alone leaks one mission's progress into
+        # the next, and since each fixture scripts a single reply that left every
+        # mission after the first waiting for a reply that would never arrive.
+        self._round: dict[tuple[str, str], int] = {}
 
     def bind(self, bus: Any, scheduler: Any) -> None:
         self._bus, self._scheduler = bus, scheduler
@@ -184,8 +187,9 @@ class MockMailProvider:
         if vendor is None:
             return SentMail(provider_message_id=message_id, provider_thread_id=provider_thread)
 
-        round_index = self._round.get(vendor.key, 0)
-        self._round[vendor.key] = round_index + 1
+        round_key = (mission_id, vendor.key)
+        round_index = self._round.get(round_key, 0)
+        self._round[round_key] = round_index + 1
         reply_body = vendor.replies.get(round_index)
         if reply_body is None or self._scheduler is None:
             return SentMail(provider_message_id=message_id, provider_thread_id=provider_thread)
@@ -221,69 +225,3 @@ class MockMailProvider:
 
     async def history(self, since_token: str | None = None) -> tuple[list[InboundMail], str]:
         return [], since_token or "0"
-
-
-class MockVoiceProvider:
-    """Builds a transcript by matching the planned questions against the vendor's answers."""
-
-    def __init__(self) -> None:
-        self.calls: list[dict[str, Any]] = []
-
-    async def place_call(
-        self, *, to: str, opening: str, questions: list[str], call_id: str
-    ) -> CallResult:
-        vendor = next(
-            (
-                v
-                for v in world.VENDORS
-                if v.phone and _digits(v.phone) == _digits(to)
-            ),
-            None,
-        )
-        self.calls.append({"to": to, "opening": opening, "questions": questions})
-
-        if vendor is None:
-            return CallResult(
-                provider_call_id=new_id("call"), status="failed",
-                error="number not reachable in the demo dataset",
-            )
-        if vendor.call_outcome != "completed":
-            return CallResult(provider_call_id=new_id("call"), status=vendor.call_outcome)
-
-        transcript = [{"speaker": "agent", "text": opening}]
-        transcript.append({"speaker": "supplier", "text": "Ya, silakan."})
-        for question in questions:
-            transcript.append({"speaker": "agent", "text": question})
-            answer = _match_answer(question, vendor.call_answers)
-            transcript.append(
-                {
-                    "speaker": "supplier",
-                    "text": answer or "Untuk itu saya harus cek dulu ke bagian produksi.",
-                }
-            )
-        transcript.append({"speaker": "agent", "text": "Terima kasih banyak atas waktunya."})
-        return CallResult(
-            provider_call_id=new_id("tcall"),
-            status="completed",
-            transcript=transcript,
-            duration_seconds=45 + 20 * len(questions),
-        )
-
-
-def _digits(value: str) -> str:
-    digits = re.sub(r"[^0-9]", "", value or "")
-    return digits[-9:] if len(digits) >= 9 else digits
-
-
-def _match_answer(question: str, answers: dict[str, str]) -> str | None:
-    q = question.lower()
-    for needle, answer in answers.items():
-        if needle.lower() in q:
-            return answer
-    # Fall back to token overlap so paraphrased questions still land.
-    best, best_score = None, 0
-    for needle, answer in answers.items():
-        score = len(_tokens(needle) & _tokens(q))
-        if score > best_score:
-            best, best_score = answer, score
-    return best if best_score > 0 else None

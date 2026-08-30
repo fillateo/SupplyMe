@@ -15,7 +15,7 @@ from .adapters import registry
 from .agents import Agents
 from .config import Settings, get_settings
 from .domain.events import Event, EventType
-from .domain.models import Mission, MissionStatus
+from .domain.models import Mission, MissionStatus, SearchScope
 from .workflow import handlers as _handlers  # noqa: F401  (registers handlers)
 from .workflow.context import Repo
 from .workflow.orchestrator import Orchestrator
@@ -53,6 +53,72 @@ class Runtime:
     async def start(self, concurrency: int = 6) -> None:
         if hasattr(self.providers.bus, "start"):
             await self.providers.bus.start(concurrency)
+        await self.resume_pending_follow_ups()
+
+    async def resume_pending_follow_ups(self) -> int:
+        """Restart whatever a lost scheduler queue left stranded.
+
+        A follow-up is a scheduled event, and an in-process scheduler loses its
+        queue when the process dies. The state that matters survives — the thread
+        is in the store, marked sent, with its follow-up count — but nothing is
+        left to fire, so a supplier who never replies keeps a vendor waiting
+        forever and the mission never reaches a recommendation.
+
+        Cloud Tasks persists its own queue, so this is a no-op there. It matters
+        exactly where the README says state does not survive a restart, which is
+        every local run.
+        """
+        from .domain.models import EmailThread, ThreadStatus
+        from .workflow.handlers import MAX_FOLLOW_UPS
+
+        try:
+            threads = await self.repo.list(EmailThread)
+        except Exception:  # a store that cannot list is not a reason to fail startup
+            log.exception("could not read threads while resuming follow-ups")
+            return 0
+
+        rearmed = 0
+        for thread in threads:
+            if thread.status is not ThreadStatus.SENT:
+                continue
+            if thread.follow_up_count >= MAX_FOLLOW_UPS:
+                # No follow-up left to send, so a timer would do nothing. What
+                # this thread needs is for the router to look at it again: it may
+                # be holding a disagreement that can no longer be asked about,
+                # and until something says so the vendor never reaches a
+                # terminal state and the mission never finishes.
+                await self.orchestrator.emit(
+                    Event(
+                        type=EventType.VENDOR_UPDATED,
+                        mission_id=thread.mission_id,
+                        payload={"vendor_id": thread.vendor_id, "stage": "resumed",
+                                 "version": f"{thread.id}:resumed"},
+                    )
+                )
+                rearmed += 1
+                continue
+            await self.providers.scheduler.schedule(
+                Event(
+                    type=EventType.FOLLOW_UP_REQUIRED,
+                    mission_id=thread.mission_id,
+                    payload={
+                        "vendor_id": thread.vendor_id, "thread_id": thread.id,
+                        "reason": "no response",
+                        # Deliberately not the version the live timer uses. An
+                        # identical payload is an identical dedup key, so a
+                        # re-armed timer would claim the key first and the real
+                        # one would then be discarded as a redelivery — leaving
+                        # the thread with no timer at all, which is the thing
+                        # this is here to prevent.
+                        "version": f"{thread.id}:resumed:{thread.follow_up_count}",
+                    },
+                ),
+                delay_seconds=48 * 3600,
+            )
+            rearmed += 1
+        if rearmed:
+            log.info("threads_resumed", extra={"status": f"{rearmed} thread(s) picked back up"})
+        return rearmed
 
     async def stop(self) -> None:
         if hasattr(self.providers.scheduler, "cancel_all"):
@@ -63,10 +129,18 @@ class Runtime:
     async def handle(self, event: Event) -> None:
         await self.orchestrator.handle(event)
 
-    async def create_mission(self, objective: str, *, user_id: str = "demo-user") -> Mission:
+    async def create_mission(
+        self,
+        objective: str,
+        *,
+        user_id: str = "demo-user",
+        location: str | None = None,
+        scope: SearchScope = SearchScope.COUNTRY,
+    ) -> Mission:
         mission = Mission(
             objective=objective.strip(), user_id=user_id,
             status=MissionStatus.CREATED, mode=self.settings.mode.value,
+            location=(location or "").strip() or None, search_scope=scope,
         )
         await self.repo.save(mission)
         await self.orchestrator.emit(

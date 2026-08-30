@@ -30,9 +30,6 @@ const EVENT_COPY: Record<string, string> = {
   "email.received": "Supplier replied",
   "quote.extracted": "Quotation read",
   "conflict.detected": "Sources disagree",
-  "call.required": "Decided to call",
-  "call.started": "Calling",
-  "call.completed": "Call finished",
   "followup.required": "Following up",
   "vendor.updated": "Supplier record updated",
   "recommendation.ready": "Ranking computed",
@@ -41,7 +38,7 @@ const EVENT_COPY: Record<string, string> = {
 };
 
 const NOTABLE = new Set([
-  "conflict.detected", "call.completed", "email.received",
+  "conflict.detected", "email.received",
   "brand.claim.adjudicated", "mission.completed", "recommendation.ready",
 ]);
 
