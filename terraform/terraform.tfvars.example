@@ -1,12 +1,33 @@
+# Copy to terraform.tfvars and fill in. Never commit the result.
+#
+# Every variable here is declared in variables.tf, which carries the long
+# reasoning for each one; this file is the short version plus the values you
+# actually have to supply.
+
+# --- Required ---------------------------------------------------------------
+
 project_id = "your-project-id"
 region     = "us-central1"
+
+# Both images. scripts/deploy.sh builds and pushes them for you.
 image         = "us-central1-docker.pkg.dev/your-project-id/supply-me/api:latest"
 console_image = "us-central1-docker.pkg.dev/your-project-id/supply-me/console:latest"
 
-# demo binds the mock providers and makes the service publicly readable so a
-# judge can open the link. live binds Gmail, Search and Places and does not.
-mode            = "demo"
+# --- Mail: the one setting that reaches strangers ---------------------------
+#
+# The addresses in a mission belong to real businesses, read off their real
+# websites. Leave mail_redirect_to set to a mailbox you own unless you have
+# decided, on purpose, to write to them — /api/health states which it is.
+# The app password for smtp_user goes in Secret Manager, never here.
+
+smtp_user        = "you@gmail.com"
+mail_redirect_to = "you@gmail.com"
+
+# autonomous | external | strict. `external` holds the first email to each
+# supplier for a human.
 approval_policy = "external"
+
+# --- Model routing ----------------------------------------------------------
 
 # Leave empty to resolve the newest model the project can actually reach.
 # Pinning is cheaper: probing the ladder costs two model calls per process.
@@ -15,21 +36,31 @@ approval_policy = "external"
 reasoning_model = ""
 fast_model      = ""
 
-# Gemini 3.x is served from the global endpoint, not from a named region.
-# This is separate from `region`, which is where Cloud Run itself runs.
+# Gemini 3.x is served from the global endpoint, not from a named region. This
+# is separate from `region`, which is where Cloud Run itself runs, and it has to
+# be: Cloud Tasks rejects `global` outright.
 vertex_location = "global"
+
+# --- Access and scale -------------------------------------------------------
+
+# Anyone with the link can open the console. True because the point of
+# deploying is that someone can look; what bounds the damage is the caps below
+# and the mail redirect above, not the door. Turn it off before pointing this
+# at real suppliers with the redirect unset.
+publicly_readable = true
 
 max_instances = 4
 
-# Set these. A budget alert emails you; it does not stop spending — the hard
-# stops are max_usd_per_mission below and the app's own caps.
+# Read replies through the Gmail API push path instead of the IMAP poll. Needs
+# an OAuth client and a consent screen; see docs/LOCAL.md.
+gmail_push = false
+
+# --- Cost -------------------------------------------------------------------
+
+# A budget alert emails you; it does not stop spending. The hard stop is
+# max_usd_per_mission, which fails the mission rather than warning about it.
 budget_amount_usd = 20
 billing_account   = ""
 alert_email       = ""
 
-# Hard stops, applied per mission inside the application.
-max_usd_per_mission   = 1.00
-
-# Demo only: compresses a 48-hour follow-up wait to about 90 seconds, so a
-# judge opening the link sees the mission finish instead of appearing to stall.
-demo_speedup = 2000
+max_usd_per_mission = 1.00
