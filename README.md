@@ -1,166 +1,166 @@
-# SupplyMe
+# 🧭 SupplyMe — Autonomous Supplier Discovery
 
-**Autonomous supplier discovery**
-
-Tell it what you want to make. It works out which suppliers you need, finds them,
-reads what they publish, emails them, follows up until a question is settled, and
-tells you what it could and could not establish.
-
-**Every number it reports back is stamped with where it came from** — and with
-whether that source was the supplier's own marketing or somebody else.
+An agentic sourcing system that turns *"I want to make this product"* into a
+qualified supply network — discovering suppliers, reading what they publish,
+emailing them, chasing replies for days, and reporting **where every single
+number came from**.
 
 Built for the Google × Devpost **All Things Agentic** hackathon, category
 **The Taskmaster**.
 
----
-
-## The two moments it turns on
-
-Not "AI searches for suppliers." The agent builds a supplier network for a
-product it has never seen, then goes out into the world to qualify it.
-
-**Two suppliers claim the same major fragrance brand as a customer.** One is
-corroborated by the brand's own site and a trade publication. The other is the
-supplier's word and nothing else. The system reports them differently, and never
-as the same thing.
-
-**One supplier's website says MOQ 500; their email says 1,000.** The system
-notices, and rather than asking again it puts both numbers back to them in one
-targeted follow-up: *"your published minimum is 500 but we were quoted 1,000 —
-is 500 possible as a pilot?"* They confirm 500 at a higher unit price, and the
-resolution re-scores them.
-
-## Why this is a job for an agent
-
-I want to build a perfume brand. I do not have a supplier network.
-
-That sentence hides a week of work. A 50ml EDP needs a fragrance house, a
-filler, a bottle, a pump, a cap, a label, a box — and in Indonesia, BPOM
-registration. For each I have to find companies, work out which of them
-manufacture rather than resell, learn their minimum order quantities before I
-waste their time and mine, ask the same eight questions, wait, chase, and then
-compare replies that are not comparable.
+## 🎯 Project Overview
 
 Sourcing information is not published, it is *disclosed* — differently to
-different people, in a negotiation. There is no dataset. The only way to know a
+different people, in a negotiation. There is no dataset. The only way to learn a
 supplier's real minimum order is to ask them, and the only way to know whether
-their claims hold is to find someone other than them saying it.
+their claims hold is to find somebody other than them saying it.
 
-So it is a long, interruptible, multi-source investigation in which most of the
-wall-clock time is spent waiting for a human being to reply. That is a bad fit
-for search and a good fit for an agent.
+SupplyMe runs that investigation end to end: it **decomposes a product into the
+supply chain it needs**, **finds candidate manufacturers**, **researches each one
+against the live web**, **emails what it cannot find out**, **resolves
+contradictions**, and **ranks the survivors** with a deterministic score it can
+explain line by line.
 
-## How it works
+Two moments show what that buys you:
 
-```
-  "500 × 50ml EDP, Indonesia, premium packaging, minimize first-batch risk"
-                                │
-                      Mission agent reads it
-                                │
-                 Supply-chain agent decomposes it
-                                │
-        ┌──────────┬────────────┼────────────┬──────────┐
-      bottle      pump         cap        filling     label      ← parallel
-        │           │           │            │           │
-     discovery → identity resolution → research → evidence
-        │
-    ┌───┴────────────────────────────┐
-    │                                │
-  facts known                   facts missing
-    │                                │
-    │                       outreach
-    │                          │
-    │                        email
-    │                          │
-    │                    supplier replies (hours later)
-    │                          │
-    │                   quote extraction
-    │                          │
-    │                   conflict detection ──→ targeted follow-up
-    │                          │
-    └──────────┬───────────────┘
-               │
-   deterministic scoring + explanation
-               │
-      recommended supply network
+- **Two suppliers claim the same major fragrance brand as a customer.** One is
+  corroborated by the brand's own site and a trade publication; the other is the
+  supplier's word and nothing else. They are reported differently, and never as
+  the same thing.
+- **A supplier's website says MOQ 500; their email says 1,000.** Rather than
+  asking again, the system puts both numbers back to them in one targeted
+  follow-up — *"your published minimum is 500 but we were quoted 1,000 — is 500
+  possible as a pilot?"* — and re-scores them on the answer.
+
+Most of the wall-clock time in that job is spent waiting for a human to reply.
+That is a bad fit for search, and a good fit for an agent.
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart TD
+    B[Browser] --> C["Next.js console<br/>Cloud Run · proxies /api/* server-side"]
+    C -->|HTTPS| A["FastAPI<br/>Cloud Run"]
+    A --> O["Orchestrator<br/>claim dedup key → handler → emit next"]
+    O --> AG["7 agents<br/>Gemini / Vertex AI"]
+    O --> DE["Deterministic engines<br/>evidence · quotes · conflicts · scoring"]
+    AG --> P["Ports<br/>Search · Maps · Mail · Store · Bus · Tasks"]
+    DE --> P
+    P --> X["Adapters — every one the real service<br/>Programmable Search · Places · SMTP + IMAP · Gmail API"]
+    X --> S[("Firestore · Pub/Sub · Cloud Tasks · Cloud Logging")]
+    S -->|push| A
 ```
 
-Nothing above is a single long LLM call. Each arrow is a persisted event.
+Every component drawn above is implemented. Nothing in the pipeline is a single
+long LLM call — **each arrow is a persisted event**, so a Cloud Run restart mid
+mission loses nothing and a supplier replying three days later resumes the same
+mission.
 
-## Taskmaster fit
+### Core Components
 
-| What the category asks for | Where it is |
-| --- | --- |
-| Receives a real objective | `POST /api/missions` → `mission.created` |
-| Decomposes it | `app/agents/planning.py` |
-| Decides what happens next | `handle_vendor_updated` in `app/workflow/handlers.py` |
-| Uses external tools | Search, Places, Gmail/SMTP — `app/adapters/` |
-| Works asynchronously | Pub/Sub push + Cloud Tasks; the browser can be closed |
-| Reacts to new events | `email.received` resumes a mission mid-flight — see Gmail integration for which half of that path has been run live |
-| Maintains state | Firestore; a Cloud Run restart loses nothing |
-| Produces a useful outcome | A supply network, with reasons and open risks |
+- **🧠 [Backend API](./backend/README.md)** — FastAPI, the orchestrator, the seven agents, and the deterministic engines
+- **🖥️ Console** (`frontend/`) — Next.js 15 dashboard; every fact clickable back to its source excerpt
+- **📬 Mail loop** (`app/adapters/`) — SMTP out, IMAP in, or Gmail API push; replies re-enter the workflow by `In-Reply-To`
+- **☁️ Infrastructure** (`terraform/`) — OpenTofu; Cloud Run, Firestore, Pub/Sub, Cloud Tasks, Secret Manager, budgets
+- **📚 [Documentation](./docs/)** — architecture, cost, local setup, secrets, demo script
 
-The routing decision is the whole product. `handle_vendor_updated` reads a
-supplier's current state and picks the next move — qualify, reject, email,
-or wait — and no part of that is scripted by the user.
+### Agent Workflow
 
-## Architecture
-
+```mermaid
+graph TD
+    A[Mission agent<br/>reads the objective] --> B[Supply chain agent<br/>decomposes the product]
+    B --> C1[bottle]
+    B --> C2[pump]
+    B --> C3[cap]
+    B --> C4[filling]
+    B --> C5[label]
+    C1 --> D[Discovery agent<br/>search + Places]
+    C2 --> D
+    C3 --> D
+    C4 --> D
+    C5 --> D
+    D --> E[Identity resolution<br/>dedupe the same factory]
+    E --> F[Research agent<br/>ADK tool loop]
+    F --> G[Brand evidence agent<br/>corroborate the claims]
+    G --> H{Facts still missing?}
+    H -->|no| K[Deterministic scoring]
+    H -->|yes| I[Communication agent<br/>drafts + sends email]
+    I --> J[Supplier replies, hours later]
+    J --> L[Quote extraction]
+    L --> M{Conflict?}
+    M -->|yes| I
+    M -->|no| K
+    K --> N[Recommended supply network<br/>with reasons and open risks]
 ```
-Cloud Run: console ──► Cloud Run: API (FastAPI)
- (Next.js, proxies       │
-  /api/* server-side)    │
-                    Orchestrator ──► Pub/Sub ──┐
-                          │                     │ push
-                          │◄────────────────────┘
-                          │
-        ┌─────────────────┼──────────────────┐
-        ▼                 ▼                  ▼
-   Gemini / Vertex   Google Search      Gmail API
-        │            Places
-        ▼                 ▼                  ▼
-              Firestore (missions, vendors, evidence,
-              quotes, conflicts, approvals, event log)
-                          │
-                    Cloud Tasks (follow-ups, retries)
-                          │
-                    Cloud Logging
-```
 
-Every component in that diagram is implemented. See `docs/ARCHITECTURE.md` for
-the event table and the Firestore collections.
+The routing decision is the whole product: `handle_vendor_updated` in
+`app/workflow/handlers.py` reads a supplier's current state and picks the next
+move — qualify, reject, email, or wait — and no part of that is scripted by the
+user.
 
-## Agent architecture
+## ✨ Key Features
 
-Seven agents, each with an explicit tool allowlist (`app/domain/policy.py`).
-The allowlist is the security boundary, not a comment:
+### Autonomous Investigation
+- **Product → supply chain** — a 50ml EDP becomes fragrance house, filler, bottle, pump, cap, label, box, plus local regulatory registration
+- **Parallel discovery** — every supply-chain node is searched at once, bounded so a mission cannot rate-limit itself
+- **Agentic research** — a Google ADK `LlmAgent` chooses which page to read next based on what the last one said, and stops when it can answer
+- **Identity resolution** — the same factory listed under three names becomes one supplier
+
+### Evidence With Provenance
+- **The model extracts claims; it never rates them** — `app/domain/evidence.py` scores a claim from its source and nothing else
+- **Provenance on every displayed fact** — `verified`, `direct quote`, `published`, `supplier says`, `inferred`, `sources differ`, `unknown`
+- **Diminishing returns** — twenty directory listings copying one press release score *lower* than the manufacturer's own spec sheet
+- **Click through to the excerpt** — verbatim text, URL, and retrieval time, in the console
+
+### Outreach That Closes The Loop
+- **Asks only what is missing** — threads track asked / answered / unanswered questions
+- **Conflict-driven follow-ups** — contradictions become one targeted question, not a repeat of all eight
+- **Reply matching by mail headers** — `Message-ID` / `In-Reply-To`, so a redirected test mailbox still resolves to the right mission
+- **No polling of a browser** — Cloud Scheduler pings the mailbox, or Gmail pushes to Pub/Sub; the tab can be closed
+
+### Explainable Ranking
+- **Deterministic scoring, never a model score** — price 20% · MOQ fit 20% · capability 20% · lead time 15% · evidence 15% · logistics 10%
+- **Weights follow your objective** — *"minimize risk on the first batch"* moves weight onto MOQ fit and off price
+- **A sentence per component** — `MOQ 500 fits an order of 500`, not a bar
+- **Logistics scoped to your question** — city, country or global; the same factory scores differently under each, and the choice shapes the search queries too
+- **Comparable quotes only** — `bottle + pump + cap = Rp 12,000` normalises against `8,000 / 2,500 / 1,500`; a partial quote is reported as not-comparable rather than as cheapest
+
+### Production Behaviour
+- **Event-sourced and idempotent** — every message may be delivered twice; no supplier is ever emailed twice
+- **Hard spend caps** — a mission that hits its ceiling fails with a reason and is deliberately *not* retried
+- **Per-mission cost accounting** — read from the API's own token counts at `/api/missions/{id}` → `spend`
+- **Fail-fast configuration** — a missing credential stops the process and names itself; there is nothing to fall back to
+
+## 🤖 Agent Architecture
+
+Seven agents, each with an explicit tool allowlist in `app/domain/policy.py`.
+**The allowlist is the security boundary, not a comment** — ADK's
+`before_tool_callback` runs it on every tool invocation, and a denial is returned
+to the model as a result so the agent carries on with the tools it does hold.
 
 | Agent | May | May not |
 | --- | --- | --- |
-| Mission | read the objective | anything external |
-| Supply chain | decompose | any tool at all |
-| Discovery | search, Maps, read pages | email |
-| Research | search, read, Maps, write evidence | **email, spend** |
-| Brand evidence | search, read, write evidence | **email, spend** |
-| Communication | draft, send, read mail | alter scores |
-| Recommendation | read evidence, compute | send anything |
+| **Mission** | read the objective, write vendors | search, read, email, spend |
+| **Supply chain** | decompose | any tool at all |
+| **Discovery** | search, Maps, read pages, write vendors | email |
+| **Research** | search, read, Maps, write evidence | **email, spend** |
+| **Brand evidence** | search, read, write evidence | **email, spend** |
+| **Communication** | draft, send, read mail | alter scores |
+| **Recommendation** | write scores | send anything |
 
 The two agents that read attacker-controlled content — Research and Brand
-Evidence — hold no tool that can reach the outside world. That is deliberate: if
-a supplier's page convinces the model of something, the worst it can do is
-record a bad claim, which the evidence engine then rates on its source.
+Evidence — hold no tool that can reach the outside world. If a supplier's page
+convinces the model of something, the worst it can do is record a bad claim,
+which the evidence engine then rates on its source.
 
 ### Where Google ADK is used, and why only there
 
 Six of the seven agents are single structured calls, because the *workflow*
 decides what happens next and the model only fills in shape. Research is the
 exception: which source is worth reading depends on what the last one said, so
-that stage is a **Google ADK `LlmAgent`** with real tools
-(`app/agents/adk_research.py`). It searches, reads pages and queries Maps until
-it can answer, and stops when it can — instead of being handed a fixed set of
-pre-fetched pages, most of which it would not have needed.
-
-A live run reading one supplier chose this sequence unprompted:
+that stage is a Google ADK `LlmAgent` with real tools
+(`app/agents/adk_research.py`). A live run reading one supplier chose this
+sequence unprompted:
 
 ```
 read_page   https://kemasan-wangi.example.com/
@@ -168,172 +168,137 @@ search_web  "PT Kemasan Wangi Nusantara Indonesia 50ml glass perfume bottle MOQ"
 read_page   https://kemasan-wangi.example.com/produk/botol-parfum-50ml
 ```
 
-and came back with `moq = 500`, quoted as *"Minimum order: 500 pcs per desain."*,
-`unit_price` and `lead_time_days` correctly reported as missing — because that
-page genuinely does not state them, which is what later causes the system to
-email and ask.
+and returned `moq = 500`, quoted as *"Minimum order: 500 pcs per desain."*, with
+`unit_price` and `lead_time_days` correctly reported as missing — which is what
+later causes the system to email and ask.
 
-ADK's `before_tool_callback` runs `app/domain/policy.py` on **every** tool
-invocation, so the permission table above executes rather than describing. A
-denial is returned to the model as a result, not raised, so the agent carries on
-with the tools it does hold.
+## 🛠️ Technology Stack
 
-The tool loop gathers and writes up findings; a second call turns that write-up
-into the schema. Asking one turn to both choose the next tool call and emit
-strict JSON makes it do neither reliably, and everything downstream depends on
-the schema.
+- **Framework**: Python 3.12+ · FastAPI · Google ADK agents · Pydantic v2
+- **AI Models**: Gemini 3.5 Flash on Vertex AI, resolved from a reachability ladder in `app/config.py`
+- **Data**: Firestore (missions, vendors, evidence, quotes, conflicts, approvals, event log)
+- **Messaging**: Pub/Sub push with dead-lettering · Cloud Tasks for follow-ups and retries
+- **External APIs**: Google Programmable Search (or Gemini grounding) · Google Places · Gmail API / SMTP + IMAP
+- **Frontend**: Next.js 15 · React 19 · TypeScript · Tailwind
+- **Infrastructure**: Cloud Run (scale to zero) · Secret Manager · Cloud Logging · OpenTofu
 
-## Evidence model
+## 📋 Prerequisites
 
-The LLM extracts claims. It does not decide what they are worth — `app/domain/evidence.py` does, from the source and nothing else:
+- **Python 3.12 or 3.13** and **Node 20+** — and nothing else for local runs
+- **Google Cloud project** with Vertex AI enabled, plus `gcloud auth application-default login`
+- **API keys**:
+  - Google Cloud project ID for Vertex AI (or a Gemini Developer API key)
+  - Google Maps / Places API key — **required**, the process will not start without it
+  - Gmail app password for SMTP + IMAP — sends and reads on one credential
+  - Optional: Programmable Search key + engine ID (without one, search falls back to Gemini grounding)
 
-```
-Brand's own website           → verified
-Two independent publications  → strong evidence
-Supplier's own website        → supplier-reported, confidence capped at 0.45
-A trade directory listing     → independent, but weakly (a listing is paid for,
-                                and it is not reporting)
-Nothing found                 → no public evidence
-```
+> **There is one mode and it is the real one.** Every provider is the live
+> service or the process refuses to start, naming the variable that is missing.
+> A mission either read the real web, queried real business listings, called
+> Gemini and wrote to a real mailbox — or it never began.
 
-Confidence combines sources with diminishing returns and saturates below
-certainty, so twenty directory listings that copy one press release score
-*lower* than the manufacturer's own spec sheet.
+## 🚀 Quick Start
 
-Every displayed fact carries a provenance state — `verified`, `direct quote`,
-`published`, `supplier says`, `inferred`, `sources differ`, `unknown` — and
-clicking it in the console shows the verbatim excerpt, the URL, and when it was
-retrieved.
-
-## Scoring
-
-Deterministic and explainable. Gemini never returns a score.
-
-```
-price 20% · MOQ fit 20% · capability 20% · lead time 15% · evidence 15% · logistics 10%
-```
-
-Weights shift from what you said mattered: *"minimize risk on the first batch"*
-moves weight onto MOQ fit and off price. Each component returns the sentence
-that produced it — `MOQ 500 fits an order of 500`, not a bar.
-
-**Logistics answers the question you actually asked.** You choose the scope when
-you start a mission — a named city, a country, or anywhere — and the same
-factory scores differently under each. At city scope a supplier in your city
-scores 1.0 and one three provinces away 0.7, because being able to drive over
-and look at a sample before committing is worth something real. At global scope
-importing is the premise rather than a penalty, so an overseas supplier is no
-longer marked down for being overseas. The choice is yours and not inferred: it
-shapes the search queries, the Places region, and the ranking.
-
-Quotes are normalised before comparison, so a vendor quoting `bottle + pump +
-cap = Rp 12,000` and one quoting `8,000 / 2,500 / 1,500` compare as equal. A
-vendor who has not priced every requested component is reported as
-not-comparable rather than as cheapest.
-
-## Gmail integration
-
-`users.watch` points Gmail at a Pub/Sub topic. A supplier replies at 2am, Gmail
-pushes a historyId, `/webhooks/gmail` pulls the new message, matches it to the
-thread that asked for it, and the mission resumes. No polling, no open browser.
-
-**What actually runs today is IMAP.** The Gmail API is the better watch — it
-pushes rather than being asked — and it needs an OAuth client, a consent screen
-and a browser sign-in from whoever owns the mailbox. The app password that
-already sends over SMTP also reads over IMAP, so the loop closes on one
-credential and no console work. A Cloud Scheduler job posts to
-`/webhooks/mail/poll` once a minute, which is also what wakes a scaled-to-zero
-service to notice a reply at all.
-
-The trade is real and worth naming: a supplier answering at 2am is picked up on
-the next poll rather than the same second. Set `gmail_push = true` in Terraform
-and run `scripts/gmail_auth.py` to have the push path instead; both satisfy the
-same port, and `/api/health` says which is bound.
-
-Matching a reply to the mission that asked for it is the part that is not
-obvious. Outreach is normally redirected to a test mailbox, so replies arrive
-from that address rather than from the supplier and the sender matches nothing.
-What survives is the mail thread: every message carries a `Message-ID`, and a
-reply carries it back in `In-Reply-To`. Those headers are what a mail client
-uses to draw a conversation, and they are what this uses too.
-
-Threads keep asked/answered/unanswered questions, so a follow-up asks only what
-is still missing.
-
-## Google Cloud, and what a mission costs
-
-Cloud Run (scale to zero), Firestore, Pub/Sub with dead-lettering, Cloud Tasks,
-Vertex AI, Secret Manager, Cloud Logging. All provisioned by OpenTofu in
-`terraform/` — `plan` is the review surface, nothing is created by hand.
-
-A mission over the live web is **around 100 model calls and $0.25–$0.35** on
-`gemini-3.5-flash`: one over eight real suppliers made 98 calls on 562,000
-input tokens and cost $0.29. Measured from the API's own token counts, not
-estimated, and readable per mission at `/api/missions/{id}` → `spend`.
-
-Input tokens dominate, and reading real pages is why. A supplier's website is
-tens of thousands of tokens; the fixtures this was first measured against were
-a paragraph, and put the same mission at $0.09. That gap is the cost of the
-system being real, and it is the reason the ceilings are where they are.
-
-Reaching `SUPPLYME_MAX_USD_PER_MISSION` or `SUPPLYME_MAX_MODEL_CALLS_PER_MISSION` fails
-the mission with a reason rather than spending more, and that failure is
-deliberately **not retried** — retrying is the thing the cap exists to prevent.
-The ADK research loop is capped at 12 calls against ADK's default of 500, which
-was the largest unattended-spend risk in the system. Thinking tokens are billed
-as output, so the fast tier runs with a budget of zero; that alone cut cost per
-call by about 60%.
-
-There is no zero-spend mode: every mission reads the live web and calls Gemini,
-so the caps are what bounds it rather than a switch.
-**[docs/COST.md](docs/COST.md)** has the measurements and every guard.
-
-## Security
-
-- Untrusted content is delimited, labelled as data, and injection phrasings are
-  defanged before the model sees it (`app/security/sanitize.py`).
-- Structured output only. There is no free-form channel from a supplier's text
-  to an action.
-- Least privilege, enforced by the agent tool allowlist above.
-- Secrets in Secret Manager; nothing reaches the browser; the console proxies
-  server-side so no API credential is ever in client JavaScript.
-- Every external action requires an idempotency reservation before it runs.
-
-## Run it
-
-**There is one mode and it is the real one.** Every provider is the live
-service or the process refuses to start, naming the variable that is missing —
-so a mission either read the real web, queried real business listings, called
-Gemini and wrote to a real mailbox, or it never began. Nothing here can produce
-a convincing demonstration of suppliers that do not exist.
-
-The one safety valve is `SUPPLYME_MAIL_REDIRECT_TO`. The addresses in a mission
-belong to real businesses, read off their real websites, and the distance
-between a good demonstration and an apology is one environment variable. Set it
-to a mailbox you own; every message really sends, and says at the top who it
-would have reached.
+### 1. Clone and configure
 
 ```bash
-./run.sh            # installs what is missing, then starts the API and console
-./run.sh mission    # one whole mission in the terminal, start to finish
-./run.sh mail       # read the mailbox now instead of waiting for the poll
-./run.sh test       # 349 tests, ~55s
-./run.sh status     # what is running, and what it has spent
-./run.sh stop
+git clone <repository-url>
+cd vendor-discovery
+cp backend/.env.example backend/.env
+# Edit backend/.env with your project and credentials
 ```
 
-It needs Python 3.12 or 3.13 and Node 20+, and nothing else.
+### 2. Environment configuration
 
-For real Gemini: set `SUPPLYME_PROJECT_ID` in `backend/.env`, run `gcloud auth
-application-default login`, then `./run.sh live`. It refuses to start if either
-is missing rather than failing halfway through a mission. Run
-`backend/scripts/check_models.py` first to see which models your project can
-actually reach, and from where.
+The minimum that starts a real mission:
 
-**[docs/LOCAL.md](docs/LOCAL.md)** has the walkthrough, the full environment
-variable reference, and what to do when something breaks.
+```env
+SUPPLYME_PROJECT_ID=your-gcp-project
+SUPPLYME_VERTEX_LOCATION=global
+SUPPLYME_MAPS_API_KEY=your_places_key
 
-## Deploy it
+# The mailbox, in both directions — one Gmail app password
+SUPPLYME_SMTP_USER=you@gmail.com
+SUPPLYME_SMTP_PASSWORD=your_app_password
+
+# The one safety valve. Set it.
+SUPPLYME_MAIL_REDIRECT_TO=you@gmail.com
+```
+
+> ⚠️ **The addresses in a mission belong to real businesses**, read off their
+> real websites, and the distance between a good demonstration and an apology is
+> one environment variable. Set `SUPPLYME_MAIL_REDIRECT_TO` to a mailbox you own:
+> every message really sends, and says at the top who it would have reached.
+
+Then confirm which models your project can actually reach — reachability is a
+property of the project *and* the location, not of the model name:
+
+```bash
+backend/scripts/check_models.py --project YOUR_PROJECT --location global
+```
+
+### 3. Run the system
+
+`./run.sh` installs what is missing, then starts both services.
+
+```bash
+./run.sh            # API on :8080, console on :3000
+./run.sh mission    # one whole mission in the terminal, start to finish
+./run.sh mail       # read the mailbox now instead of waiting for the poll
+./run.sh test       # 346 tests, ~55s, no network
+./run.sh status     # what is running, and what it has spent
+./run.sh stop
+./run.sh clean      # build caches only — never source or .env
+```
+
+### 4. Access the console
+
+Open **http://localhost:3000**, describe a product — *"500 × 50ml EDP,
+Indonesia, premium packaging, minimize first-batch risk"* — and watch the supply
+chain, suppliers, evidence and emails fill in live.
+
+`GET /api/health` names every adapter actually bound, and which model resolved.
+
+## 📖 Documentation
+
+| Doc | What it covers |
+| --- | --- |
+| **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Event table, Firestore collections, why the orchestrator owns durability, the dedup key |
+| **[docs/LOCAL.md](docs/LOCAL.md)** | Full walkthrough, complete environment variable reference, and what to do when something breaks |
+| **[docs/COST.md](docs/COST.md)** | Measured spend per mission and every guard that bounds it |
+| **[docs/SECRETS.md](docs/SECRETS.md)** | Where credentials live and how they reach Cloud Run |
+| **[docs/DEMO.md](docs/DEMO.md)** | The demonstration script |
+| **[backend/README.md](backend/README.md)** | Backend layout and running it without the console |
+
+## 🔧 Environment Variables
+
+All `SUPPLYME_`-prefixed, read in exactly one place — `app/config.py`. A missing
+required one is a startup failure, not a fallback.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SUPPLYME_PROJECT_ID` | — | Google Cloud project for Vertex AI and Firestore |
+| `SUPPLYME_MAPS_API_KEY` | — | Google Places. **Required** |
+| `SUPPLYME_SMTP_USER` / `SUPPLYME_SMTP_PASSWORD` | — | Real mail in both directions, no OAuth client needed |
+| `SUPPLYME_MAIL_REDIRECT_TO` | — | Send every message here instead of to the supplier. **Use it** |
+| `SUPPLYME_VERTEX_LOCATION` | `global` | Where Vertex serves the model. Gemini 3.x answers from `global`; a named region 404s |
+| `SUPPLYME_LOCATION` | `us-central1` | Region for Cloud Tasks and friends. Must be a real region — Cloud Tasks rejects `global` |
+| `SUPPLYME_USE_CLOUD_INFRA` | `false` | Firestore / Pub/Sub / Cloud Tasks vs the in-process store, bus and scheduler |
+| `SUPPLYME_APPROVAL_POLICY` | `external` | `autonomous` \| `external` \| `strict` |
+| `SUPPLYME_SEARCH_API_KEY` / `SUPPLYME_SEARCH_ENGINE_ID` | — | Programmable Search; unset falls back to Gemini grounding |
+| `SUPPLYME_REASONING_MODEL` / `SUPPLYME_FAST_MODEL` | resolved | Empty = newest reachable model on the ladder |
+| `SUPPLYME_MAX_USD_PER_MISSION` | `1.00` | Hard stop — the mission fails with a reason rather than spending more |
+| `SUPPLYME_MAX_MODEL_CALLS_PER_MISSION` | `300` | Hard stop. A real mission over 8 suppliers uses about 100 |
+| `SUPPLYME_MAX_RESEARCH_LLM_CALLS` | `12` | Ceiling on one ADK tool loop — ADK's own default is 500 |
+| `SUPPLYME_MAX_CONCURRENT_RESEARCH` | `3` | Caps the widest fan-out so a mission cannot rate-limit itself |
+| `SUPPLYME_FAST_THINKING_BUDGET` | `0` | Thinking is billed as output and buys nothing on extraction |
+
+The complete table is in **[docs/LOCAL.md](docs/LOCAL.md)**.
+
+## ☁️ Deployment
+
+Everything is provisioned by OpenTofu — `plan` is the review surface, nothing is
+created by hand.
 
 ```bash
 cd terraform
@@ -345,62 +310,123 @@ tofu apply
 ```
 
 `scripts/deploy.sh PROJECT_ID` does the same thing and stops at the plan, after
-building both images and running the tests. Two Cloud Run services come out of
-it: the API, and the console that proxies to it. `tofu output console_url` is
-the link to open; `tofu output next_steps` is what to do after that.
+building both images and running the tests.
 
-## Testing
+Two Cloud Run services come out of it — the API, and the console that proxies to
+it. `tofu output console_url` is the link to open; `tofu output next_steps` is
+what to do after that.
+
+### 📬 Gmail integration
+
+Two paths satisfy the same port, and `/api/health` says which is bound:
+
+| Path | How it works | Trade |
+| --- | --- | --- |
+| **IMAP poll** *(what runs today)* | Cloud Scheduler posts to `/webhooks/mail/poll` once a minute; the same app password that sends also reads | A supplier answering at 2am is picked up on the next poll, not the same second |
+| **Gmail push** | `users.watch` points Gmail at a Pub/Sub topic; `/webhooks/gmail` pulls the new message and the mission resumes | Needs an OAuth client, a consent screen, and a browser sign-in from the mailbox owner |
+
+Set `gmail_push = true` in Terraform and run `backend/scripts/gmail_auth.py` to
+use the push path instead.
+
+## 💰 Cost
+
+A mission over the live web is **around 100 model calls and $0.25–$0.35** on
+`gemini-3.5-flash`. One run over eight real suppliers made 98 calls on 562,000
+input tokens and cost **$0.29** — measured from the API's own token counts, not
+estimated.
+
+Input tokens dominate, and reading real pages is why: a supplier's website is
+tens of thousands of tokens where a fixture was a paragraph.
+
+| Guard | Value | Effect |
+| --- | --- | --- |
+| Spend ceiling | `$1.00` / mission | Fails the mission with a reason, and is deliberately **not retried** |
+| Model calls | `300` / mission | Same |
+| ADK research loop | `12` calls | Against ADK's default of 500 — the largest unattended-spend risk in the system |
+| Fast-tier thinking | `0` tokens | Thinking is billed as output; this alone cut cost per call ~60% |
+| Places queries | `1` / supply-chain node | The priciest single call the system makes |
+
+There is no zero-spend mode: every mission reads the live web and calls Gemini,
+so the caps are what bounds it rather than a switch. **[docs/COST.md](docs/COST.md)**
+has the measurements and every guard.
+
+## 🔐 Security & Privacy
+
+- **Prompt-injection defence** — untrusted content is delimited, labelled as data, and injection phrasings defanged before the model sees it (`app/security/sanitize.py`)
+- **Structured output only** — there is no free-form channel from a supplier's text to an action
+- **Least privilege, executed** — the agent tool allowlist runs on every invocation rather than describing intent
+- **Secrets in Secret Manager** — nothing reaches the browser; the console proxies server-side, so no API credential is ever in client JavaScript
+- **Idempotency reservations** — every external action reserves before it runs, keyed on `mission + vendor + action + version`
+
+## 📖 Usage Guide
+
+### Running a mission
+
+1. **State the objective** — quantity, product, market, priorities. *"500 × 50ml EDP, Indonesia, premium packaging, minimize first-batch risk"*
+2. **Choose the logistics scope** — a named city, a country, or anywhere. This shapes the search queries, the Places region, and the ranking
+3. **Watch the supply chain appear** — the product is decomposed into the components it needs, and each is searched in parallel
+4. **Review the evidence** — click any fact to see the verbatim excerpt, the URL, and when it was retrieved
+5. **Approve outreach** — under the default `external` policy, the first email to each supplier waits for you
+6. **Close the tab** — replies arrive hours or days later and resume the mission on their own
+7. **Read the recommendation** — a supply network with a sentence behind every score, and the open risks named
+
+### Console features
+
+- **Live mission timeline** — every event as it is persisted
+- **Supplier cards** — provenance state on each fact, evidence drawer behind each one
+- **Conflict view** — what the website said, what the email said, and how it was resolved
+- **Communications** — every thread, with asked / answered / unanswered questions
+- **Adjustable weights** — `PUT /api/missions/{id}/weights` re-ranks without re-researching
+
+### Key API endpoints
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/missions` | Start a mission |
+| `GET /api/missions/{id}` | Status, spend, and the mission brief |
+| `GET /api/missions/{id}/vendors` | Suppliers with scores and provenance |
+| `GET /api/missions/{id}/evidence` | Every claim, source and excerpt |
+| `GET /api/missions/{id}/recommendation` | The final supply network |
+| `POST /api/approvals/{id}` | Approve or deny an outbound action |
+| `GET /api/health` | Which adapters and model are actually bound |
+| `POST /events/pubsub` · `/events/task` · `/webhooks/gmail` · `/webhooks/mail/poll` | Machine entry points |
+
+## 🧪 Testing
 
 ```bash
-.venv/bin/python -m pytest -q     # 349 tests, ~55 seconds, no network
+./run.sh test
+# or
+cd backend && .venv/bin/python -m pytest -q     # 346 tests, ~55 seconds, no network
 ```
 
-- **Unit** — evidence classification, identity resolution, quote normalisation,
-  conflict detection, scoring, number parsing, policy, injection defence, and
-  the ADK tool guard.
-- **Integration** — the whole workflow over the real event bus, plus the HTTP
-  surface with a `TestClient`.
-- **Failure** — every message delivered twice, search outage, Maps timeout,
-  blocked pages, model timeout, rate limiting, Cloud Run restart mid-mission,
-  events for records that no longer exist, and a supplier reply containing a
-  prompt-injection payload.
+- **Unit** — evidence classification, identity resolution, quote normalisation, conflict detection, scoring, number parsing, policy, injection defence, and the ADK tool guard
+- **Integration** — the whole workflow over the real event bus, plus the HTTP surface with a `TestClient`
+- **Failure** — every message delivered twice, search outage, Maps timeout, blocked pages, model timeout, rate limiting, Cloud Run restart mid-mission, events for records that no longer exist, and a supplier reply carrying a prompt-injection payload
 
 The redelivery test runs an entire mission at a 100% duplicate rate and asserts
 no supplier is emailed twice.
 
-The suite drives whole missions against test doubles, which live in `tests/`
-and are reachable from nowhere in `app/`. That distinction is the point: a
-double lets the failure cases be provoked on demand — a supplier who never
-answers, one whose site contradicts their quote, every message delivered twice —
-while the product itself has nothing to fall back to. A missing API key stops
-the process rather than substituting invented suppliers, and `/api/health` names
-every adapter actually bound.
+The suite drives whole missions against test doubles, which live in `tests/` and
+are reachable from nowhere in `app/`. That distinction is the point: a double
+lets failures be provoked on demand — a supplier who never answers, one whose
+site contradicts their quote — while the product itself has nothing to fall back
+to.
 
-## Limitations
+## ⚠️ Limitations
 
-- **Model reachability is per project and per location.** This runs on
-  `gemini-3.5-flash`, which on Vertex answers from the `global` endpoint and
-  404s from `us-central1` — with nothing in the error to suggest it exists
-  elsewhere. `scripts/check_models.py --project X --location Y` reports what a
-  given project resolves to, and the ladder in `app/config.py` picks the newest
-  that answers. Which is why the model id is configuration, not a constant.
-  There are two location settings for the same reason: Cloud Tasks rejects
-  `global`, so `SUPPLYME_VERTEX_LOCATION` and `SUPPLYME_LOCATION` cannot be one value.
-- **The Gmail inbound path has not been run against a live mailbox.** It is
-  implemented and the workflow half is exercised on every run; the OAuth half
-  needs a consent screen this project has not set up. See Gmail integration.
-- Live web research is only as good as what suppliers publish, which in this
-  industry is often a phone number and a WhatsApp link.
-- Currencies are never converted. Quotes in different currencies are reported
-  side by side and excluded from the price comparison rather than guessed at.
-- The console polls every two seconds rather than streaming.
-- One vertical's vocabulary (perfume) is encoded in the quote normaliser's
-  component aliases. Another vertical needs its own alias table.
+- **Model reachability is per project and per location.** `gemini-3.5-flash` answers from Vertex's `global` endpoint and 404s from `us-central1`, with nothing in the error to suggest it exists elsewhere. Hence the ladder in `app/config.py`, `scripts/check_models.py`, and two separate location settings — Cloud Tasks rejects `global`
+- **The Gmail inbound path has not been run against a live mailbox.** It is implemented and its workflow half is exercised on every run; the OAuth half needs a consent screen this project has not set up. IMAP is what runs today
+- **Live research is only as good as what suppliers publish** — which in this industry is often a phone number and a WhatsApp link
+- **Currencies are never converted.** Quotes in different currencies are reported side by side and excluded from the price comparison rather than guessed at
+- **The console polls every two seconds** rather than streaming
+- **One vertical's vocabulary is encoded** in the quote normaliser's component aliases. Another vertical needs its own alias table
 
-## Future work
+## 🗺️ Future Work
 
-- Sample tracking: a quotation is not a supplier until a sample arrives.
-- Negotiation memory across missions, so a second product benefits from the
-  first product's relationships.
-- A supplier-side portal, so a supplier answers a structured form once instead
-  of the same eight questions from every buyer.
+- **Sample tracking** — a quotation is not a supplier until a sample arrives
+- **Negotiation memory across missions** — so a second product benefits from the first product's relationships
+- **A supplier-side portal** — so a supplier answers a structured form once instead of the same eight questions from every buyer
+
+---
+
+**Built for buyers who need to know where the number came from.**
