@@ -6,13 +6,14 @@ Only components that exist are drawn here.
 
 ```
                  ┌──────────────────────────────────────────────┐
-   browser ────► │ Next.js console (Cloud Run or local)          │
+   browser ────► │ Next.js console — its own Cloud Run service   │
                  │  proxies /api/* server-side — no credential   │
                  │  ever reaches client JavaScript               │
+                 │  holds run.invoker on the API, nothing else   │
                  └───────────────────┬──────────────────────────┘
-                                     │ HTTPS
+                                     │ HTTPS, as itself
                  ┌───────────────────▼──────────────────────────┐
-                 │ FastAPI on Cloud Run                          │
+                 │ FastAPI — a separate Cloud Run service        │
                  │  /api/*            console reads + decisions  │
                  │  /events/pubsub    Pub/Sub push               │
                  │  /events/task      Cloud Tasks                │
@@ -78,7 +79,8 @@ payload makes a new logical event a new key by construction; only a true
 redelivery, which carries a byte-identical payload, collides.
 
 This is why every emitter that can fire twice for the same vendor passes a
-discriminator: `version=call.id`, `version=quote.id`, `version=f"{thread.id}:followup:{n}"`.
+discriminator: `version=vendor.version`, `version=quote.id`,
+`version=f"{thread.id}:followup:{n}"`.
 
 ## Events
 
@@ -110,7 +112,7 @@ discriminator: `version=call.id`, `version=quote.id`, `version=f"{thread.id}:fol
 ## Firestore collections
 
 `missions` · `supply_chain_nodes` · `vendors` · `evidence` ·
-`brand_relationships` · `email_threads` · `calls` · `quotes` · `conflicts` ·
+`brand_relationships` · `email_threads` · `quotes` · `conflicts` ·
 `approvals` · `recommendations` · `agent_runs` · `idempotency`
 
 Plus `missions/{id}/workflow_events` — the activity timeline, written on every
@@ -122,20 +124,20 @@ proof of action: the console renders it directly and nothing else.
 **Is:** reading the objective, decomposing the product, writing search queries,
 deciding which results are real suppliers, extracting claims from pages,
 judging whether a source supports a brand relationship, drafting emails,
-extracting quotes from messy replies, planning call questions, writing the final
-narrative.
+extracting quotes from messy replies, deciding what a follow-up still needs to
+ask, writing the final narrative.
 
 **Chooses its own path in exactly one place:** vendor research, which runs as a
 Google ADK `LlmAgent` with `search_web`, `read_page`, `query_maps` and
 `search_videos`. Every tool call passes through `before_tool_callback`, which
 calls `policy.check("research", ...)` — so the allowlist is enforced at runtime,
 and the agent that reads attacker-controlled pages provably holds nothing that
-can email, call or spend.
+can email or spend.
 
 **Is not:** deciding what a claim is worth, deciding whether sources conflict,
 deciding what to do about a conflict, computing confidence, computing scores,
-ranking vendors, deciding whether to send or call, deciding when a mission is
-done — or finding a supplier's email address. All of that is deterministic and
+ranking vendors, deciding whether to write to a supplier, deciding when a
+mission is done — or finding a supplier's email address. All of that is deterministic and
 unit-tested; see `app/domain/`.
 
 That last one earns its place there by experience. A supplier the system cannot

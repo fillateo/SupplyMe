@@ -105,8 +105,9 @@ or wait — and no part of that is scripted by the user.
 ## Architecture
 
 ```
-Next.js console ──► Cloud Run (FastAPI)
-                          │
+Cloud Run: console ──► Cloud Run: API (FastAPI)
+ (Next.js, proxies       │
+  /api/* server-side)    │
                     Orchestrator ──► Pub/Sub ──┐
                           │                     │ push
                           │◄────────────────────┘
@@ -311,7 +312,7 @@ variable reference, and what to do when something breaks.
 
 ```bash
 cd terraform
-cp terraform.tfvars.example terraform.tfvars   # set project_id and image
+cp terraform.tfvars.example terraform.tfvars   # set project_id and both images
 cp backend.hcl.example backend.hcl             # set your state bucket
 tofu init -backend-config=backend.hcl
 tofu fmt && tofu validate && tofu plan         # review before applying
@@ -319,7 +320,9 @@ tofu apply
 ```
 
 `scripts/deploy.sh PROJECT_ID` does the same thing and stops at the plan, after
-building the image and running the tests. Then `tofu output next_steps`.
+building both images and running the tests. Two Cloud Run services come out of
+it: the API, and the console that proxies to it. `tofu output console_url` is
+the link to open; `tofu output next_steps` is what to do after that.
 
 ## Testing
 
