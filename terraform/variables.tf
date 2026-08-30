@@ -14,6 +14,11 @@ variable "image" {
   description = "Fully qualified container image for the service."
 }
 
+variable "console_image" {
+  type        = string
+  description = "Fully qualified container image for the Next.js console."
+}
+
 variable "service_name" {
   type    = string
   default = "vendor-discovery"

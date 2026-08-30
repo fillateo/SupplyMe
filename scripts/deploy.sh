@@ -17,6 +17,7 @@ VERTEX_LOCATION="${VERTEX_LOCATION:-global}"
 SERVICE="vendor-discovery"
 TAG="$(git rev-parse --short HEAD 2>/dev/null || date +%s)"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${SERVICE}/api:${TAG}"
+CONSOLE_IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${SERVICE}/console:${TAG}"
 
 cd "$(dirname "$0")/.."
 
@@ -32,6 +33,10 @@ echo "==> Building ${IMAGE}"
 gcloud builds submit backend --project "${PROJECT}" --tag "${IMAGE}" --quiet
 
 echo
+echo "==> Building ${CONSOLE_IMAGE}"
+gcloud builds submit frontend --project "${PROJECT}" --tag "${CONSOLE_IMAGE}" --quiet
+
+echo
 echo "==> Planning"
 cd terraform
 if [ ! -f backend.hcl ]; then
@@ -42,7 +47,8 @@ tofu init -backend-config=backend.hcl -upgrade
 tofu fmt -check
 tofu validate
 tofu plan -var "project_id=${PROJECT}" -var "region=${REGION}" \
-  -var "vertex_location=${VERTEX_LOCATION}" -var "image=${IMAGE}"
+  -var "vertex_location=${VERTEX_LOCATION}" -var "image=${IMAGE}" \
+  -var "console_image=${CONSOLE_IMAGE}"
 
 cat <<EOF
 
@@ -50,9 +56,11 @@ Plan written above. Nothing has been applied.
 
   cd terraform
   tofu apply -var project_id=${PROJECT} -var region=${REGION} \
-    -var vertex_location=${VERTEX_LOCATION} -var image=${IMAGE}
+    -var vertex_location=${VERTEX_LOCATION} -var image=${IMAGE} \
+    -var console_image=${CONSOLE_IMAGE}
 
-Then wire the service's own URL so it can build webhook callbacks:
+Then:
 
+  tofu output console_url   # the link to open
   tofu output next_steps
 EOF

@@ -3,6 +3,11 @@ output "service_url" {
   description = "Base URL of the API. The console proxies to this."
 }
 
+output "console_url" {
+  value       = google_cloud_run_v2_service.console.uri
+  description = "The operations console. This is the link to open, and to put in a demo."
+}
+
 output "workflow_topic" {
   value = google_pubsub_topic.workflow.name
 }
