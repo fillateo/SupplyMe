@@ -134,6 +134,14 @@ class CostMeter:
             )
 
     def seed(self, mission_id: str, usage: Usage) -> None:
-        """Restore a mission's totals after a process restart."""
+        """Restore a mission's totals after a process restart.
+
+        Copied, not adopted. `record` mutates the stored Usage in place, so
+        keeping the caller's object would make their copy climb with the meter —
+        and a caller holding it as a "what I have already written" marker would
+        then never see a difference to write.
+        """
         with self._lock:
-            self._by_mission[mission_id] = usage
+            self._by_mission[mission_id] = Usage(
+                usage.calls, usage.input_tokens, usage.output_tokens, usage.usd
+            )

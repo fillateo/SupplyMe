@@ -93,6 +93,9 @@ class Orchestrator:
         self.meter = getattr(providers, "meter", None)
         self.agents = agents
         self.stats: dict[str, int] = {}
+        #: What this process has already written onto each mission's record, so
+        #: what it writes next is the difference. See _persist_spend.
+        self._persisted_spend: dict[str, Any] = {}
         #: Bounds the widest fan-out in the system. See Settings.max_concurrent_research.
         self.research_slots = asyncio.Semaphore(self.settings.max_concurrent_research)
 
@@ -180,31 +183,52 @@ class Orchestrator:
             return
         from ..domain.cost import Usage
 
-        self.meter.seed(
-            mission_id,
-            Usage(
-                calls=mission.model_calls,
-                input_tokens=mission.input_tokens,
-                output_tokens=mission.output_tokens,
-                usd=mission.estimated_cost_usd,
-            ),
+        already = Usage(
+            calls=mission.model_calls,
+            input_tokens=mission.input_tokens,
+            output_tokens=mission.output_tokens,
+            usd=mission.estimated_cost_usd,
         )
+        self.meter.seed(mission_id, already)
+        # Seeded, therefore already on the record: this process owes the mission
+        # only what it goes on to spend from here.
+        self._persisted_spend[mission_id] = already
 
     async def _persist_spend(self, mission_id: str) -> None:
-        """Write the mission's model spend onto its record."""
+        """Add what this process has spent since last time onto the record.
+
+        A delta inside the transaction, not an absolute. Cloud Run runs several
+        instances of a mission at once and each meter counts only its own calls,
+        so writing absolutes made the record whatever the last writer happened
+        to hold: two instances that had each made fifty calls wrote fifty, and
+        the mission reported half of what it spent. Half is the dangerous
+        direction — the cap reads this number back after a scale-to-zero.
+        """
         if self.meter is None or not mission_id:
             return
+        from ..domain.cost import Usage
+
         usage = self.meter.usage(mission_id)
-        if usage.calls == 0:
+        written = self._persisted_spend.get(mission_id) or Usage()
+        delta = Usage(
+            calls=usage.calls - written.calls,
+            input_tokens=usage.input_tokens - written.input_tokens,
+            output_tokens=usage.output_tokens - written.output_tokens,
+            usd=usage.usd - written.usd,
+        )
+        if delta.calls <= 0:
             return
 
         def _apply(mission: Mission) -> None:
-            mission.model_calls = usage.calls
-            mission.input_tokens = usage.input_tokens
-            mission.output_tokens = usage.output_tokens
-            mission.estimated_cost_usd = round(usage.usd, 6)
+            mission.model_calls += delta.calls
+            mission.input_tokens += delta.input_tokens
+            mission.output_tokens += delta.output_tokens
+            mission.estimated_cost_usd = round(
+                mission.estimated_cost_usd + delta.usd, 6
+            )
 
-        await self.repo.mutate(Mission, mission_id, _apply)
+        if await self.repo.mutate(Mission, mission_id, _apply) is not None:
+            self._persisted_spend[mission_id] = usage
 
     async def emit(self, event: Event) -> None:
         if not event.mission_id:

@@ -262,7 +262,7 @@ backend/scripts/check_models.py --project YOUR_PROJECT --location global
 ./run.sh            # API on :8080, console on :3000
 ./run.sh mission    # one whole mission in the terminal, start to finish
 ./run.sh mail       # read the mailbox now instead of waiting for the poll
-./run.sh test       # 352 tests, ~55s, no network
+./run.sh test       # 354 tests, ~55s, no network
 ./run.sh status     # what is running, and what it has spent
 ./run.sh stop
 ./run.sh clean      # build caches only — never source or .env
@@ -413,7 +413,7 @@ has the measurements and every guard.
 ```bash
 ./run.sh test
 # or
-cd backend && .venv/bin/python -m pytest -q     # 352 tests, ~55 seconds, no network
+cd backend && .venv/bin/python -m pytest -q     # 354 tests, ~55 seconds, no network
 ```
 
 - **Unit** — evidence classification, identity resolution, quote normalisation, conflict detection, scoring, number parsing, policy, injection defence, and the ADK tool guard

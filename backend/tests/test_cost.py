@@ -236,6 +236,67 @@ class TestSpendSurvivesAProcessBoundary:
         finally:
             await runtime.stop()
 
+    async def test_two_instances_spending_at_once_add_up_on_the_record(self):
+        """Two meters, one mission, one document.
+
+        Each instance knows only its own calls. If each writes its own total,
+        the record ends up holding one instance's number instead of the sum —
+        and that is the number the next cold start reads its cap back from, so
+        the error is in the direction that lets a mission overspend.
+        """
+        from app.config import ApprovalPolicy, Settings
+        from app.workflow.orchestrator import Orchestrator
+
+        from .conftest import OBJECTIVE
+        from .fixtures import build_providers, build_runtime
+
+        settings = Settings(approval_policy=ApprovalPolicy.AUTONOMOUS)
+        runtime = build_runtime(settings)
+        await runtime.start(concurrency=4)
+        try:
+            mission = await runtime.create_mission(OBJECTIVE)
+
+            # A second Cloud Run instance: its own meter, the same documents.
+            elsewhere = build_providers(settings)
+            elsewhere.store = runtime.providers.store
+            second = Orchestrator(elsewhere, runtime.orchestrator.agents)
+
+            for instance in (runtime.orchestrator, second):
+                await instance._restore_spend(mission.id)
+                for _ in range(50):
+                    instance.meter.record(mission.id, "gemini-3.5-flash", 1_000, 100)
+                await instance._persist_spend(mission.id)
+
+            record = await runtime.providers.store.get("missions", mission.id)
+            assert record["model_calls"] == 100, "wrote one instance's total, not the mission's"
+            assert record["input_tokens"] == 100_000
+        finally:
+            await runtime.stop()
+
+    async def test_persisting_twice_does_not_count_the_same_calls_again(self):
+        """The write is a delta, so it has to know what it already wrote."""
+        from app.config import ApprovalPolicy, Settings
+
+        from .conftest import OBJECTIVE
+        from .fixtures import build_runtime
+
+        settings = Settings(approval_policy=ApprovalPolicy.AUTONOMOUS)
+        runtime = build_runtime(settings)
+        await runtime.start(concurrency=4)
+        try:
+            mission = await runtime.create_mission(OBJECTIVE)
+            orchestrator = runtime.orchestrator
+            orchestrator.meter.record(mission.id, "gemini-3.5-flash", 1_000, 100)
+
+            await orchestrator._persist_spend(mission.id)
+            await orchestrator._persist_spend(mission.id)
+            await orchestrator._persist_spend(mission.id)
+
+            record = await runtime.providers.store.get("missions", mission.id)
+            assert record["model_calls"] == 1
+        finally:
+            await runtime.stop()
+
     async def test_the_cap_counts_the_whole_mission_not_this_process(self):
         """Otherwise the ceiling is per instance, and four instances is four
         times the budget nobody agreed to."""
