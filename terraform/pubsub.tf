@@ -18,12 +18,55 @@ resource "google_pubsub_topic" "dead_letter" {
   depends_on = [google_project_service.enabled]
 }
 
+# A topic with no subscription is a black hole: Pub/Sub retains messages per
+# subscription, so publishing to a topic nobody subscribes to drops them on the
+# floor. A dead-letter topic in that state parks nothing — it deletes. This is
+# what makes a parked event survivable, and it is a pull subscription because
+# what you do with a dead event is look at it, not serve it.
+resource "google_pubsub_subscription" "dead_letter" {
+  name  = "${google_pubsub_topic.dead_letter.name}-sub"
+  topic = google_pubsub_topic.dead_letter.id
+
+  # The longest Pub/Sub allows. A parked event is evidence of a bug, and the
+  # bug may not be noticed until Monday.
+  message_retention_duration = "604800s" # 7 days
+  retain_acked_messages      = false
+
+  expiration_policy {
+    ttl = "" # never expire
+  }
+}
+
+# Dead-lettering is done BY Pub/Sub, not by this service, so it is the Pub/Sub
+# service agent that needs the rights — publish to the parking topic, and ack
+# the message it is moving off the source subscription. Without both, the
+# `dead_letter_policy` below is silently inert: delivery attempts are never
+# counted out, and the message is retried forever instead of parked. Nothing in
+# the console says so, which is why this is spelled out here.
+locals {
+  pubsub_agent = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-pubsub.iam.gserviceaccount.com"
+}
+
+resource "google_pubsub_topic_iam_member" "dead_letter_publisher" {
+  topic  = google_pubsub_topic.dead_letter.name
+  role   = "roles/pubsub.publisher"
+  member = local.pubsub_agent
+}
+
+resource "google_pubsub_subscription_iam_member" "workflow_dead_letter_subscriber" {
+  subscription = google_pubsub_subscription.workflow_push.name
+  role         = "roles/pubsub.subscriber"
+  member       = local.pubsub_agent
+}
+
 resource "google_pubsub_subscription" "workflow_push" {
   name  = "${var.service_name}-workflow-push"
   topic = google_pubsub_topic.workflow.id
 
-  # Generous: a research handler makes several model calls before it acks.
-  ack_deadline_seconds = 300
+  # A research handler makes several model calls before it acks. This is the
+  # maximum Pub/Sub allows, and it sits above the Cloud Run request timeout on
+  # purpose — see the ordering comment in run.tf.
+  ack_deadline_seconds = 600
 
   push_config {
     # A push subscription cannot set request headers, so the shared secret the
@@ -91,6 +134,26 @@ resource "google_pubsub_subscription" "gmail_push" {
       service_account_email = google_service_account.push.email
     }
   }
+
+  retry_policy {
+    minimum_backoff = "10s"
+    maximum_backoff = "600s"
+  }
+
+  # Same reasoning as the workflow subscription: a notification that fails five
+  # times is a bug. Retrying it forever buries the one that would have worked.
+  dead_letter_policy {
+    dead_letter_topic     = google_pubsub_topic.dead_letter.id
+    max_delivery_attempts = 5
+  }
+}
+
+resource "google_pubsub_subscription_iam_member" "gmail_dead_letter_subscriber" {
+  count = var.gmail_push ? 1 : 0
+
+  subscription = google_pubsub_subscription.gmail_push[0].name
+  role         = "roles/pubsub.subscriber"
+  member       = local.pubsub_agent
 }
 
 # Delayed work: follow-ups, non-response timeouts, retry backoff.

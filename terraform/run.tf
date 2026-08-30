@@ -31,6 +31,19 @@ resource "google_cloud_run_v2_service" "api" {
 
     max_instance_request_concurrency = 20
 
+    # Three timeouts govern one event, and they have to be ordered or none of
+    # them protects anything:
+    #
+    #   request timeout (540s)  <  Pub/Sub ack deadline (600s)  <=  orchestrator
+    #                                                               lease (600s)
+    #
+    # Cloud Run kills a stuck handler first, so by the time Pub/Sub gives up and
+    # redelivers, the previous attempt is provably dead and the lease has just
+    # expired for the retry to claim. Left at the defaults these were all 300s,
+    # which put a redelivery in a race with the attempt it was replacing — and a
+    # research handler is several model calls long, so the race was reachable.
+    timeout = "540s"
+
     containers {
       image = var.image
 

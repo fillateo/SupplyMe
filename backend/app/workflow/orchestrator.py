@@ -52,7 +52,15 @@ def on(event_type: EventType) -> Callable[[Handler], Handler]:
 
 
 #: How long a handler may hold an event's key before another worker may retry it.
-LEASE_SECONDS = 300.0
+#:
+#: Tied to the Pub/Sub ack deadline (600s, see terraform/pubsub.tf), not chosen
+#: independently. It must not be shorter, or a redelivery arriving on the
+#: deadline would claim a key whose first attempt is still running and do the
+#: work twice; it must not be much longer, or a worker that really did die
+#: leaves the event unclaimable until well after Pub/Sub has given up retrying
+#: it. Cloud Run kills the request at 540s, so at 600s the previous attempt is
+#: dead and the key is free at the moment the retry needs it.
+LEASE_SECONDS = 600.0
 #: Retry backoff, in seconds, indexed by attempt.
 BACKOFF = (5.0, 15.0, 60.0, 300.0, 900.0)
 #: A rate limit is a queueing problem: back off much harder than for a bug,
