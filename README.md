@@ -315,7 +315,7 @@ would have reached.
 ./run.sh            # installs what is missing, then starts the API and console
 ./run.sh mission    # one whole mission in the terminal, start to finish
 ./run.sh mail       # read the mailbox now instead of waiting for the poll
-./run.sh test       # 347 tests, ~55s
+./run.sh test       # 349 tests, ~55s
 ./run.sh status     # what is running, and what it has spent
 ./run.sh stop
 ```
@@ -351,7 +351,7 @@ the link to open; `tofu output next_steps` is what to do after that.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest -q     # 347 tests, ~55 seconds, no network
+.venv/bin/python -m pytest -q     # 349 tests, ~55 seconds, no network
 ```
 
 - **Unit** — evidence classification, identity resolution, quote normalisation,

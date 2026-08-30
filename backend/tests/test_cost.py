@@ -196,3 +196,55 @@ class TestVendorCeiling:
         settings = Settings()
         # 8 per category across ~7 nodes would be 56 research loops.
         assert settings.max_vendors_per_mission < settings.max_vendors_per_category * 7
+
+
+class TestSpendSurvivesAProcessBoundary:
+    """The meter is in memory; a mission is not.
+
+    Cloud Run scales to zero between events and runs several instances at once,
+    so a mission routinely spans processes that have never met. Each one used to
+    start counting from zero, which meant the cap bounded what one instance
+    spent rather than what the mission spent — and a mission that had made a
+    hundred calls reported two, because the totals written back were whichever
+    instance wrote last.
+    """
+
+    async def test_a_fresh_process_picks_up_what_the_mission_already_spent(self):
+        from app.config import ApprovalPolicy, Settings
+
+        from .conftest import OBJECTIVE
+        from .fixtures import build_runtime
+
+        settings = Settings(approval_policy=ApprovalPolicy.AUTONOMOUS)
+        runtime = build_runtime(settings)
+        await runtime.start(concurrency=4)
+        try:
+            mission = await runtime.create_mission(OBJECTIVE)
+            # Stand in for a previous instance that spent a great deal.
+            mission.model_calls = 97
+            mission.input_tokens = 560_000
+            mission.output_tokens = 22_000
+            mission.estimated_cost_usd = 0.29
+            await runtime.repo.save(mission)
+
+            assert runtime.providers.meter.usage(mission.id).calls == 0
+            await runtime.orchestrator._restore_spend(mission.id)
+
+            restored = runtime.providers.meter.usage(mission.id)
+            assert restored.calls == 97
+            assert restored.usd == pytest.approx(0.29)
+        finally:
+            await runtime.stop()
+
+    async def test_the_cap_counts_the_whole_mission_not_this_process(self):
+        """Otherwise the ceiling is per instance, and four instances is four
+        times the budget nobody agreed to."""
+        from app.domain.cost import BudgetExceeded, CostMeter, Usage
+
+        meter = CostMeter(max_calls_per_mission=100, max_usd_per_mission=1.0)
+        meter.seed("m", Usage(calls=99, input_tokens=1, output_tokens=1, usd=0.30))
+        meter.check("m")  # 99 is under the cap
+
+        meter.record("m", "gemini-3.5-flash", 10, 10)
+        with pytest.raises(BudgetExceeded, match="100-model-call cap"):
+            meter.check("m")

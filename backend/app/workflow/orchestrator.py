@@ -111,6 +111,7 @@ class Orchestrator:
             )
             return
 
+        await self._restore_spend(event.mission_id)
         await self._record(event, status="started")
         started = time.perf_counter()
         try:
@@ -146,6 +147,40 @@ class Orchestrator:
 
         for next_event in next_events:
             await self.emit(next_event)
+
+    async def _restore_spend(self, mission_id: str) -> None:
+        """Teach this process what the mission has already spent elsewhere.
+
+        The meter lives in memory, and a mission does not. Cloud Run scales to
+        zero between events and runs several instances at once, so a mission
+        routinely spans processes that have never met — and each one started
+        counting from zero. The cap then bounded what one instance spent rather
+        than what the mission spent, and the totals written back onto the record
+        were whichever instance wrote last, which is how a mission that had made
+        a hundred calls came to report two.
+
+        Read once per mission per process: the meter is authoritative from then
+        on, and re-reading on every event would spend a document read to learn
+        what it already knows.
+        """
+        if self.meter is None or not mission_id:
+            return
+        if self.meter.usage(mission_id).calls:
+            return
+        mission = await self.repo.load(Mission, mission_id)
+        if mission is None or not mission.model_calls:
+            return
+        from ..domain.cost import Usage
+
+        self.meter.seed(
+            mission_id,
+            Usage(
+                calls=mission.model_calls,
+                input_tokens=mission.input_tokens,
+                output_tokens=mission.output_tokens,
+                usd=mission.estimated_cost_usd,
+            ),
+        )
 
     async def _persist_spend(self, mission_id: str) -> None:
         """Write the mission's model spend onto its record."""
