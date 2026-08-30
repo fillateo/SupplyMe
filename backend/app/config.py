@@ -67,12 +67,19 @@ class Settings(BaseSettings):
     # --- Google Cloud -------------------------------------------------------
     project_id: str = ""
 
-    #: Vertex region for Gemini, which is not the same choice as the region the
-    #: service runs in. Gemini 3.x is served from the `global` endpoint; asking
-    #: a named region for it returns 404 with no hint that the model exists
-    #: somewhere else. Cloud Run, Cloud Tasks and Artifact Registry stay in a
-    #: real region — see terraform/variables.tf.
-    location: str = "global"
+    #: Region for the Google Cloud services this runs on: Cloud Tasks, and
+    #: anything else that takes a location. Must be a real region — Cloud Tasks
+    #: rejects `global` outright, which is how these two settings came to be
+    #: separate in the first place.
+    location: str = "us-central1"
+
+    #: Where Vertex serves the model, which is a different question. Gemini 3.x
+    #: answers from the `global` endpoint and returns 404 from a named region,
+    #: with nothing in the error to suggest it exists elsewhere. Reachability is
+    #: a property of the project and the location together, not of the model
+    #: name: on one project `gemini-3.5-flash` answers from `global` while
+    #: `gemini-2.5-pro` answers from `us-central1`. See scripts/check_models.py.
+    vertex_location: str = "global"
     use_vertex: bool = True
 
     # Model routing: cheap model for extraction/classification, strong model for

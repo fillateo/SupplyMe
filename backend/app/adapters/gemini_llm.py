@@ -109,7 +109,7 @@ async def acquire_model_slot() -> asyncio.Semaphore:
 def _client(settings: Settings) -> genai.Client:
     if settings.use_vertex and settings.project_id:
         return genai.Client(
-            vertexai=True, project=settings.project_id, location=settings.location
+            vertexai=True, project=settings.project_id, location=settings.vertex_location
         )
     return genai.Client(api_key=settings.gemini_api_key or None)
 

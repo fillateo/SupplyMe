@@ -32,7 +32,7 @@ Recommended `.env` for a recorded demo:
 VDS_MODE=demo
 VDS_APPROVAL_POLICY=external      # so the approval gate is visible
 VDS_PROJECT_ID=your-project
-VDS_LOCATION=global               # where Vertex serves Gemini 3.x from
+VDS_VERTEX_LOCATION=global        # where Vertex serves Gemini 3.x from
 VDS_DEMO_SPEEDUP=2000             # a 48h follow-up becomes ~86 seconds
 VDS_DEMO_DUPLICATE_RATE=0.25      # a quarter of events delivered twice
 ```

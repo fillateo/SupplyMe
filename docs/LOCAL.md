@@ -159,8 +159,14 @@ Then in `.env`:
 ```
 VDS_USE_SCRIPTED_MODEL=false
 VDS_PROJECT_ID=your-project
-VDS_LOCATION=global
+VDS_VERTEX_LOCATION=global
 ```
+
+Two location settings, because no single value works for both.
+`VDS_VERTEX_LOCATION` is where the model is served from. `VDS_LOCATION` is
+where the service's own Google Cloud dependencies live, and Cloud Tasks rejects
+`global` as an invalid location — which is how a deployment that resolved
+Gemini perfectly still failed its startup probe.
 
 and restart the API. `/api/health` will show `GeminiLLM`.
 
@@ -236,7 +242,8 @@ have called a Google API it did not call.
 | `VDS_USE_CLOUD_INFRA` | `false` | Firestore/Pub/Sub/Cloud Tasks vs in-process. Independent of `VDS_MODE` |
 | `VDS_APPROVAL_POLICY` | `external` | `autonomous` \| `external` \| `strict` |
 | `VDS_PROJECT_ID` | — | Google Cloud project for Vertex AI and Firestore |
-| `VDS_LOCATION` | `global` | Vertex endpoint. Gemini 3.x is served from `global`; a named region 404s |
+| `VDS_LOCATION` | `us-central1` | Region for Cloud Tasks and friends. Must be a real region — Cloud Tasks rejects `global` |
+| `VDS_VERTEX_LOCATION` | `global` | Where Vertex serves the model. Gemini 3.x answers from `global`; a named region 404s |
 | `VDS_USE_VERTEX` | `true` | false uses the Gemini Developer API and `VDS_GEMINI_API_KEY` instead |
 | `VDS_REASONING_MODEL` | resolved | empty = newest reachable model on the ladder |
 | `VDS_FAST_MODEL` | resolved | cheap model for extraction and classification |

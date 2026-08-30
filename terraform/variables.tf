@@ -56,12 +56,14 @@ variable "vertex_location" {
 
   description = <<-EOT
     Which Vertex endpoint serves the model. Deliberately separate from
-    var.region: Gemini 3.x is served from `global`, and asking a named region
-    for it returns a 404 that does not mention the model exists elsewhere.
+    var.region, and it has to be: Gemini 3.x is served from `global` and
+    returns 404 from a named region, while Cloud Tasks rejects `global` as an
+    invalid location. There is no single value that satisfies both, which is
+    why there are two variables.
 
-    Cloud Run, Cloud Tasks and Artifact Registry still live in var.region.
-    Run backend/scripts/check_models.py to see what a project and location
-    actually resolve to.
+    Cloud Run, Cloud Tasks and Artifact Registry live in var.region. Run
+    backend/scripts/check_models.py to see what a project and location resolve
+    to before changing this.
   EOT
 }
 

@@ -57,10 +57,16 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "VDS_PROJECT_ID"
         value = var.project_id
       }
-      # Not var.region. See variables.tf: the model endpoint and the
-      # service's region are different decisions.
+      # The region the service's own Google Cloud dependencies live in.
+      # Cloud Tasks rejects `global`, so this must stay a real region.
       env {
         name  = "VDS_LOCATION"
+        value = var.region
+      }
+      # Where Vertex serves the model — a different question, and a different
+      # answer. See variables.tf.
+      env {
+        name  = "VDS_VERTEX_LOCATION"
         value = var.vertex_location
       }
       env {

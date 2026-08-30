@@ -353,6 +353,8 @@ have called a Google API it did not call.
   elsewhere. `scripts/check_models.py --project X --location Y` reports what a
   given project resolves to, and the ladder in `app/config.py` picks the newest
   that answers. Which is why the model id is configuration, not a constant.
+  There are two location settings for the same reason: Cloud Tasks rejects
+  `global`, so `VDS_VERTEX_LOCATION` and `VDS_LOCATION` cannot be one value.
 - **The Gmail inbound path has not been run against a live mailbox.** It is
   implemented and the workflow half is exercised on every run; the OAuth half
   needs a consent screen this project has not set up. See Gmail integration.
