@@ -11,6 +11,17 @@
 # to free — and a supplier who answers at 2am is picked up at 2am rather than
 # whenever someone next looks.
 
+# Cloud Scheduler mints the OIDC token as the push identity, which requires
+# permission to impersonate it. Granted explicitly rather than relied on: the
+# default service-agent role has covered this, and a job that cannot mint its
+# token fails by going quiet — ENABLED, schedule elapsing, nothing arriving —
+# which is an expensive silence to diagnose.
+resource "google_service_account_iam_member" "scheduler_can_mint_push_tokens" {
+  service_account_id = google_service_account.push.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:service-${data.google_project.current.number}@gcp-sa-cloudscheduler.iam.gserviceaccount.com"
+}
+
 resource "google_cloud_scheduler_job" "mail_poll" {
   name        = "${var.service_name}-mail-poll"
   description = "Read supplier replies out of the mailbox and resume their missions."
@@ -50,5 +61,6 @@ resource "google_cloud_scheduler_job" "mail_poll" {
   depends_on = [
     google_project_service.enabled,
     google_cloud_run_v2_service_iam_member.push_can_invoke,
+    google_service_account_iam_member.scheduler_can_mint_push_tokens,
   ]
 }
