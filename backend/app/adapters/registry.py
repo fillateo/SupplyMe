@@ -91,6 +91,9 @@ def build(
                 settings.tasks_queue,
                 f"{settings.public_base_url.rstrip('/')}/events/task",
                 settings.pubsub_push_token,
+                # A demo deployment on real infrastructure still needs the demo
+                # clock, or it sits on a 48-hour timer while someone watches.
+                speedup=demo_speedup if settings.is_demo else 1.0,
             )
     else:
         store = MemoryStore()

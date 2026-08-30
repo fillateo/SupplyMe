@@ -57,7 +57,8 @@ class CloudTasksScheduler:
     """Cloud Tasks -> HTTP POST back to this service's /events/task endpoint."""
 
     def __init__(
-        self, project: str, location: str, queue: str, target_url: str, token: str = ""
+        self, project: str, location: str, queue: str, target_url: str, token: str = "",
+        *, speedup: float = 1.0,
     ) -> None:
         from google.cloud import tasks_v2
 
@@ -65,23 +66,30 @@ class CloudTasksScheduler:
         self._parent = self._client.queue_path(project, location, queue)
         self._target_url = target_url
         self._token = token
+        self._speedup = max(speedup, 1e-6)
 
     async def schedule(
         self, event: Event, *, delay_seconds: float, compressible: bool = True
     ) -> str:
-        # `compressible` belongs to the demo clock, which only the local
-        # scheduler runs; Cloud Tasks always waits the real delay. It is still
-        # part of the Scheduler protocol and the orchestrator passes it on every
-        # call, so omitting it made every scheduled event in the cloud — retry
-        # backoff, follow-up timer, non-response timeout — raise TypeError.
-        del compressible
+        # The demo clock is not a property of the local scheduler; it is a
+        # property of the deployment. A demo on Cloud Run holds the same real
+        # 48-hour follow-up timer, so a mission reaches `awaiting_response` and
+        # then looks broken to whoever opened the link — the queue is working
+        # exactly as asked, and nothing says so.
+        #
+        # `compressible` is what keeps this honest. Business time compresses:
+        # waiting two days for a supplier is a fact about suppliers. Retry
+        # backoff does not, because shortening it lands the retries inside the
+        # same overloaded window they exist to avoid.
         import time
+
+        delay = delay_seconds / self._speedup if compressible else delay_seconds
 
         from google.cloud import tasks_v2
         from google.protobuf import timestamp_pb2
 
         schedule_time = timestamp_pb2.Timestamp()
-        schedule_time.FromSeconds(int(time.time() + delay_seconds))
+        schedule_time.FromSeconds(int(time.time() + delay))
 
         headers = {"Content-Type": "application/json"}
         if self._token:

@@ -46,7 +46,7 @@ cd backend
 .venv/bin/python -m pytest -q
 ```
 
-317 tests, about 55 seconds. They cover the whole workflow end to end,
+318 tests, about 55 seconds. They cover the whole workflow end to end,
 including every message being delivered twice, a search outage, a model
 timeout, a mid-mission restart, and a supplier reply containing a
 prompt-injection payload.

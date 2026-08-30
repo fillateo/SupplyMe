@@ -528,6 +528,42 @@ class TestSchedulerImplementationsMatchThePort:
     and non-response timeout, and the whole mission stops on the first one.
     """
 
+    async def test_cloud_tasks_compresses_business_time_but_not_backoff(self):
+        """The demo clock is a property of the deployment, not of the scheduler.
+
+        A demo running on Cloud Run used to hold the same real 48-hour follow-up
+        timer as production, so a mission reached `awaiting_response` and then
+        appeared to stall for two days while someone watched. The queue was
+        doing exactly what it was told, and nothing said so.
+        """
+        import time
+        from unittest.mock import AsyncMock, patch
+
+        from app.adapters.scheduler import CloudTasksScheduler
+
+        with patch("google.cloud.tasks_v2.CloudTasksAsyncClient") as client_class:
+            client = client_class.return_value
+            client.queue_path.return_value = "projects/p/locations/l/queues/q"
+            client.create_task = AsyncMock(
+                return_value=type("Created", (), {"name": "task/1"})()
+            )
+            scheduler = CloudTasksScheduler("p", "l", "q", "https://x/events/task",
+                                            speedup=2000.0)
+
+            event = Event(type=EventType.VENDOR_UPDATED, mission_id="m", payload={})
+            now = time.time()
+
+            await scheduler.schedule(event, delay_seconds=172_800.0, compressible=True)
+            business_time = client.create_task.await_args.kwargs["task"].schedule_time
+            # 48 hours becomes about 86 seconds, not two days.
+            assert 30 < business_time.timestamp() - now < 300
+
+            await scheduler.schedule(event, delay_seconds=900.0, compressible=False)
+            backoff = client.create_task.await_args.kwargs["task"].schedule_time
+            # A backoff divided by the demo speedup stops being a backoff: the
+            # retries land back inside the window they exist to avoid.
+            assert backoff.timestamp() - now > 800
+
     def test_every_scheduler_accepts_the_ports_keyword_arguments(self):
         import inspect
 

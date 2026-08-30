@@ -28,3 +28,7 @@ alert_email       = ""
 
 # Hard stops, applied per mission inside the application.
 max_usd_per_mission   = 0.50
+
+# Demo only: compresses a 48-hour follow-up wait to about 90 seconds, so a
+# judge opening the link sees the mission finish instead of appearing to stall.
+demo_speedup = 2000

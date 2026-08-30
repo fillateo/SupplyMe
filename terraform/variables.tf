@@ -78,6 +78,30 @@ variable "fast_model" {
   default = ""
 }
 
+variable "demo_speedup" {
+  type    = number
+  default = 1.0
+
+  description = <<-EOT
+    Divides scheduled delays, in demo mode only.
+
+    A 48-hour follow-up timer is correct behaviour and useless to anyone
+    watching: a demo deployment left at 1.0 shows a mission that reaches
+    `awaiting_response` and then appears to stall for two days, because Cloud
+    Tasks is faithfully holding the timer. 2000 turns that wait into about 90
+    seconds.
+
+    It compresses the clock, never the workflow, and it cannot shorten a retry
+    backoff — shortening those would land the retries inside the same
+    overloaded window they exist to avoid. Ignored entirely when mode is live.
+  EOT
+
+  validation {
+    condition     = var.mode == "demo" || var.demo_speedup == 1.0
+    error_message = "demo_speedup only applies in demo mode; leave it at 1.0 for live."
+  }
+}
+
 variable "max_instances" {
   type        = number
   default     = 4

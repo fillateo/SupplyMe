@@ -100,6 +100,12 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "VDS_TASKS_QUEUE"
         value = google_cloud_tasks_queue.followups.name
       }
+      # A demo deployment that holds real 48-hour timers looks broken to
+      # anyone who opens it. See variables.tf.
+      env {
+        name  = "VDS_DEMO_SPEEDUP"
+        value = tostring(var.demo_speedup)
+      }
       # Spend guards. These are hard stops in the application, not alerts.
       env {
         name  = "VDS_MAX_USD_PER_MISSION"

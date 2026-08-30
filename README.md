@@ -289,7 +289,7 @@ only the text generation is deterministic.
 ```bash
 ./run.sh            # installs what is missing, then starts the API and console
 ./run.sh demo       # one whole mission in the terminal, ~30s
-./run.sh test       # 317 tests, ~55s
+./run.sh test       # 318 tests, ~55s
 ./run.sh status     # what is running, and what it has spent
 ./run.sh stop
 ```
@@ -323,7 +323,7 @@ building the image and running the tests. Then `tofu output next_steps`.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest -q     # 317 tests, ~55 seconds, no network
+.venv/bin/python -m pytest -q     # 318 tests, ~55 seconds, no network
 ```
 
 - **Unit** — evidence classification, identity resolution, quote normalisation,
