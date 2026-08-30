@@ -18,7 +18,7 @@ from threading import Lock
 
 #: USD per million tokens. Verify against current Vertex AI pricing before
 #: relying on the totals — these were entered on 2026-08-30 and Google changes
-#: them. Override with VDS_PRICE_* if yours differ (committed volume, region).
+#: them. Override with SUPPLYME_PRICE_* if yours differ (committed volume, region).
 PRICING: dict[str, tuple[float, float]] = {
     # model prefix     (input $/1M, output $/1M)
     "gemini-2.5-flash-lite": (0.10, 0.40),
@@ -124,13 +124,13 @@ class CostMeter:
         if usage.calls >= self.max_calls_per_mission:
             raise BudgetExceeded(
                 f"mission reached its {self.max_calls_per_mission}-model-call cap "
-                f"(spent about ${usage.usd:.3f}). Raise VDS_MAX_MODEL_CALLS_PER_MISSION "
+                f"(spent about ${usage.usd:.3f}). Raise SUPPLYME_MAX_MODEL_CALLS_PER_MISSION "
                 "if this mission genuinely needs more."
             )
         if usage.usd >= self.max_usd_per_mission:
             raise BudgetExceeded(
                 f"mission reached its ${self.max_usd_per_mission:.2f} cap after "
-                f"{usage.calls} model calls. Raise VDS_MAX_USD_PER_MISSION to allow more."
+                f"{usage.calls} model calls. Raise SUPPLYME_MAX_USD_PER_MISSION to allow more."
             )
 
     def seed(self, mission_id: str, usage: Usage) -> None:

@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="VendorDiscoveryShortcut",
+    title="SupplyMe",
     description=(
         "An agentic sourcing workflow: a goal in, a qualified supplier network out. "
         "Every number it reports is traceable to the source it came from."
@@ -43,7 +43,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         o.strip()
-        for o in os.environ.get("VDS_CORS_ORIGINS", "http://localhost:3000").split(",")
+        for o in os.environ.get("SUPPLYME_CORS_ORIGINS", "http://localhost:3000").split(",")
         if o.strip()
     ],
     allow_methods=["*"],

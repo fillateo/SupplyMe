@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# VendorDiscoveryShortcut — local runner.
+# SupplyMe — local runner.
 #
 #   ./run.sh              set up if needed, then start the API and the console
 #   ./run.sh mission      run one whole mission in the terminal, no servers
@@ -12,9 +12,9 @@
 #   ./run.sh clean        remove build caches (never touches source or .env)
 #
 # There is one mode and it is the real one: real Gemini, the live web, Google
-# Places, YouTube, and a mailbox that actually sends. Credentials are not
+# Places, and a mailbox that actually sends. Credentials are not
 # optional — a missing one stops the process and names itself. Set
-# VDS_MAIL_REDIRECT_TO in backend/.env before running this against suppliers
+# SUPPLYME_MAIL_REDIRECT_TO in backend/.env before running this against suppliers
 # you have not agreed to contact.
 
 set -euo pipefail
@@ -26,8 +26,8 @@ RUNDIR="$ROOT/.run"
 VENV="$BACKEND/.venv"
 PY="$VENV/bin/python"
 
-API_PORT="${VDS_API_PORT:-8080}"
-WEB_PORT="${VDS_WEB_PORT:-3000}"
+API_PORT="${SUPPLYME_API_PORT:-8080}"
+WEB_PORT="${SUPPLYME_WEB_PORT:-3000}"
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   BOLD=$'\033[1m'; DIM=$'\033[2m'; RED=$'\033[31m'; GREEN=$'\033[32m'
@@ -207,7 +207,7 @@ cmd_test() {
 cmd_mission() {
   check_prereqs; setup_backend
   say "running one complete mission in the terminal"
-  info "real providers, real spend, and real email — check VDS_MAIL_REDIRECT_TO"
+  info "real providers, real spend, and real email — check SUPPLYME_MAIL_REDIRECT_TO"
   echo
   (cd "$BACKEND" && "$PY" scripts/run_mission.py "$@")
 }
@@ -317,7 +317,7 @@ cmd_dev() {
   # so failing here with the name of the missing variable beats failing four
   # minutes into a mission.
   local missing=""
-  for key in VDS_PROJECT_ID VDS_MAPS_API_KEY VDS_YOUTUBE_API_KEY VDS_SMTP_USER VDS_SMTP_PASSWORD; do
+  for key in SUPPLYME_PROJECT_ID SUPPLYME_MAPS_API_KEY SUPPLYME_SMTP_USER SUPPLYME_SMTP_PASSWORD; do
     grep -qE "^$key=.+" "$BACKEND/.env" 2>/dev/null || missing="$missing $key"
   done
   if [ -n "$missing" ]; then
@@ -325,8 +325,8 @@ cmd_dev() {
     info "there is no offline mode — see backend/.env.example for what each one is"
     die "cannot start"
   fi
-  if ! grep -qE '^VDS_MAIL_REDIRECT_TO=.+' "$BACKEND/.env" 2>/dev/null; then
-    warn "VDS_MAIL_REDIRECT_TO is empty: outreach will go to real suppliers."
+  if ! grep -qE '^SUPPLYME_MAIL_REDIRECT_TO=.+' "$BACKEND/.env" 2>/dev/null; then
+    warn "SUPPLYME_MAIL_REDIRECT_TO is empty: outreach will go to real suppliers."
     info "set it to a mailbox you own unless that is what you meant."
   fi
   local gcloud_bin adc
@@ -349,7 +349,7 @@ cmd_dev() {
   fi
 
   local project
-  project="$(grep -E '^VDS_PROJECT_ID=' "$BACKEND/.env" | head -1 | cut -d= -f2 | tr -d '[:space:]')"
+  project="$(grep -E '^SUPPLYME_PROJECT_ID=' "$BACKEND/.env" | head -1 | cut -d= -f2 | tr -d '[:space:]')"
   say "checking which Gemini models $project can reach"
   (cd "$BACKEND" && "$PY" scripts/check_models.py --project "$project" 2>/dev/null \
       | tail -5 | sed 's/^/    /') || warn "model check failed; starting anyway"

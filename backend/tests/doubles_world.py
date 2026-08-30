@@ -19,15 +19,6 @@ class DemoPage:
 
 
 @dataclass
-class DemoVideo:
-    video_id: str
-    title: str
-    channel: str
-    description: str
-    self_published: bool = False
-
-
-@dataclass
 class DemoVendor:
     key: str
     name: str
@@ -45,7 +36,6 @@ class DemoVendor:
     node_keys: tuple[str, ...] = ()
     keywords: tuple[str, ...] = ()
     pages: list[DemoPage] = field(default_factory=list)
-    videos: list[DemoVideo] = field(default_factory=list)
     #: Reply template keyed by outreach round: 0 = first request, 1 = follow-up.
     replies: dict[int, str] = field(default_factory=dict)
     reply_delay_seconds: float = 6.0
@@ -149,15 +139,6 @@ VENDORS: list[DemoVendor] = [
                     "Klien kami termasuk Maison Verel, salah satu rumah parfum premium.\n\n"
                     "Hubungi: inquiry@aroma-nusantara.example.com | +62 21 8899 1122"
                 ),
-            )
-        ],
-        videos=[
-            DemoVideo(
-                video_id="demo_tour_aroma",
-                title="Factory tour: inside an Indonesian perfume filling plant",
-                channel="Aroma Nusantara Official",
-                description="A walkthrough of our filling and crimping lines in Bekasi.",
-                self_published=True,
             )
         ],
         replies={

@@ -41,7 +41,7 @@ Only components that exist are drawn here.
         ┌────────────────────────▼────────────────────────────────┐
         │ Adapters — every one of them the real service            │
         │  Programmable Search or Gemini grounding · Places ·      │
-        │  YouTube · SMTP out and IMAP in (or the Gmail API)       │
+        │  SMTP out and IMAP in (or the Gmail API)                 │
         │                                                         │
         │  A missing credential is a startup failure, not a        │
         │  fallback. The test doubles live in tests/ and are       │
@@ -90,7 +90,7 @@ discriminator: `version=vendor.version`, `version=quote.id`,
 | `mission.created` | API | Reads the objective, sets scoring weights |
 | `requirements.created` | mission | Decomposes into supply-chain nodes |
 | `supply_chain.planned` | supply chain | Fans out one discovery branch per node |
-| `vendor.discovery.started` | fan-out | Search + Places, identity resolution |
+| `supplier.discovery.started` | fan-out | Search + Places, identity resolution |
 | `vendor.discovered` | discovery | Starts research on a new vendor |
 | `vendor.research.started` | discovery | Reads sources, finds a contact route, records evidence, applies facts |
 | `evidence.found` | research | Timeline marker |
@@ -129,8 +129,8 @@ extracting quotes from messy replies, deciding what a follow-up still needs to
 ask, writing the final narrative.
 
 **Chooses its own path in exactly one place:** vendor research, which runs as a
-Google ADK `LlmAgent` with `search_web`, `read_page`, `query_maps` and
-`search_videos`. Every tool call passes through `before_tool_callback`, which
+Google ADK `LlmAgent` with `search_web`, `read_page` and `query_maps`.
+Every tool call passes through `before_tool_callback`, which
 calls `policy.check("research", ...)` — so the allowlist is enforced at runtime,
 and the agent that reads attacker-controlled pages provably holds nothing that
 can email or spend.

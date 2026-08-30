@@ -1,4 +1,6 @@
-# VendorDiscoveryShortcut
+# SupplyMe
+
+**Autonomous supplier discovery**
 
 Tell it what you want to make. It works out which suppliers you need, finds them,
 reads what they publish, emails them, follows up until a question is settled, and
@@ -92,7 +94,7 @@ Nothing above is a single long LLM call. Each arrow is a persisted event.
 | Receives a real objective | `POST /api/missions` → `mission.created` |
 | Decomposes it | `app/agents/planning.py` |
 | Decides what happens next | `handle_vendor_updated` in `app/workflow/handlers.py` |
-| Uses external tools | Search, Places, YouTube, Gmail/SMTP — `app/adapters/` |
+| Uses external tools | Search, Places, Gmail/SMTP — `app/adapters/` |
 | Works asynchronously | Pub/Sub push + Cloud Tasks; the browser can be closed |
 | Reacts to new events | `email.received` resumes a mission mid-flight — see Gmail integration for which half of that path has been run live |
 | Maintains state | Firestore; a Cloud Run restart loses nothing |
@@ -115,7 +117,7 @@ Cloud Run: console ──► Cloud Run: API (FastAPI)
         ┌─────────────────┼──────────────────┐
         ▼                 ▼                  ▼
    Gemini / Vertex   Google Search      Gmail API
-        │            Places, YouTube
+        │            Places
         ▼                 ▼                  ▼
               Firestore (missions, vendors, evidence,
               quotes, conflicts, approvals, event log)
@@ -138,8 +140,8 @@ The allowlist is the security boundary, not a comment:
 | Mission | read the objective | anything external |
 | Supply chain | decompose | any tool at all |
 | Discovery | search, Maps, read pages | email |
-| Research | search, read, Maps, YouTube, write evidence | **email, spend** |
-| Brand evidence | search, read, YouTube, write evidence | **email, spend** |
+| Research | search, read, Maps, write evidence | **email, spend** |
+| Brand evidence | search, read, write evidence | **email, spend** |
 | Communication | draft, send, read mail | alter scores |
 | Recommendation | read evidence, compute | send anything |
 
@@ -189,8 +191,8 @@ The LLM extracts claims. It does not decide what they are worth — `app/domain/
 Brand's own website           → verified
 Two independent publications  → strong evidence
 Supplier's own website        → supplier-reported, confidence capped at 0.45
-A YouTube factory tour        → supplier-reported (it proves a factory exists,
-                                not who its customers are)
+A trade directory listing     → independent, but weakly (a listing is paid for,
+                                and it is not reporting)
 Nothing found                 → no public evidence
 ```
 
@@ -274,7 +276,7 @@ tens of thousands of tokens; the fixtures this was first measured against were
 a paragraph, and put the same mission at $0.09. That gap is the cost of the
 system being real, and it is the reason the ceilings are where they are.
 
-Reaching `VDS_MAX_USD_PER_MISSION` or `VDS_MAX_MODEL_CALLS_PER_MISSION` fails
+Reaching `SUPPLYME_MAX_USD_PER_MISSION` or `SUPPLYME_MAX_MODEL_CALLS_PER_MISSION` fails
 the mission with a reason rather than spending more, and that failure is
 deliberately **not retried** — retrying is the thing the cap exists to prevent.
 The ADK research loop is capped at 12 calls against ADK's default of 500, which
@@ -305,7 +307,7 @@ so a mission either read the real web, queried real business listings, called
 Gemini and wrote to a real mailbox, or it never began. Nothing here can produce
 a convincing demonstration of suppliers that do not exist.
 
-The one safety valve is `VDS_MAIL_REDIRECT_TO`. The addresses in a mission
+The one safety valve is `SUPPLYME_MAIL_REDIRECT_TO`. The addresses in a mission
 belong to real businesses, read off their real websites, and the distance
 between a good demonstration and an apology is one environment variable. Set it
 to a mailbox you own; every message really sends, and says at the top who it
@@ -322,7 +324,7 @@ would have reached.
 
 It needs Python 3.12 or 3.13 and Node 20+, and nothing else.
 
-For real Gemini: set `VDS_PROJECT_ID` in `backend/.env`, run `gcloud auth
+For real Gemini: set `SUPPLYME_PROJECT_ID` in `backend/.env`, run `gcloud auth
 application-default login`, then `./run.sh live`. It refuses to start if either
 is missing rather than failing halfway through a mission. Run
 `backend/scripts/check_models.py` first to see which models your project can
@@ -330,7 +332,6 @@ actually reach, and from where.
 
 **[docs/LOCAL.md](docs/LOCAL.md)** has the walkthrough, the full environment
 variable reference, and what to do when something breaks.
-**[docs/DEMO.md](docs/DEMO.md)** is the four-minute path through the console.
 
 ## Deploy it
 
@@ -384,7 +385,7 @@ every adapter actually bound.
   given project resolves to, and the ladder in `app/config.py` picks the newest
   that answers. Which is why the model id is configuration, not a constant.
   There are two location settings for the same reason: Cloud Tasks rejects
-  `global`, so `VDS_VERTEX_LOCATION` and `VDS_LOCATION` cannot be one value.
+  `global`, so `SUPPLYME_VERTEX_LOCATION` and `SUPPLYME_LOCATION` cannot be one value.
 - **The Gmail inbound path has not been run against a live mailbox.** It is
   implemented and the workflow half is exercised on every run; the OAuth half
   needs a consent screen this project has not set up. See Gmail integration.

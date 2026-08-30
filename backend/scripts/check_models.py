@@ -74,7 +74,7 @@ async def main() -> int:
         return 1
     preferred = next((m for m in MODEL_LADDER if m in reachable), reachable[0])
     print(f"The service will resolve to: {preferred}")
-    print("Override with VDS_REASONING_MODEL / VDS_FAST_MODEL.")
+    print("Override with SUPPLYME_REASONING_MODEL / SUPPLYME_FAST_MODEL.")
     return 0
 
 

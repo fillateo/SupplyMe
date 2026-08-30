@@ -51,15 +51,15 @@ A budget alert emails you; it does not stop anything. These do:
 
 | Guard | Default | Stops |
 | --- | --- | --- |
-| `VDS_MAX_USD_PER_MISSION` | `1.00` | the mission, with a reason on the record |
-| `VDS_MAX_MODEL_CALLS_PER_MISSION` | `300` | the mission |
-| `VDS_MAX_RESEARCH_LLM_CALLS` | `12` | one research agent's tool loop |
-| `VDS_MAX_CONCURRENT_RESEARCH` | `3` | how many run at once |
-| `VDS_MAX_CONCURRENT_MODEL_CALLS` | `4` | Gemini requests in flight, process-wide |
-| `VDS_MIN_MODEL_CALL_INTERVAL_SECONDS` | `0` | how fast the queue drains |
-| `VDS_MAX_OUTREACH_PER_MISSION` | `12` | emails |
-| `VDS_MAX_VENDORS_PER_CATEGORY` | `8` | how many suppliers get researched |
-| `VDS_MAX_EVENT_RETRIES` | `5` | retrying a failing handler forever |
+| `SUPPLYME_MAX_USD_PER_MISSION` | `1.00` | the mission, with a reason on the record |
+| `SUPPLYME_MAX_MODEL_CALLS_PER_MISSION` | `300` | the mission |
+| `SUPPLYME_MAX_RESEARCH_LLM_CALLS` | `12` | one research agent's tool loop |
+| `SUPPLYME_MAX_CONCURRENT_RESEARCH` | `3` | how many run at once |
+| `SUPPLYME_MAX_CONCURRENT_MODEL_CALLS` | `4` | Gemini requests in flight, process-wide |
+| `SUPPLYME_MIN_MODEL_CALL_INTERVAL_SECONDS` | `0` | how fast the queue drains |
+| `SUPPLYME_MAX_OUTREACH_PER_MISSION` | `12` | emails |
+| `SUPPLYME_MAX_VENDORS_PER_CATEGORY` | `8` | how many suppliers get researched |
+| `SUPPLYME_MAX_EVENT_RETRIES` | `5` | retrying a failing handler forever |
 
 Reaching a spend cap raises `BudgetExceeded`, which the orchestrator treats as
 **terminal, not retryable** — retrying is precisely what the cap exists to
@@ -70,7 +70,7 @@ prevent. The mission's `failure_reason` says which cap and what it had spent.
 Google ADK defaults `max_llm_calls` to **500 per agent run**. A research agent
 needs about five. Five vendors researching at 500 calls each is 2,500 model
 calls for one mission — on the order of $8 with thinking on, and it would happen
-silently. `VDS_MAX_RESEARCH_LLM_CALLS=12` is the ceiling that prevents it, and
+silently. `SUPPLYME_MAX_RESEARCH_LLM_CALLS=12` is the ceiling that prevents it, and
 `tests/test_cost.py` asserts the shipped default stays an order of magnitude
 below ADK's.
 
@@ -92,11 +92,11 @@ same `CostMeter`, attributing each turn to the mission that caused it. If your
 ### Rate limits are a queueing problem
 
 A project with no provisioned Vertex throughput answers 429 to most of a burst,
-and retrying the burst reproduces it. `VDS_MAX_CONCURRENT_MODEL_CALLS` bounds
+and retrying the burst reproduces it. `SUPPLYME_MAX_CONCURRENT_MODEL_CALLS` bounds
 how many requests exist at once across every agent, and
-`VDS_MIN_MODEL_CALL_INTERVAL_SECONDS` spreads what is left. On a small quota,
+`SUPPLYME_MIN_MODEL_CALL_INTERVAL_SECONDS` spreads what is left. On a small quota,
 `2` and `1.0` turn a storm into a queue. If a mission still cannot finish, set
-`VDS_USE_ADK_RESEARCH=false`: the pre-fetching research agent makes **one**
+`SUPPLYME_USE_ADK_RESEARCH=false`: the pre-fetching research agent makes **one**
 metered call per supplier instead of up to twelve, at the cost of the agent
 choosing its own sources.
 
@@ -139,9 +139,9 @@ with the redirect unset.
 
 ## If you are close to the limit
 
-1. `VDS_FAST_MODEL=gemini-2.5-flash-lite` — roughly a third of flash.
-2. Lower `VDS_MAX_VENDORS_PER_CATEGORY` to 3 and
-   `VDS_MAX_MODEL_CALLS_PER_MISSION` to 40.
+1. `SUPPLYME_FAST_MODEL=gemini-2.5-flash-lite` — roughly a third of flash.
+2. Lower `SUPPLYME_MAX_VENDORS_PER_CATEGORY` to 3 and
+   `SUPPLYME_MAX_MODEL_CALLS_PER_MISSION` to 40.
 3. Check `curl -s localhost:8080/api/health | jq .spend.since_startup` after any
    live run.
 

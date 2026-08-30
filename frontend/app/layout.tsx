@@ -1,27 +1,40 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans, IBM_Plex_Serif } from "next/font/google";
+import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
-const sans = IBM_Plex_Sans({
-  subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-plex-sans",
+const display = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-display",
+  display: "swap",
 });
-const serif = IBM_Plex_Serif({
-  subsets: ["latin"], weight: ["400", "500"], style: ["normal", "italic"],
-  variable: "--font-plex-serif",
+
+const sans = Inter({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-sans",
+  display: "swap",
 });
-const mono = IBM_Plex_Mono({
-  subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-plex-mono",
+
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "VendorDiscoveryShortcut",
-  description: "Tell it what you want to make. It finds the suppliers, and shows its sources.",
+  title: "SupplyMe | Autonomous supplier discovery",
+  description:
+    "Tell it what you want to make. SupplyMe decomposes the product into a supply chain, finds suppliers, reads what they publish, emails them, and reports every number with the source it came from.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${serif.variable} ${mono.variable}`}>
-      <body>{children}</body>
+    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
+      <body className="min-h-screen bg-canvas font-sans text-slate-900 antialiased">
+        {children}
+      </body>
     </html>
   );
 }

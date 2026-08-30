@@ -46,59 +46,59 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
-        name  = "VDS_APPROVAL_POLICY"
+        name  = "SUPPLYME_APPROVAL_POLICY"
         value = var.approval_policy
       }
       env {
-        name  = "VDS_PROJECT_ID"
+        name  = "SUPPLYME_PROJECT_ID"
         value = var.project_id
       }
       # The region the service's own Google Cloud dependencies live in.
       # Cloud Tasks rejects `global`, so this must stay a real region.
       env {
-        name  = "VDS_LOCATION"
+        name  = "SUPPLYME_LOCATION"
         value = var.region
       }
       # Where Vertex serves the model — a different question, and a different
       # answer. See variables.tf.
       env {
-        name  = "VDS_VERTEX_LOCATION"
+        name  = "SUPPLYME_VERTEX_LOCATION"
         value = var.vertex_location
       }
       env {
-        name  = "VDS_USE_VERTEX"
+        name  = "SUPPLYME_USE_VERTEX"
         value = tostring(var.use_vertex)
       }
       env {
         # Firestore, Pub/Sub and Cloud Tasks instead of the in-process store,
         # bus and scheduler. See
         # Settings.use_cloud_infra.
-        name  = "VDS_USE_CLOUD_INFRA"
+        name  = "SUPPLYME_USE_CLOUD_INFRA"
         value = "true"
       }
       env {
-        name  = "VDS_REASONING_MODEL"
+        name  = "SUPPLYME_REASONING_MODEL"
         value = var.reasoning_model
       }
       env {
-        name  = "VDS_FAST_MODEL"
+        name  = "SUPPLYME_FAST_MODEL"
         value = var.fast_model
       }
       env {
-        name  = "VDS_PUBLIC_BASE_URL"
+        name  = "SUPPLYME_PUBLIC_BASE_URL"
         value = local.service_url
       }
       env {
-        name  = "VDS_PUBSUB_TOPIC"
+        name  = "SUPPLYME_PUBSUB_TOPIC"
         value = google_pubsub_topic.workflow.name
       }
       env {
-        name  = "VDS_TASKS_QUEUE"
+        name  = "SUPPLYME_TASKS_QUEUE"
         value = google_cloud_tasks_queue.followups.name
       }
       # Spend guards. These are hard stops in the application, not alerts.
       env {
-        name  = "VDS_MAX_USD_PER_MISSION"
+        name  = "SUPPLYME_MAX_USD_PER_MISSION"
         value = tostring(var.max_usd_per_mission)
       }
 
@@ -108,7 +108,7 @@ resource "google_cloud_run_v2_service" "api" {
         for_each = var.use_vertex ? [] : [1]
 
         content {
-          name = "VDS_GEMINI_API_KEY"
+          name = "SUPPLYME_GEMINI_API_KEY"
           value_source {
             secret_key_ref {
               secret  = google_secret_manager_secret.gemini_api_key.secret_id
@@ -119,19 +119,19 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
-        name  = "VDS_SMTP_USER"
+        name  = "SUPPLYME_SMTP_USER"
         value = var.smtp_user
       }
       env {
-        name  = "VDS_MAIL_REDIRECT_TO"
+        name  = "SUPPLYME_MAIL_REDIRECT_TO"
         value = var.mail_redirect_to
       }
 
-      # The three product credentials. Secrets rather than plain values: a
+      # The two product credentials. Secrets rather than plain values: a
       # revision's environment is readable by anyone with viewer on the project,
       # and an API key in it is an API key published to them.
       env {
-        name = "VDS_MAPS_API_KEY"
+        name = "SUPPLYME_MAPS_API_KEY"
         value_source {
           secret_key_ref {
             secret  = google_secret_manager_secret.maps_api_key.secret_id
@@ -140,16 +140,7 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
       env {
-        name = "VDS_YOUTUBE_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.youtube_api_key.secret_id
-            version = "latest"
-          }
-        }
-      }
-      env {
-        name = "VDS_SMTP_PASSWORD"
+        name = "SUPPLYME_SMTP_PASSWORD"
         value_source {
           secret_key_ref {
             secret  = google_secret_manager_secret.smtp_password.secret_id
@@ -159,7 +150,7 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
-        name = "VDS_PUBSUB_PUSH_TOKEN"
+        name = "SUPPLYME_PUBSUB_PUSH_TOKEN"
         value_source {
           secret_key_ref {
             secret  = google_secret_manager_secret.push_token.secret_id

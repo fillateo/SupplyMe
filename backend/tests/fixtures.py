@@ -29,7 +29,6 @@ from .doubles_providers import (
     MockMailProvider,
     MockMapsProvider,
     MockSearchProvider,
-    MockVideoProvider,
 )
 
 
@@ -64,7 +63,6 @@ def build_providers(
         ),
         search=MockSearchProvider(),
         maps=MockMapsProvider(),
-        video=MockVideoProvider(),
         mail=mail,
         notes=[],
     )

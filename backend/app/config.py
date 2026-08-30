@@ -28,19 +28,24 @@ class ApprovalPolicy(StrEnum):
 # name: on one project `gemini-3.5-flash` answers from `global` and 404s from
 # `us-central1`, while `gemini-2.5-pro` does the opposite. That is why this is a
 # ladder that gets probed rather than a constant.
+# Flash first, deliberately. Pro costs roughly an order of magnitude more per
+# token and this workload is extraction and adjudication over short excerpts,
+# not long-horizon reasoning — flash answers it for a fraction of the money. The
+# pro entries stay only so a project that cannot reach any flash model still
+# starts.
 MODEL_LADDER = (
-    "gemini-3.5-pro",
     "gemini-3.5-flash",
-    "gemini-3-pro-preview",
     "gemini-3-flash-preview",
-    "gemini-2.5-pro",
     "gemini-2.5-flash",
+    "gemini-3.5-pro",
+    "gemini-3-pro-preview",
+    "gemini-2.5-pro",
 )
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="VDS_", env_file=".env", extra="ignore", protected_namespaces=()
+        env_prefix="SUPPLYME_", env_file=".env", extra="ignore", protected_namespaces=()
     )
 
     approval_policy: ApprovalPolicy = ApprovalPolicy.EXTERNAL_ACTIONS
@@ -90,7 +95,6 @@ class Settings(BaseSettings):
     maps_api_key: str = ""
     search_api_key: str = ""
     search_engine_id: str = ""
-    youtube_api_key: str = ""
     gmail_sender: str = ""
     gmail_topic: str = ""                  # Gmail watch -> Pub/Sub topic
 

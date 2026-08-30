@@ -21,7 +21,6 @@ class Tool(StrEnum):
     SEARCH_WEB = "search_web"
     READ_PAGE = "read_page"
     QUERY_MAPS = "query_maps"
-    SEARCH_YOUTUBE = "search_youtube"
     WRITE_EVIDENCE = "write_evidence"
     WRITE_VENDOR = "write_vendor"
     DRAFT_EMAIL = "draft_email"
@@ -43,13 +42,12 @@ AGENT_TOOLS: dict[str, frozenset[Tool]] = {
             Tool.SEARCH_WEB,
             Tool.READ_PAGE,
             Tool.QUERY_MAPS,
-            Tool.SEARCH_YOUTUBE,
             Tool.WRITE_EVIDENCE,
             Tool.WRITE_VENDOR,
         }
     ),
     "brand_evidence": frozenset(
-        {Tool.SEARCH_WEB, Tool.READ_PAGE, Tool.SEARCH_YOUTUBE, Tool.WRITE_EVIDENCE}
+        {Tool.SEARCH_WEB, Tool.READ_PAGE, Tool.WRITE_EVIDENCE}
     ),
     "communication": frozenset(
         {Tool.DRAFT_EMAIL, Tool.SEND_EMAIL, Tool.READ_MAIL, Tool.WRITE_EVIDENCE}

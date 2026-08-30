@@ -30,7 +30,7 @@ BANNER = (
     "=============================================================\n"
     "REDIRECTED TEST MESSAGE - this did NOT go to the supplier.\n"
     "Intended recipient: {to}\n"
-    "Unset VDS_MAIL_REDIRECT_TO to write to suppliers for real.\n"
+    "Unset SUPPLYME_MAIL_REDIRECT_TO to write to suppliers for real.\n"
     "=============================================================\n\n"
 )
 

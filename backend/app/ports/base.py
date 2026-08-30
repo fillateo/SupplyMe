@@ -68,27 +68,6 @@ class MapsProvider(Protocol):
     async def place_details(self, place_id: str) -> Place | None: ...
 
 
-# --------------------------------------------------------------------------
-# YouTube
-# --------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Video:
-    video_id: str
-    title: str
-    channel: str
-    description: str
-    url: str
-    published_at: str | None = None
-    #: True when the uploading channel is the supplier's own channel.
-    self_published: bool = False
-
-
-@runtime_checkable
-class VideoProvider(Protocol):
-    async def search_videos(self, query: str, *, limit: int = 5) -> list[Video]: ...
-
 
 # --------------------------------------------------------------------------
 # Mail

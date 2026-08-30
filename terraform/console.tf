@@ -12,7 +12,7 @@
 
 resource "google_service_account" "console" {
   account_id   = "${var.service_name}-console"
-  display_name = "VendorDiscoveryShortcut console"
+  display_name = "SupplyMe console"
 }
 
 # The console reaches the API as itself. In demo mode the API is public anyway,

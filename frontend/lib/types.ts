@@ -57,7 +57,11 @@ export type Mission = {
   priorities: string[]; success_criteria: string[];
   emails_sent: number; created_at: string;
   weights: Record<string, number>; failure_reason: string | null;
+  estimated_cost_usd?: number | null;
+  model_calls?: number | null;
+  vendors_admitted?: number | null;
 };
+
 
 export type MissionCounts = {
   vendors: number; qualified: number; rejected: number; in_progress: number;

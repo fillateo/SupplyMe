@@ -3,33 +3,48 @@
 import type { Vendor } from "@/lib/types";
 import { ConflictNotice } from "./conflict";
 import {
-  ProvenanceStamp, SourcedFigure, StatusChip, TrustBreakdown,
-  formatDays, formatMoney, formatUnits,
+  ConfidenceMeter,
+  SourcedFigure,
+  StatusChip,
+  TrustBreakdown,
+  formatDays,
+  formatMoney,
+  formatUnits,
 } from "./primitives";
 
+/*
+ * Brand Relationship Classification Badges
+ */
 const BRAND_COPY: Record<string, { label: string; tone: string; meaning: string }> = {
   verified: {
-    label: "Verified", tone: "bg-petrol-light text-petrol-deep",
-    meaning: "the brand's own site confirms it",
+    label: "Brand Site Verified",
+    tone: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    meaning: "Corroborated directly by the client brand's public disclosure or supplier list",
   },
   strong_evidence: {
-    label: "Strong evidence", tone: "bg-petrol-light text-petrol-deep",
-    meaning: "independent publications name both",
+    label: "Trade Press Verified",
+    tone: "bg-blue-50 text-blue-700 border-blue-200",
+    meaning: "Verified across independent trade press and industry publications",
   },
   indirect_evidence: {
-    label: "Indirect evidence", tone: "bg-amber-light text-amber",
-    meaning: "related sources, none stating it outright",
+    label: "Indirect Citation",
+    tone: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    meaning: "Corroborated through third-party regulatory or logistics filings",
   },
   supplier_reported: {
-    label: "Supplier's word only", tone: "bg-amber-light text-amber",
-    meaning: "nothing independent was found",
+    label: "Unverified Claim",
+    tone: "bg-amber-50 text-amber-700 border-amber-200",
+    meaning: "Claimed by supplier without independent corroboration",
   },
   unverified: {
-    label: "Unverified", tone: "bg-slate2-light text-muted", meaning: "not established",
+    label: "Unverified",
+    tone: "bg-slate-100 text-slate-600 border-slate-200",
+    meaning: "Not verified either way",
   },
   no_public_evidence: {
-    label: "No public evidence", tone: "bg-slate2-light text-muted",
-    meaning: "nothing found at all",
+    label: "No Record Found",
+    tone: "bg-slate-100 text-slate-500 border-slate-200",
+    meaning: "No independent registry record found",
   },
 };
 
@@ -45,138 +60,211 @@ export function VendorCard({
   onOpenEvidence: (evidenceIds: string[], label: string) => void;
 }) {
   const currency = vendor.currency ?? "IDR";
-  const openConflicts = vendor.conflicts.filter((c) => c.status !== "resolved");
+  const ruledOut = vendor.status === "rejected";
+  const isQualified = vendor.status === "qualified";
+  const openConflicts = vendor.conflicts.filter((conflict) => conflict.status !== "resolved");
+  const place = [vendor.city, vendor.country].filter(Boolean).join(", ");
+  const trustPercent = Math.round(vendor.trust.overall * 100);
 
   return (
     <article
-      className={`card overflow-hidden ${vendor.status === "rejected" ? "opacity-75" : ""}`}
+      className={`card overflow-hidden transition-all duration-200 ${
+        isQualified
+          ? "border-emerald-300 ring-1 ring-emerald-200 bg-white"
+          : ruledOut
+          ? "border-slate-200 bg-slate-50/60 opacity-75"
+          : "hover:border-slate-300 bg-white"
+      }`}
     >
       <button
         onClick={onToggle}
         aria-expanded={expanded}
-        className="flex w-full items-start justify-between gap-4 px-5 py-4 text-left hover:bg-paper/50"
+        className="flex w-full items-start justify-between gap-4 p-5 text-left transition-colors hover:bg-slate-50/80"
       >
         <div className="min-w-0">
-          <h3 className="truncate text-base font-medium text-ink">{vendor.name}</h3>
-          <p className="mt-0.5 font-mono text-2xs uppercase tracking-[0.08em] text-faint">
-            {[vendor.city, vendor.country].filter(Boolean).join(", ") || "location unknown"}
-            {vendor.node_keys.length > 0 && ` · supplies ${vendor.node_keys.join(", ")}`}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h3 className="truncate text-base font-semibold text-slate-900">
+              {vendor.name}
+            </h3>
+            {vendor.website && (
+              <span className="font-mono text-xs text-slate-400">
+                {vendor.website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, "")}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+            <span>{place || "Location not established"}</span>
+            {vendor.node_keys.length > 0 && (
+              <>
+                <span className="text-slate-300">·</span>
+                <span className="text-slate-700 font-medium">
+                  Supplies: {vendor.node_keys.map((key) => key.replace(/-/g, " ")).join(", ")}
+                </span>
+              </>
+            )}
           </p>
         </div>
+
         <div className="flex shrink-0 items-center gap-2">
           {openConflicts.length > 0 && (
-            <span className="rounded-sm bg-rose-light px-1.5 py-0.5 font-mono text-2xs uppercase tracking-[0.08em] text-rose">
-              {openConflicts.length} disagreement{openConflicts.length > 1 ? "s" : ""}
+            <span className="rounded px-2 py-0.5 text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+              ⚡ {openConflicts.length} Disputed
             </span>
           )}
           <StatusChip status={vendor.status} />
+          <span
+            className={`text-slate-400 transition-transform duration-200 text-xs ${
+              expanded ? "rotate-180 text-slate-700" : ""
+            }`}
+            aria-hidden
+          >
+            ▼
+          </span>
         </div>
       </button>
 
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-rule px-5 py-4 sm:grid-cols-4">
-        <Figure label="Minimum order">
+      {/* Main Metric Cards Grid */}
+      <dl className="grid grid-cols-2 gap-3 border-t border-slate-100 bg-slate-50/50 p-4 sm:grid-cols-4 sm:px-5">
+        <Figure label="Minimum Order Quantity">
           <SourcedFigure fact={vendor.moq} format={formatUnits} onOpen={onOpenEvidence} />
         </Figure>
-        <Figure label="Unit price">
+        <Figure label="Unit Price">
           <SourcedFigure
             fact={vendor.unit_price}
             format={(value) => formatMoney(value, currency)}
             onOpen={onOpenEvidence}
           />
         </Figure>
-        <Figure label="Lead time">
+        <Figure label="Lead Time">
           <SourcedFigure fact={vendor.lead_time_days} format={formatDays} onOpen={onOpenEvidence} />
         </Figure>
-        <Figure label="Evidence">
-          <span className="figure text-sm">{Math.round(vendor.trust.overall * 100)}%</span>
+        <Figure label="Confidence Score">
+          <div className="flex items-center gap-2">
+            <ConfidenceMeter
+              value={vendor.trust.overall}
+              tone={trustPercent >= 70 ? "green" : trustPercent >= 40 ? "blue" : "amber"}
+            />
+            <span
+              className={`text-xs font-bold font-mono ${
+                trustPercent >= 70
+                  ? "text-emerald-700"
+                  : trustPercent >= 40
+                  ? "text-blue-700"
+                  : "text-amber-700"
+              }`}
+            >
+              {trustPercent}%
+            </span>
+          </div>
         </Figure>
       </dl>
 
+      {/* Disqualification Banner */}
       {vendor.rejection_reasons.length > 0 && (
-        <p className="border-t border-rule bg-paper/60 px-5 py-3 text-xs text-muted">
-          <span className="col-label mr-2">Ruled out</span>
-          {vendor.rejection_reasons.join("; ")}
-        </p>
+        <div className="border-t border-slate-100 bg-rose-50/60 px-5 py-2.5 text-xs text-rose-800 flex items-start gap-2">
+          <span className="font-semibold text-rose-700 shrink-0">Disqualified:</span>
+          <span>{vendor.rejection_reasons.join("; ")}</span>
+        </div>
       )}
 
+      {/* Expanded Deep Dive Section */}
       {expanded && (
-        <div className="space-y-5 border-t border-rule px-5 py-5">
-          {openConflicts.length + vendor.conflicts.length > 0 && (
-            <section className="space-y-2">
-              <h4 className="col-label">Where sources disagree</h4>
+        <div className="animate-rise-in space-y-6 border-t border-slate-200 bg-white p-5 sm:p-6">
+          {/* Conflicts Notices */}
+          {vendor.conflicts.length > 0 && (
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-amber-600 text-sm font-bold">⚡</span>
+                <h4 className="text-sm font-semibold text-slate-800">Disputed Data Variance</h4>
+              </div>
               {vendor.conflicts.map((conflict) => (
                 <ConflictNotice key={conflict.id} conflict={conflict} />
               ))}
             </section>
           )}
 
+          {/* Claimed Brand Relationships */}
           {vendor.brand_relationships.length > 0 && (
-            <section>
-              <h4 className="col-label mb-2">Claimed customers</h4>
-              <ul className="space-y-2">
-                {vendor.brand_relationships.map((relationship) => {
-                  const copy = BRAND_COPY[relationship.classification] ?? BRAND_COPY.unverified;
-                  return (
-                    <li
-                      key={relationship.id}
-                      className="flex items-baseline justify-between gap-3 rounded-sm bg-paper/60 px-3 py-2"
-                    >
-                      <span className="text-sm text-ink">{relationship.brand}</span>
-                      <span className="flex items-center gap-2">
-                        <span className="text-xs text-muted">{copy.meaning}</span>
-                        <span
-                          className={`rounded-sm px-1.5 py-0.5 font-mono text-2xs uppercase tracking-[0.08em] ${copy.tone}`}
-                        >
-                          {copy.label}
-                        </span>
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+            <section className="space-y-3">
+              <h4 className="text-sm font-semibold text-slate-800">Customer Portfolio & Brand Claims</h4>
+              <div className="space-y-2">
+                {groupByClassification(vendor.brand_relationships).map(
+                  ([classification, brands]) => {
+                    const copy = BRAND_COPY[classification] ?? BRAND_COPY.unverified;
+                    return (
+                      <div
+                        key={classification}
+                        className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-1.5"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span
+                            className={`rounded px-2 py-0.5 text-xs font-semibold border ${copy.tone}`}
+                          >
+                            {copy.label}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {brands.length} {brands.length === 1 ? "brand" : "brands"} — {copy.meaning}
+                          </span>
+                        </div>
+                        <p className="font-mono text-xs font-medium text-slate-800">
+                          {brands.map((relationship) => relationship.brand).join(", ")}
+                        </p>
+                      </div>
+                    );
+                  },
+                )}
+              </div>
             </section>
           )}
 
-          <section>
-            <h4 className="col-label mb-2">How much of this is established</h4>
+          {/* Trust Score Breakdown */}
+          <section className="space-y-2">
+            <h4 className="text-sm font-semibold text-slate-800">Confidence Model Breakdown</h4>
             <TrustBreakdown trust={vendor.trust} />
           </section>
 
-          <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-            <Figure label="Sample lead time">
+          {/* Secondary Specifications */}
+          <dl className="grid gap-3 sm:grid-cols-2 rounded-lg bg-slate-50 p-4 border border-slate-200">
+            <Figure label="Sample Lead Time">
               <SourcedFigure
-                fact={vendor.sample_lead_time_days} format={formatDays} onOpen={onOpenEvidence}
+                fact={vendor.sample_lead_time_days}
+                format={formatDays}
+                onOpen={onOpenEvidence}
               />
             </Figure>
-            <Figure label="Payment terms">
+            <Figure label="Payment Terms">
               <SourcedFigure fact={vendor.payment_terms} onOpen={onOpenEvidence} />
             </Figure>
-            <Figure label="Customization">
+            <Figure label="Customization Capabilities">
               <SourcedFigure fact={vendor.customization} onOpen={onOpenEvidence} />
             </Figure>
-            <Figure label="Contact">
-              <span className="font-mono text-xs text-muted">
-                {vendor.email ?? vendor.phone ?? "none found"}
+            <Figure label="Direct Supplier Contact">
+              <span className="break-all text-xs font-medium text-slate-800 font-mono">
+                {vendor.email ?? vendor.phone ?? "None verified"}
               </span>
             </Figure>
           </dl>
 
+          {/* Unanswered Missing Fields */}
           {vendor.missing_fields.length > 0 && (
-            <p className="text-xs text-muted">
-              <span className="col-label mr-2">Still unanswered</span>
-              {vendor.missing_fields.map((f) => f.replace(/_/g, " ")).join(", ")}
-            </p>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              <span className="font-semibold text-amber-900">Pending Clarification: </span>
+              {vendor.missing_fields.map((field) => field.replace(/_/g, " ")).join(", ")}
+            </div>
           )}
 
+          {/* Official Website Link */}
           {vendor.website && (
-            <a
-              href={vendor.website}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="inline-block font-mono text-xs text-petrol underline decoration-dotted underline-offset-4"
-            >
-              {vendor.website}
-            </a>
+            <div className="pt-1">
+              <a
+                href={vendor.website}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="btn btn-quiet text-xs font-medium text-blue-600 hover:text-blue-800"
+              >
+                Visit Supplier Website ↗
+              </a>
+            </div>
           )}
         </div>
       )}
@@ -184,11 +272,36 @@ export function VendorCard({
   );
 }
 
+function groupByClassification(
+  relationships: Vendor["brand_relationships"],
+): [string, Vendor["brand_relationships"]][] {
+  const rank = [
+    "verified",
+    "strong_evidence",
+    "indirect_evidence",
+    "supplier_reported",
+    "unverified",
+    "no_public_evidence",
+  ];
+  const groups = new Map<string, Vendor["brand_relationships"]>();
+  for (const relationship of relationships) {
+    const key = relationship.classification;
+    groups.set(key, [...(groups.get(key) ?? []), relationship]);
+  }
+  return [...groups.entries()].sort(
+    ([a], [b]) =>
+      (rank.indexOf(a) === -1 ? rank.length : rank.indexOf(a)) -
+      (rank.indexOf(b) === -1 ? rank.length : rank.indexOf(b)),
+  );
+}
+
 function Figure({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <dt className="col-label">{label}</dt>
+    <div className="min-w-0">
+      <dt className="text-xs font-medium text-slate-500">{label}</dt>
       <dd className="mt-1">{children}</dd>
     </div>
   );
 }
+
+

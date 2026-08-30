@@ -144,7 +144,7 @@ async def resolve_model(settings: Settings, *, prefer_fast: bool = False) -> str
 
     raise RuntimeError(
         "no Gemini model from the preference ladder is reachable; "
-        "set VDS_REASONING_MODEL / VDS_FAST_MODEL explicitly"
+        "set SUPPLYME_REASONING_MODEL / SUPPLYME_FAST_MODEL explicitly"
     )
 
 

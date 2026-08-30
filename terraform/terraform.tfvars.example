@@ -1,7 +1,7 @@
 project_id = "your-project-id"
 region     = "us-central1"
-image         = "us-central1-docker.pkg.dev/your-project-id/vendor-discovery/api:latest"
-console_image = "us-central1-docker.pkg.dev/your-project-id/vendor-discovery/console:latest"
+image         = "us-central1-docker.pkg.dev/your-project-id/supply-me/api:latest"
+console_image = "us-central1-docker.pkg.dev/your-project-id/supply-me/console:latest"
 
 # demo binds the mock providers and makes the service publicly readable so a
 # judge can open the link. live binds Gmail, Search and Places and does not.

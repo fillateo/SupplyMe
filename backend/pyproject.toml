@@ -1,5 +1,5 @@
 [project]
-name = "vendor-discovery-shortcut"
+name = "supply-me"
 version = "0.1.0"
 description = "Agentic sourcing workflow: goal -> supply chain -> vendors -> evidence -> outreach -> recommendation"
 requires-python = ">=3.12,<3.14"

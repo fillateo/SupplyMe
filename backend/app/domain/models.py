@@ -47,7 +47,6 @@ class SourceType(StrEnum):
     DIRECTORY = "directory"
     NEWS = "news"
     INDUSTRY_PUBLICATION = "industry_publication"
-    YOUTUBE = "youtube"
     SEARCH_RESULT = "search_result"
     SUPPLIER_EMAIL = "supplier_email"
     UNKNOWN = "unknown"

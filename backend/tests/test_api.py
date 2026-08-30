@@ -60,7 +60,7 @@ def test_health_reports_which_providers_are_bound(client):
     """
     body = client.get("/api/health").json()
     providers = body["providers"]
-    assert set(providers) >= {"store", "bus", "scheduler", "llm", "search", "maps", "video", "mail"}
+    assert set(providers) >= {"store", "bus", "scheduler", "llm", "search", "maps", "mail"}
     # This suite drives the workflow with doubles, and the endpoint says so
     # rather than reporting the names of adapters it is not bound to.
     assert providers["mail"] == "MockMailProvider"
@@ -174,7 +174,7 @@ class TestPushTokenReachesTheEndpoint:
         # deployed service does, so configure the token the same way.
         from app.config import reset_settings_cache
 
-        monkeypatch.setenv("VDS_PUBSUB_PUSH_TOKEN", self.TOKEN)
+        monkeypatch.setenv("SUPPLYME_PUBSUB_PUSH_TOKEN", self.TOKEN)
         reset_settings_cache()
 
         original = deps.startup

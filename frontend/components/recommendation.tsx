@@ -4,11 +4,11 @@ import type { Recommendation, Selection } from "@/lib/types";
 import { ConfidenceMeter } from "./primitives";
 
 /*
- * The ranking arrives already computed and already explained — the scoring
- * engine produced one sentence per component. This panel shows those sentences
- * rather than a bar chart, because "MOQ 500 fits an order of 500" tells a buyer
- * something a bar cannot.
+ * Strategic Recommendation & Sourcing Decision Board:
+ * Executive analysis, mathematical fit rankings, unit BOM cost aggregation,
+ * and tactical risk triage.
  */
+
 export function RecommendationPanel({
   recommendation,
   live,
@@ -20,18 +20,61 @@ export function RecommendationPanel({
 }) {
   if (!recommendation) {
     return (
-      <p className="py-8 text-sm text-muted">
-        {live
-          ? "The ranking is computed once every supplier has been settled either way."
-          : "No ranking was produced for this mission."}
-      </p>
+      <div className="card p-12 text-center border-dashed bg-white">
+        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-purple-50 text-purple-600 font-bold">
+          ⚖
+        </div>
+        <p className="text-base font-semibold text-slate-800">
+          {live ? "Synthesizing Supply Network Ranking" : "No Recommendation Produced"}
+        </p>
+        <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-slate-500">
+          {live
+            ? "The multi-criteria ranking algorithm activates automatically once candidate research, pricing verification, and email inquiries have been concluded across all BOM nodes."
+            : "This mission ended before enough verified candidates could be ranked."}
+        </p>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <section>
-        <h3 className="col-label mb-3">Recommended supply network</h3>
+    <div className="space-y-6">
+      {/* Executive Procurement Narrative Card */}
+      {recommendation.narrative && (
+        <section className="card p-6 border-blue-200 bg-blue-50/30">
+          <div className="flex items-center gap-2 pb-2 mb-2 border-b border-blue-100">
+            <span className="h-2 w-2 rounded-full bg-blue-600" />
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-blue-700">
+              Executive Sourcing Strategy & Assessment
+            </h2>
+          </div>
+          <p className="text-sm leading-relaxed text-slate-800 sm:text-base">
+            {recommendation.narrative}
+          </p>
+        </section>
+      )}
+
+      {/* Selected Supply Network */}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-200">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">
+              Recommended Supply Network ({recommendation.selections.length} Selected)
+            </h2>
+            <p className="text-xs text-slate-500">
+              Top-ranked suppliers weighted by your priority parameters
+            </p>
+          </div>
+
+          {recommendation.estimated_unit_cost !== null && (
+            <div className="flex items-baseline gap-2 rounded-lg bg-emerald-50 px-3.5 py-1.5 border border-emerald-200">
+              <span className="text-xs font-medium text-emerald-800">Estimated Total Unit BOM:</span>
+              <span className="text-base font-bold text-emerald-800 font-mono">
+                {currencyFormat(recommendation.estimated_unit_cost)}
+              </span>
+            </div>
+          )}
+        </div>
+
         <div className="space-y-3">
           {recommendation.selections.map((selection) => (
             <SelectionCard
@@ -41,30 +84,32 @@ export function RecommendationPanel({
             />
           ))}
         </div>
-        {recommendation.estimated_unit_cost !== null && (
-          <p className="mt-4 flex items-baseline justify-between border-t border-rule pt-3">
-            <span className="col-label">Components priced so far, per unit</span>
-            <span className="figure text-lg">
-              {currencyFormat(recommendation.estimated_unit_cost)}
-            </span>
-          </p>
-        )}
       </section>
 
+      {/* Disqualified Candidates Ledger */}
       {recommendation.rejected.length > 0 && (
-        <section>
-          <h3 className="col-label mb-1">Not viable, and why</h3>
-          <p className="mb-3 text-xs text-muted">
-            A supplier ruled out here may be an excellent supplier at a different scale.
+        <section className="card p-5 border-slate-200 bg-white space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-rose-600 text-sm font-bold">✕</span>
+            <h3 className="text-sm font-semibold text-slate-800">
+              Disqualified Candidates ({recommendation.rejected.length})
+            </h3>
+          </div>
+          <p className="text-xs text-slate-500">
+            Suppliers ruled out for this production batch profile (e.g. excessive MOQ threshold, missing certifications, or unverified claims).
           </p>
-          <ul className="divide-y divide-rule border-y border-rule">
+
+          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-slate-50/50 overflow-hidden">
             {recommendation.rejected.map((row, index) => (
-              <li key={index} className="flex items-baseline justify-between gap-6 py-3">
+              <li
+                key={index}
+                className="flex flex-col gap-1.5 p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+              >
                 <div className="min-w-0">
-                  <p className="truncate text-sm text-ink">{row.vendor.name}</p>
-                  <p className="col-label mt-0.5">{row.node_name}</p>
+                  <p className="font-semibold text-slate-800 text-xs">{row.vendor.name}</p>
+                  <p className="text-xs text-slate-500">{row.node_name}</p>
                 </div>
-                <p className="max-w-md text-right text-xs text-muted">
+                <p className="text-xs text-rose-700 sm:max-w-md sm:text-right font-medium">
                   {(row.score.rejection_reasons.length > 0
                     ? row.score.rejection_reasons
                     : row.vendor.rejection_reasons
@@ -76,10 +121,30 @@ export function RecommendationPanel({
         </section>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-3">
-        <Column title="Risks" items={recommendation.risks} />
-        <Column title="Still unknown" items={recommendation.unknowns} />
-        <Column title="Do these next" items={recommendation.next_actions} ordered />
+      {/* Tactical 3-Column Triage Board */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Column
+          title="Operational Risks"
+          subtitle="Variables requiring mitigation"
+          items={recommendation.risks}
+          accent="amber"
+          icon="⚠"
+        />
+        <Column
+          title="Unsettled Unknowns"
+          subtitle="Information yet to be confirmed"
+          items={recommendation.unknowns}
+          accent="purple"
+          icon="?"
+        />
+        <Column
+          title="Immediate Next Steps"
+          subtitle="Tactical buyer checklist"
+          items={recommendation.next_actions}
+          accent="emerald"
+          icon="✓"
+          ordered
+        />
       </div>
     </div>
   );
@@ -92,61 +157,83 @@ function SelectionCard({
   selection: Selection;
   currencyFormat: (value: number) => string;
 }) {
+  const place = [selection.vendor.city, selection.vendor.country].filter(Boolean).join(", ");
+  const scoreTotal = Math.round(selection.score.total);
+
   return (
-    <article className="card p-5">
-      <header className="flex items-start justify-between gap-6">
+    <article className="card p-5 border-emerald-300 ring-1 ring-emerald-200 bg-white transition-all">
+      <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="col-label">{selection.node_name}</p>
-          <h4 className="mt-1 truncate text-base font-medium text-ink">
+          <div className="flex items-center gap-2">
+            <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 border border-slate-200">
+              {selection.node_name}
+            </span>
+          </div>
+          <h3 className="mt-1.5 text-base font-semibold text-slate-900">
             {selection.vendor.name}
-          </h4>
-          <p className="mt-0.5 font-mono text-2xs uppercase tracking-[0.08em] text-faint">
-            {[selection.vendor.city, selection.vendor.country].filter(Boolean).join(", ")}
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {place || "Location unverified"}
           </p>
         </div>
-        <div className="shrink-0 text-right">
-          <p className="figure text-2xl">{selection.score.total.toFixed(0)}</p>
-          <p className="col-label">out of 100</p>
+
+        <div className="flex items-center gap-3">
+          {selection.quote?.unit_price != null && (
+            <div className="text-right">
+              <span className="text-xs text-slate-500 block">Unit Quote</span>
+              <span className="text-base font-bold text-slate-900 font-mono">
+                {currencyFormat(selection.quote.unit_price)}
+              </span>
+            </div>
+          )}
+
+          <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800">
+            <span className="text-sm font-bold font-mono leading-none">
+              {scoreTotal}
+            </span>
+            <span className="text-[0.6rem] font-medium text-emerald-600">/ 100</span>
+          </div>
         </div>
       </header>
 
-      {selection.quote?.unit_price != null && (
-        <p className="mt-3 flex items-baseline gap-2">
-          <span className="figure text-sm">{currencyFormat(selection.quote.unit_price)}</span>
-          <span className="text-xs text-muted">
-            per unit{selection.quote.bundled ? ", quoted as a bundle" : ""}
-          </span>
-        </p>
-      )}
-
-      <ul className="mt-4 space-y-1.5">
-        {(selection.why ?? []).map((reason, index) => (
-          <li key={index} className="flex gap-2 text-sm text-muted">
-            <span className="text-petrol">·</span>
-            <span>{reason}</span>
-          </li>
-        ))}
-      </ul>
-
-      <details className="mt-4 border-t border-rule pt-3">
-        <summary className="col-label cursor-pointer hover:text-petrol">
-          How the score was reached
-        </summary>
-        <ul className="mt-3 space-y-2">
-          {selection.score.components.map((component) => (
-            <li key={component.name} className="flex items-baseline gap-3">
-              <span className="col-label w-20 shrink-0">{component.name.replace(/_/g, " ")}</span>
-              <ConfidenceMeter value={component.raw} />
-              <span className="figure w-12 shrink-0 text-right text-xs">
-                {(component.contribution * 100).toFixed(1)}
-              </span>
-              <span className="min-w-0 flex-1 text-xs text-muted">{component.explanation}</span>
+      {/* Rationale Bullet Points */}
+      {(selection.why ?? []).length > 0 && (
+        <ul className="mt-4 space-y-1.5 rounded-lg bg-slate-50 p-3 border border-slate-200/80">
+          {(selection.why ?? []).map((reason, index) => (
+            <li key={index} className="flex items-start gap-2 text-xs text-slate-700 leading-relaxed">
+              <span className="text-emerald-600 font-bold">✓</span>
+              <span>{reason}</span>
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-2xs text-faint">
-          Each row is weight × fit. The weights come from what you said mattered.
-        </p>
+      )}
+
+      {/* Score Components Accordion */}
+      <details className="mt-3 border-t border-slate-100 pt-2.5">
+        <summary className="cursor-pointer text-xs font-semibold text-blue-600 hover:text-blue-800">
+          ▶ View Mathematical Fit Breakdown & Criteria Weights
+        </summary>
+        <div className="mt-2.5 space-y-2 rounded-lg bg-slate-50 p-3 border border-slate-200">
+          <ul className="space-y-2">
+            {selection.score.components.map((component) => (
+              <li
+                key={component.name}
+                className="grid grid-cols-[7rem_auto_3rem_1fr] items-center gap-x-3 gap-y-1 max-sm:grid-cols-[1fr_auto] max-sm:gap-y-1"
+              >
+                <span className="text-xs font-medium text-slate-700 truncate capitalize max-sm:col-span-2">
+                  {component.name.replace(/_/g, " ")}
+                </span>
+                <ConfidenceMeter value={component.raw} tone="blue" />
+                <span className="font-mono text-right text-xs font-bold text-slate-800">
+                  {(component.contribution * 100).toFixed(1)}
+                </span>
+                <span className="truncate text-xs text-slate-500 max-sm:col-span-2">
+                  {component.explanation}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </details>
     </article>
   );
@@ -154,23 +241,47 @@ function SelectionCard({
 
 function Column({
   title,
+  subtitle,
   items,
   ordered = false,
+  accent = "blue",
+  icon = "•",
 }: {
   title: string;
+  subtitle: string;
   items: string[];
   ordered?: boolean;
+  accent?: "amber" | "purple" | "emerald" | "blue";
+  icon?: string;
 }) {
   if (items.length === 0) return null;
+
+  const accentStyles = {
+    amber: "border-amber-200 bg-amber-50/40 text-amber-900",
+    purple: "border-purple-200 bg-purple-50/40 text-purple-900",
+    emerald: "border-emerald-200 bg-emerald-50/40 text-emerald-900",
+    blue: "border-blue-200 bg-blue-50/40 text-blue-900",
+  }[accent];
+
   const List = ordered ? "ol" : "ul";
+
   return (
-    <section>
-      <h3 className="col-label mb-2">{title}</h3>
-      <List className="space-y-1.5">
+    <section className={`card p-5 ${accentStyles}`}>
+      <div className="flex items-center justify-between pb-2 mb-2 border-b border-black/5">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">{title}</h3>
+          <p className="text-xs text-slate-500">{subtitle}</p>
+        </div>
+        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 font-mono">
+          {items.length}
+        </span>
+      </div>
+
+      <List className="space-y-1.5 mt-2.5">
         {items.map((item, index) => (
-          <li key={index} className="flex gap-2 text-xs leading-relaxed text-muted">
-            <span className="figure shrink-0 text-faint">
-              {ordered ? `${index + 1}.` : "·"}
+          <li key={index} className="flex items-start gap-2 text-xs leading-relaxed text-slate-700">
+            <span className="font-mono font-bold text-slate-400 shrink-0">
+              {ordered ? `${index + 1}.` : icon}
             </span>
             <span>{item}</span>
           </li>
@@ -179,3 +290,5 @@ function Column({
     </section>
   );
 }
+
+

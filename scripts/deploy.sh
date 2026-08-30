@@ -14,7 +14,7 @@ REGION="${2:-us-central1}"
 # Where Vertex serves the model, which is not where the service runs. Gemini
 # 3.x answers from `global` and 404s from a named region.
 VERTEX_LOCATION="${VERTEX_LOCATION:-global}"
-SERVICE="vendor-discovery"
+SERVICE="supply-me"
 TAG="$(git rev-parse --short HEAD 2>/dev/null || date +%s)"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${SERVICE}/api:${TAG}"
 CONSOLE_IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${SERVICE}/console:${TAG}"

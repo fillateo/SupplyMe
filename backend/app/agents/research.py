@@ -10,7 +10,7 @@ persuasive, and it needs an investigator that starts from disbelief.
 from __future__ import annotations
 
 from ..domain.policy import Tool
-from ..ports.base import PageContent, Place, SearchHit, Video
+from ..ports.base import PageContent, Place, SearchHit
 from .base import Agent
 from .schemas import BrandInvestigation, VendorResearch
 
@@ -72,7 +72,7 @@ claim. Never soften that into "likely" or "probably".
 class ResearchAgent(Agent):
     name = "research"
     tools = frozenset(
-        {Tool.SEARCH_WEB, Tool.READ_PAGE, Tool.QUERY_MAPS, Tool.SEARCH_YOUTUBE,
+        {Tool.SEARCH_WEB, Tool.READ_PAGE, Tool.QUERY_MAPS,
          Tool.WRITE_EVIDENCE, Tool.WRITE_VENDOR}
     )
     instruction = RESEARCH_INSTRUCTION
@@ -85,7 +85,6 @@ class ResearchAgent(Agent):
         pages: list[PageContent],
         hits: list[SearchHit],
         place: Place | None,
-        videos: list[Video],
         wanted_fields: list[str],
         mission_id: str = "",
         vendor_id: str | None = None,
@@ -121,15 +120,6 @@ class ResearchAgent(Agent):
                 f"SEARCH RESULT (source_type=search_result)\nurl: {hit.url}\n"
                 f"title: {hit.title}\nsnippet: {hit.snippet}"
             )
-        for video in videos:
-            blocks.append(
-                f"YOUTUBE VIDEO (source_type=youtube)\nurl: {video.url}\ntitle: {video.title}\n"
-                f"channel: {video.channel}"
-                f"{' [the supplier own channel]' if video.self_published else ''}\n"
-                f"description: {video.description}\n"
-                "Note: a video showing a factory evidences that a factory exists. It is not "
-                "evidence of who that factory's customers are."
-            )
 
         return await self.call(
             prompt=prompt,
@@ -143,7 +133,7 @@ class ResearchAgent(Agent):
 
 class BrandEvidenceAgent(Agent):
     name = "brand_evidence"
-    tools = frozenset({Tool.SEARCH_WEB, Tool.READ_PAGE, Tool.SEARCH_YOUTUBE, Tool.WRITE_EVIDENCE})
+    tools = frozenset({Tool.SEARCH_WEB, Tool.READ_PAGE, Tool.WRITE_EVIDENCE})
     instruction = BRAND_INSTRUCTION
 
     async def investigate(
@@ -153,7 +143,6 @@ class BrandEvidenceAgent(Agent):
         brand: str,
         hits: list[SearchHit],
         pages: list[PageContent],
-        videos: list[Video],
         mission_id: str = "",
         vendor_id: str | None = None,
     ) -> BrandInvestigation:
@@ -168,11 +157,6 @@ class BrandEvidenceAgent(Agent):
             if page.blocked_reason:
                 continue
             blocks.append(f"PAGE\nurl: {page.url}\ntitle: {page.title}\n\n{page.text}")
-        for video in videos:
-            blocks.append(
-                f"YOUTUBE\nurl: {video.url}\ntitle: {video.title}\nchannel: {video.channel}"
-                f"{' [supplier own channel]' if video.self_published else ''}\n{video.description}"
-            )
         return await self.call(
             prompt=prompt,
             schema=BrandInvestigation,

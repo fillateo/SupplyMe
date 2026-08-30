@@ -5,7 +5,7 @@ workflow event or a stored document, not from a narration of what the code
 intends to do.
 
 It reads the live web, queries Google Places, calls Gemini and sends real
-email, because there is no other kind of run. Set VDS_MAIL_REDIRECT_TO before
+email, because there is no other kind of run. Set SUPPLYME_MAIL_REDIRECT_TO before
 using it against suppliers you have not agreed to contact.
 
     python scripts/run_mission.py --project YOUR_PROJECT
@@ -59,14 +59,14 @@ async def main(argv: list[str] | None = None) -> int:
         # Autonomous so a single run reaches the end without someone sitting on
         # the approvals; the approval path has its own test in test_workflow.py.
         # Every outbound message still really sends, so leave
-        # VDS_MAIL_REDIRECT_TO set unless you mean to write to suppliers.
+        # SUPPLYME_MAIL_REDIRECT_TO set unless you mean to write to suppliers.
         approval_policy=ApprovalPolicy.AUTONOMOUS,
         **overrides,
     )
     runtime = Runtime.build(settings)
 
     print("=" * 78)
-    print("VendorDiscoveryShortcut — demo run")
+    print("SupplyMe — demo run")
     for note in runtime.providers.notes:
         print(f"  note: {note}")
     print("=" * 78)

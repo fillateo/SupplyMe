@@ -73,7 +73,7 @@ class DiscoveryAgent(Agent):
         )
         return await self.call(
             prompt=prompt, schema=SearchQueries, fast=True, mission_id=mission_id,
-            event_type="vendor.discovery.started", instruction=QUERY_INSTRUCTION,
+            event_type="supplier.discovery.started", instruction=QUERY_INSTRUCTION,
         )
 
     async def extract(

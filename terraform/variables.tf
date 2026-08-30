@@ -21,7 +21,7 @@ variable "console_image" {
 
 variable "service_name" {
   type    = string
-  default = "vendor-discovery"
+  default = "supply-me"
 }
 
 variable "gmail_push" {
@@ -47,8 +47,8 @@ variable "publicly_readable" {
     Let anyone with the link open the console and the API.
 
     True because the point of deploying is that someone can look. What bounds
-    the damage is not the door but the caps: VDS_MAX_USD_PER_MISSION and
-    VDS_MAX_MODEL_CALLS_PER_MISSION stop a mission rather than warning about
+    the damage is not the door but the caps: SUPPLYME_MAX_USD_PER_MISSION and
+    SUPPLYME_MAX_MODEL_CALLS_PER_MISSION stop a mission rather than warning about
     it, outreach is capped per mission, and while mail_redirect_to is set every
     message goes to that address rather than to a supplier.
 
@@ -137,7 +137,7 @@ variable "budget_amount_usd" {
     Monthly budget that triggers alerts. Set to 0 to skip creating one.
 
     A budget alert does NOT stop spending — it emails you. The hard stops live in
-    the application (VDS_MAX_USD_PER_MISSION, VDS_MAX_MODEL_CALLS_PER_MISSION)
+    the application (SUPPLYME_MAX_USD_PER_MISSION, SUPPLYME_MAX_MODEL_CALLS_PER_MISSION)
     and in the caps below. Set this well under your remaining credit so the
     warning arrives while you can still act on it.
   EOT

@@ -3,116 +3,177 @@
 import type { Dimension, Fact, Provenance, Trust } from "@/lib/types";
 
 /*
- * The provenance stamp is this product's signature device. It sits beside every
- * asserted figure and says HOW the figure was obtained — never whether the
- * figure is good news. A confirmed MOQ of 5,000 and a confirmed MOQ of 500 wear
- * the same stamp; only the source differs.
+ * Provenance Marks: Clear, understated classification badges indicating
+ * how a fact was obtained (multi-source corroboration, written quote,
+ * catalog listing, supplier claim, inferred, or conflicting).
  */
 
-const PROVENANCE: Record<Provenance, { label: string; className: string; hint: string }> = {
+type MarkStyle = { label: string; className: string; icon: string; hint: string };
+
+const PROVENANCE: Record<Provenance, MarkStyle> = {
   verified: {
-    label: "verified",
-    className: "bg-petrol-light text-petrol-deep",
-    hint: "two or more independent sources agree",
+    label: "Corroborated",
+    icon: "✓✓",
+    className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    hint: "Two or more independent sources agree on this fact.",
   },
   direct_quote: {
-    label: "direct",
-    className: "bg-petrol-light text-petrol-deep",
-    hint: "the supplier told us, in writing",
+    label: "In Writing",
+    icon: "✉",
+    className: "bg-blue-50 text-blue-700 border-blue-200",
+    hint: "The supplier stated this directly in written correspondence we hold.",
   },
   publicly_listed: {
-    label: "published",
-    className: "bg-slate2-light text-muted",
-    hint: "stated on a public page",
+    label: "Published",
+    icon: "🌐",
+    className: "bg-slate-100 text-slate-700 border-slate-200",
+    hint: "Stated on a public catalog or official listing we indexed.",
   },
   supplier_reported: {
-    label: "supplier says",
-    className: "bg-amber-light text-amber",
-    hint: "the supplier's own claim, with nothing corroborating it",
+    label: "Supplier Claim",
+    icon: "⚠",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+    hint: "Supplier's self-reported claim. No independent corroboration found.",
   },
   estimated: {
-    label: "estimated",
-    className: "bg-amber-light text-amber",
-    hint: "approximated, not stated",
+    label: "Estimated",
+    icon: "~",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+    hint: "Estimated by the AI reasoning engine. No direct source states this.",
   },
   inferred: {
-    label: "inferred",
-    className: "bg-amber-light text-amber",
-    hint: "derived, not stated by any source",
+    label: "Inferred",
+    icon: "∷",
+    className: "bg-purple-50 text-purple-700 border-purple-200",
+    hint: "Derived from adjacent facts. Not stated outright by a single source.",
   },
   conflicting: {
-    label: "sources differ",
-    className: "bg-rose-light text-rose",
-    hint: "sources disagree and it is not settled",
+    label: "Disputed",
+    icon: "⚡",
+    className: "bg-rose-50 text-rose-700 border-rose-200",
+    hint: "Multiple sources disagree on this figure. Active dispute.",
   },
   unknown: {
-    label: "unknown",
-    className: "bg-slate2-light text-faint",
-    hint: "nobody has told us",
+    label: "Unestablished",
+    icon: "—",
+    className: "bg-slate-50 text-slate-500 border-slate-200",
+    hint: "Not established yet. No source found.",
   },
 };
 
-export function ProvenanceStamp({ provenance }: { provenance: Provenance }) {
+export function ProvenanceMark({ provenance }: { provenance: Provenance }) {
   const style = PROVENANCE[provenance] ?? PROVENANCE.unknown;
   return (
     <span
       title={style.hint}
-      className={`inline-flex items-center rounded-sm px-1.5 py-0.5 font-mono text-2xs
-                  uppercase tracking-[0.08em] ${style.className}`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded px-2 py-0.5 text-xs font-medium border ${style.className}`}
     >
+      <span className="opacity-70 text-[0.65rem]">{style.icon}</span>
       {style.label}
     </span>
   );
 }
 
 /**
- * A segmented meter, not a progress bar. Ten discrete cells read as a
- * measurement taken off an instrument rather than progress toward a finish
- * line — which is the honest reading, because confidence is a level, not a
- * task that completes.
+ * Clean linear progress meter designed for high readability.
  */
-export function ConfidenceMeter({ value, tone = "petrol" }: { value: number; tone?: string }) {
-  const filled = Math.round(Math.max(0, Math.min(1, value)) * 10);
-  const fill = tone === "rose" ? "bg-rose" : tone === "amber" ? "bg-amber" : "bg-petrol";
+export function ConfidenceMeter({
+  value,
+  tone = "green",
+}: {
+  value: number;
+  tone?: "blue" | "green" | "amber" | "rose" | "purple" | "cyan";
+}) {
+  const clamped = Math.max(0, Math.min(1, value));
+  const percent = Math.round(clamped * 100);
+
+  const fillColors: Record<string, string> = {
+    blue: "bg-blue-600",
+    cyan: "bg-sky-500",
+    green: "bg-emerald-600",
+    amber: "bg-amber-500",
+    rose: "bg-rose-500",
+    purple: "bg-purple-600",
+  };
+
+  const fillColor = fillColors[tone] ?? fillColors.green;
+
   return (
-    <span className="inline-flex gap-[2px] align-middle" aria-hidden>
-      {Array.from({ length: 10 }, (_, index) => (
-        <span
-          key={index}
-          className={`h-3 w-[3px] rounded-[1px] ${index < filled ? fill : "bg-rule"}`}
+    <div
+      className="inline-flex items-center gap-2"
+      role="progressbar"
+      aria-valuenow={percent}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <div className="h-2 w-16 overflow-hidden rounded-full bg-slate-100 border border-slate-200/80">
+        <div
+          className={`h-full rounded-full transition-all duration-300 ${fillColor}`}
+          style={{ width: `${percent}%` }}
         />
-      ))}
-    </span>
+      </div>
+    </div>
   );
+}
+
+function toneFor(score: number): "green" | "blue" | "amber" | "rose" {
+  if (score >= 0.75) return "green";
+  if (score >= 0.5) return "blue";
+  if (score >= 0.25) return "amber";
+  return "rose";
 }
 
 export function TrustBreakdown({ trust }: { trust: Trust }) {
   return (
-    <dl className="space-y-1.5">
-      {trust.dimensions.map((dimension: Dimension) => (
-        <div key={dimension.name} className="flex items-baseline gap-3">
-          <dt className="col-label w-28 shrink-0">{dimension.name.replace(/_/g, " ")}</dt>
-          <dd className="flex min-w-0 flex-1 items-center gap-2">
-            <ConfidenceMeter
-              value={dimension.score}
-              tone={dimension.score >= 0.6 ? "petrol" : dimension.score >= 0.3 ? "amber" : "rose"}
-            />
-            <span className="figure w-9 text-right text-xs">
-              {Math.round(dimension.score * 100)}%
-            </span>
-            <span className="truncate text-xs text-muted">{dimension.explanation}</span>
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <div className="space-y-3 rounded-lg bg-slate-50/80 p-3.5 border border-slate-200">
+      <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Trust Breakdown Dimensions
+        </span>
+        <span className="text-xs font-bold text-slate-900 font-mono">
+          Overall: {Math.round(trust.overall * 100)}%
+        </span>
+      </div>
+      <dl className="space-y-2">
+        {trust.dimensions.map((dimension: Dimension) => {
+          const tone = toneFor(dimension.score);
+          const percent = Math.round(dimension.score * 100);
+          return (
+            <div
+              key={dimension.name}
+              className="grid grid-cols-[7.5rem_auto_3rem_1fr] items-center gap-x-3 gap-y-1 max-sm:grid-cols-[1fr_auto] max-sm:gap-y-1"
+            >
+              <dt className="text-xs font-medium text-slate-700 truncate capitalize max-sm:col-span-2">
+                {dimension.name.replace(/_/g, " ")}
+              </dt>
+              <ConfidenceMeter value={dimension.score} tone={tone} />
+              <span
+                className={`text-right text-xs font-semibold font-mono ${
+                  percent >= 70
+                    ? "text-emerald-700"
+                    : percent >= 40
+                    ? "text-amber-700"
+                    : "text-rose-700"
+                }`}
+              >
+                {percent}%
+              </span>
+              <span className="truncate text-xs text-slate-500 max-sm:col-span-2">
+                {dimension.explanation}
+              </span>
+            </div>
+          );
+        })}
+      </dl>
+    </div>
   );
 }
 
-/** A figure plus its stamp. Clicking it opens the sources behind it. */
+/** A figure with evidence proof trigger */
 export function SourcedFigure({
   fact,
   format,
-  unknownLabel = "not yet known",
+  unknownLabel = "Not established",
   onOpen,
 }: {
   fact: Fact;
@@ -122,57 +183,170 @@ export function SourcedFigure({
 }) {
   const known = fact.value !== null && fact.provenance !== "unknown";
   if (!known) {
-    return <span className="font-mono text-xs text-faint">{unknownLabel}</span>;
+    return <span className="text-xs text-slate-400 italic">{unknownLabel}</span>;
   }
   const rendered = format ? format(fact.value as string | number) : String(fact.value);
   const clickable = Boolean(onOpen) && fact.evidence_ids.length > 0;
+
+  const figure = clickable ? (
+    <button
+      type="button"
+      onClick={() => onOpen!(fact.evidence_ids, rendered)}
+      className="sourced"
+      title={`Inspect ${fact.evidence_ids.length} evidence source${
+        fact.evidence_ids.length === 1 ? "" : "s"
+      }`}
+    >
+      <span>{rendered}</span>
+      <span className="ml-1 text-[0.65rem] opacity-75 font-mono">[{fact.evidence_ids.length}]</span>
+    </button>
+  ) : (
+    <span className="text-xs font-semibold text-slate-800 font-mono">{rendered}</span>
+  );
+
   return (
-    <span className="inline-flex items-baseline gap-2">
-      <span
-        className={`figure text-sm ${clickable ? "sourced" : ""}`}
-        onClick={clickable ? () => onOpen!(fact.evidence_ids, rendered) : undefined}
-        role={clickable ? "button" : undefined}
-        tabIndex={clickable ? 0 : undefined}
-        onKeyDown={
-          clickable
-            ? (event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onOpen!(fact.evidence_ids, rendered);
-                }
-              }
-            : undefined
-        }
-      >
-        {rendered}
-      </span>
-      <ProvenanceStamp provenance={fact.provenance} />
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      {figure}
+      <ProvenanceMark provenance={fact.provenance} />
     </span>
   );
 }
 
-const STATUS_TONE: Record<string, string> = {
-  qualified: "bg-petrol-light text-petrol-deep",
-  completed: "bg-petrol-light text-petrol-deep",
-  responded: "bg-petrol-light text-petrol-deep",
-  rejected: "bg-slate2-light text-muted",
-  failed: "bg-rose-light text-rose",
-  contacted: "bg-amber-light text-amber",
-  sent: "bg-amber-light text-amber",
-  awaiting_approval: "bg-rose-light text-rose",
-  awaiting_response: "bg-amber-light text-amber",
-  not_attempted: "bg-slate2-light text-muted",
+/*
+ * Status chip with clean, soft background styling and accessible contrast.
+ */
+const STATUS_STYLES: Record<string, { label: string; tone: string; dotColor: string }> = {
+  // Vendor pipeline
+  discovered: {
+    label: "Discovered",
+    tone: "bg-slate-100 text-slate-700 border-slate-200",
+    dotColor: "bg-slate-500",
+  },
+  researching: {
+    label: "Researching",
+    tone: "bg-blue-50 text-blue-700 border-blue-200",
+    dotColor: "bg-blue-500",
+  },
+  shortlisted: {
+    label: "Shortlisted",
+    tone: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    dotColor: "bg-indigo-500",
+  },
+  contacted: {
+    label: "Outreach Sent",
+    tone: "bg-amber-50 text-amber-700 border-amber-200",
+    dotColor: "bg-amber-500",
+  },
+  responded: {
+    label: "Replied",
+    tone: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    dotColor: "bg-emerald-500",
+  },
+  qualified: {
+    label: "Qualified",
+    tone: "bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold",
+    dotColor: "bg-emerald-600",
+  },
+  rejected: {
+    label: "Ruled Out",
+    tone: "bg-slate-100 text-slate-500 border-slate-200",
+    dotColor: "bg-slate-400",
+  },
+
+  // Mission lifecycle
+  created: {
+    label: "Initialized",
+    tone: "bg-slate-100 text-slate-700 border-slate-200",
+    dotColor: "bg-slate-400",
+  },
+  planning: {
+    label: "BOM Planning",
+    tone: "bg-purple-50 text-purple-700 border-purple-200",
+    dotColor: "bg-purple-500",
+  },
+  discovering: {
+    label: "Active Discovery",
+    tone: "bg-blue-50 text-blue-700 border-blue-200",
+    dotColor: "bg-blue-500",
+  },
+  researching_mission: {
+    label: "Researching",
+    tone: "bg-blue-50 text-blue-700 border-blue-200",
+    dotColor: "bg-blue-500",
+  },
+  outreach: {
+    label: "Outreach in Progress",
+    tone: "bg-amber-50 text-amber-700 border-amber-200",
+    dotColor: "bg-amber-500",
+  },
+  awaiting_response: {
+    label: "Awaiting Replies",
+    tone: "bg-amber-50 text-amber-700 border-amber-200",
+    dotColor: "bg-amber-500",
+  },
+  awaiting_approval: {
+    label: "Decision Required",
+    tone: "bg-rose-50 text-rose-700 border-rose-300 font-semibold",
+    dotColor: "bg-rose-500",
+  },
+  recommending: {
+    label: "Ranking Suppliers",
+    tone: "bg-purple-50 text-purple-700 border-purple-200",
+    dotColor: "bg-purple-500",
+  },
+  completed: {
+    label: "Completed",
+    tone: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    dotColor: "bg-emerald-500",
+  },
+  failed: {
+    label: "Stopped",
+    tone: "bg-rose-50 text-rose-700 border-rose-200",
+    dotColor: "bg-rose-500",
+  },
+
+  // Communications
+  sent: {
+    label: "Sent",
+    tone: "bg-amber-50 text-amber-700 border-amber-200",
+    dotColor: "bg-amber-500",
+  },
+  draft: {
+    label: "Drafted",
+    tone: "bg-slate-100 text-slate-700 border-slate-200",
+    dotColor: "bg-slate-400",
+  },
+  awaiting: {
+    label: "Awaiting Reply",
+    tone: "bg-amber-50 text-amber-700 border-amber-200",
+    dotColor: "bg-amber-500",
+  },
+  not_attempted: {
+    label: "Not Contacted",
+    tone: "bg-slate-100 text-slate-500 border-slate-200",
+    dotColor: "bg-slate-400",
+  },
 };
 
-export function StatusChip({ status, live = false }: { status: string; live?: boolean }) {
-  const tone = STATUS_TONE[status] ?? "bg-slate2-light text-muted";
+export function StatusChip({
+  status,
+  live = false,
+}: {
+  status: string;
+  live?: boolean;
+}) {
+  const meta = STATUS_STYLES[status] ?? {
+    label: status.replace(/_/g, " "),
+    tone: "bg-slate-100 text-slate-700 border-slate-200",
+    dotColor: "bg-blue-500",
+  };
+
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 font-mono
-                  text-2xs uppercase tracking-[0.08em] ${tone}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium border ${meta.tone}`}
     >
-      {live && <span className="h-1.5 w-1.5 rounded-full bg-current animate-breathe" />}
-      {status.replace(/_/g, " ")}
+      <span className={`inline-block h-1.5 w-1.5 rounded-full ${meta.dotColor} ${live ? "animate-pulse" : ""}`} />
+      <span>{meta.label}</span>
     </span>
   );
 }
@@ -185,10 +359,13 @@ export function formatMoney(value: number | string, currency = "IDR"): string {
 
 export function formatDays(value: number | string): string {
   const days = typeof value === "number" ? value : Number(value);
-  return Number.isNaN(days) ? String(value) : `${days} days`;
+  if (Number.isNaN(days)) return String(value);
+  return `${days} ${days === 1 ? "day" : "days"}`;
 }
 
 export function formatUnits(value: number | string): string {
   const units = typeof value === "number" ? value : Number(value);
   return Number.isNaN(units) ? String(value) : units.toLocaleString("en-US");
 }
+
+

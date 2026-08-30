@@ -1,4 +1,4 @@
-"""Stand-ins for search, Places, YouTube and mail, for the test suite only.
+"""Stand-ins for search, Places and mail, for the test suite only.
 
 The product has no simulated providers — a missing key is a startup failure, not
 a fallback to invented suppliers. These exist so a whole mission can be driven
@@ -21,7 +21,6 @@ from app.ports.base import (
     Place,
     SearchHit,
     SentMail,
-    Video,
 )
 
 from . import doubles_world as world
@@ -124,26 +123,6 @@ class MockMapsProvider:
             business_status="OPERATIONAL",
             types=("point_of_interest", "establishment"),
         )
-
-
-class MockVideoProvider:
-    async def search_videos(self, query: str, *, limit: int = 5) -> list[Video]:
-        out: list[Video] = []
-        q = _tokens(query)
-        for vendor in world.VENDORS:
-            for video in vendor.videos:
-                if q & _tokens(video.title + " " + video.channel + " " + vendor.name):
-                    out.append(
-                        Video(
-                            video_id=video.video_id,
-                            title=video.title,
-                            channel=video.channel,
-                            description=video.description,
-                            url=f"https://www.youtube.com/watch?v={video.video_id}",
-                            self_published=video.self_published,
-                        )
-                    )
-        return out[:limit]
 
 
 class MockMailProvider:

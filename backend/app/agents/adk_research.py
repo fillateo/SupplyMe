@@ -48,7 +48,7 @@ from .schemas import VendorResearch
 
 log = logging.getLogger(__name__)
 
-APP_NAME = "vendor-discovery-research"
+APP_NAME = "supply-me-research"
 
 #: Which mission the tool loop is currently running for. ADK owns the call
 #: stack between `investigate` and the model, so the attribution has to travel
@@ -103,7 +103,6 @@ TOOL_PERMISSIONS: dict[str, Tool] = {
     "search_web": Tool.SEARCH_WEB,
     "read_page": Tool.READ_PAGE,
     "query_maps": Tool.QUERY_MAPS,
-    "search_videos": Tool.SEARCH_YOUTUBE,
 }
 
 ADK_INSTRUCTION = f"""
@@ -121,7 +120,6 @@ You have tools. Use them deliberately, not exhaustively:
   asked anything, so this is worth one page on its own.
 - `query_maps` to confirm the business exists at an address and to pick up a
   published phone number.
-- `search_videos` only when a factory's capability is genuinely in question.
 
 Stop as soon as you can fill in the schema. Reading a fifth page to confirm
 something two sources already agree on costs money and tells you nothing. If a
@@ -223,25 +221,7 @@ def build_tools(providers: Any) -> list[FunctionTool]:
             ]
         }
 
-    async def search_videos(query: str) -> dict[str, Any]:
-        """Search YouTube. A factory tour proves a factory exists, nothing more.
-
-        Args:
-            query: The company name plus what you want to see.
-        """
-        videos = await providers.video.search_videos(query, limit=3)
-        return {
-            "videos": [
-                {
-                    "title": v.title, "channel": v.channel, "url": v.url,
-                    "description": v.description,
-                    "self_published": v.self_published,
-                }
-                for v in videos
-            ]
-        }
-
-    return [FunctionTool(func) for func in (search_web, read_page, query_maps, search_videos)]
+    return [FunctionTool(func) for func in (search_web, read_page, query_maps)]
 
 
 class AdkResearchAgent:

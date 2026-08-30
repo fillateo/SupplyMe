@@ -13,9 +13,8 @@ locals {
     # See gemini.tf.
     "generativelanguage.googleapis.com",
     "apikeys.googleapis.com",
-    # Evidence the agent reads: business listings, and factory video.
+    # Evidence the agent reads: business listings.
     "places.googleapis.com",
-    "youtube.googleapis.com",
     "artifactregistry.googleapis.com",
     "secretmanager.googleapis.com",
     "logging.googleapis.com",
@@ -46,7 +45,7 @@ resource "google_artifact_registry_repository" "images" {
 
 resource "google_service_account" "app" {
   account_id   = "${var.service_name}-app"
-  display_name = "VendorDiscoveryShortcut workload"
+  display_name = "SupplyMe workload"
 }
 
 resource "google_service_account" "push" {

@@ -3,65 +3,104 @@
 import type { Conflict } from "@/lib/types";
 
 const ACTION_COPY: Record<string, string> = {
-  email: "Asking the supplier to confirm",
-  none: "No route to settle it",
+  email: "A follow-up email has been sent to the supplier to clarify the discrepancy",
+  none: "No external verification route available",
 };
 
-const STATUS_COPY: Record<string, string> = {
-  open: "Detected",
-  resolving: "Being settled",
-  resolved: "Settled",
-  unresolvable: "Could not be settled",
+const STATUS_META: Record<string, { label: string; badge: string }> = {
+  open: {
+    label: "Discrepancy Found",
+    badge: "bg-rose-50 text-rose-700 border-rose-200",
+  },
+  resolving: {
+    label: "Clarification In Progress",
+    badge: "bg-amber-50 text-amber-700 border-amber-200",
+  },
+  resolved: {
+    label: "Resolved",
+    badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  },
+  unresolvable: {
+    label: "Unresolvable",
+    badge: "bg-slate-100 text-slate-600 border-slate-200",
+  },
 };
 
-/**
- * Two sources disagreeing is the most useful thing this product finds, so it
- * gets its own device rather than a warning icon: both values, side by side,
- * each labelled with where it came from, and what the system did about it.
- */
 export function ConflictNotice({ conflict }: { conflict: Conflict }) {
   const settled = conflict.status === "resolved";
-  const tone = settled ? "border-petrol bg-petrol-light/40" : "border-rose bg-rose-light/50";
+  const meta = STATUS_META[conflict.status] ?? STATUS_META.open;
 
   return (
-    <section className={`rounded-md border-l-2 ${tone} px-4 py-3`}>
-      <header className="flex items-baseline justify-between gap-3">
-        <h4 className="font-mono text-2xs uppercase tracking-[0.1em] text-ink">
-          {STATUS_COPY[conflict.status] ?? conflict.status} · {conflict.field.replace(/_/g, " ")}
-        </h4>
-        {!settled && <span className="h-3 w-8 rounded-sm hatch" aria-hidden />}
+    <section
+      className={`overflow-hidden rounded-lg border p-4 transition-all ${
+        settled
+          ? "border-emerald-200 bg-emerald-50/40"
+          : "border-amber-200 bg-amber-50/30"
+      }`}
+    >
+      <header className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200/60">
+        <div className="flex items-center gap-2">
+          <span className={`rounded px-2 py-0.5 text-xs font-semibold border ${meta.badge}`}>
+            {meta.label}
+          </span>
+          <span className="text-xs font-semibold text-slate-800 capitalize">
+            {conflict.field.replace(/_/g, " ")} Variance
+          </span>
+        </div>
       </header>
 
-      <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {conflict.values.map((entry, index) => (
-          <div key={index} className="rounded-sm bg-surface/80 px-3 py-2">
-            <p className="figure text-sm">{String(entry.value)}</p>
-            <p className="col-label mt-0.5">{entry.source_type.replace(/_/g, " ")}</p>
+          <div
+            key={index}
+            className="rounded-lg border border-slate-200 bg-white p-3 shadow-subtle"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-slate-500 capitalize">
+                Source: {entry.source_type.replace(/_/g, " ")}
+              </span>
+              <span className="text-xs font-semibold text-slate-400">Variant #{index + 1}</span>
+            </div>
+            <p className="mt-1 text-base font-bold text-slate-900 font-mono">
+              {String(entry.value)}
+            </p>
             {entry.excerpt && (
-              <p className="mt-1.5 line-clamp-2 font-serif text-xs italic text-muted">
-                &ldquo;{entry.excerpt}&rdquo;
+              <p className="mt-2 line-clamp-3 rounded bg-slate-50 p-2 font-mono text-xs italic leading-relaxed text-slate-600 border-l-2 border-slate-300">
+                “{entry.excerpt}”
               </p>
             )}
           </div>
         ))}
       </div>
 
-      <p className="mt-2.5 text-xs text-muted">
+      <div className="mt-3 rounded-lg bg-white p-3 border border-slate-200 text-xs leading-relaxed text-slate-700">
         {settled ? (
-          <>
-            Now recorded as{" "}
-            <span className="figure text-ink">{String(conflict.resolved_value)}</span> —{" "}
-            {conflict.preferred_reason}
-          </>
+          <p className="flex items-start gap-2">
+            <span className="text-emerald-600 font-bold">✓</span>
+            <span>
+              Settled as{" "}
+              <strong className="text-emerald-700 font-mono font-semibold">
+                {String(conflict.resolved_value)}
+              </strong>{" "}
+              — {conflict.preferred_reason}
+            </span>
+          </p>
         ) : (
-          <>
-            Using{" "}
-            <span className="figure text-ink">{String(conflict.preferred_value)}</span> meanwhile,
-            because {conflict.preferred_reason}.{" "}
-            {ACTION_COPY[conflict.resolution_action ?? "none"]}.
-          </>
+          <p className="flex items-start gap-2">
+            <span className="text-amber-600 font-bold">⚠</span>
+            <span>
+              Using provisional figure{" "}
+              <strong className="text-slate-900 font-mono font-semibold">
+                {String(conflict.preferred_value)}
+              </strong>{" "}
+              ({conflict.preferred_reason}).{" "}
+              <span className="text-slate-500">{ACTION_COPY[conflict.resolution_action ?? "none"]}</span>.
+            </span>
+          </p>
         )}
-      </p>
+      </div>
     </section>
   );
 }
+
+

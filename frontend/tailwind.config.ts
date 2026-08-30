@@ -1,58 +1,78 @@
 import type { Config } from "tailwindcss";
 
-/**
- * The palette comes from technical documents — certificates of analysis,
- * customs declarations — rather than from product UI. Cool paper, petrol ink.
- * Signal colours encode HOW a fact was obtained, never whether it is good news.
- */
-export default {
-  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
+const config: Config = {
+  content: [
+    "./pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
   theme: {
     extend: {
       colors: {
-        paper: "#EEF1F4",
-        surface: "#FFFFFF",
-        ink: "#12181F",
-        muted: "#5A6672",
-        faint: "#8A97A3",
-        rule: "#D3DAE1",
-        petrol: { DEFAULT: "#0B5D5B", deep: "#083F3E", light: "#E3EFEE" },
-        amber: { DEFAULT: "#B4690E", light: "#FBF0E0" },
-        rose: { DEFAULT: "#A32B36", light: "#FAE9EA" },
-        slate2: { DEFAULT: "#8A97A3", light: "#EDF0F3" },
+        canvas: "#f8fafc",
+        surface: "#ffffff",
+        raised: "#f1f5f9",
+        line: "#e2e8f0",
+        "line-bright": "#cbd5e1",
+        ink: {
+          DEFAULT: "#0f172a",
+          light: "#334155",
+          muted: "#64748b",
+          faint: "#94a3b8",
+        },
+        muted: "#64748b",
+        faint: "#94a3b8",
+        brand: {
+          50: "#f0fdf4",
+          100: "#dcfce7",
+          500: "#10b981",
+          600: "#059669",
+          700: "#047857",
+        },
+        accent: {
+          blue: "#2563eb",
+          "blue-light": "#eff6ff",
+          amber: "#d97706",
+          "amber-light": "#fef3c7",
+          rose: "#e11d48",
+          "rose-light": "#ffe4e6",
+          emerald: "#10b981",
+          "emerald-light": "#ecfdf5",
+          purple: "#7c3aed",
+          "purple-light": "#f5f3ff",
+        },
       },
       fontFamily: {
-        // Human intent.
-        serif: ["var(--font-plex-serif)", "Georgia", "serif"],
-        // Machine findings.
-        sans: ["var(--font-plex-sans)", "system-ui", "sans-serif"],
-        // Anything measured, quoted, or sourced.
-        mono: ["var(--font-plex-mono)", "ui-monospace", "monospace"],
-      },
-      fontSize: {
-        "2xs": ["0.6875rem", { lineHeight: "1rem", letterSpacing: "0.04em" }],
+        sans: ["var(--font-sans)", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        display: ["var(--font-display)", "var(--font-sans)", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
       boxShadow: {
-        card: "0 1px 2px rgba(18,24,31,0.05), 0 0 0 1px rgba(18,24,31,0.06)",
-        drawer: "-12px 0 32px rgba(18,24,31,0.12)",
+        xs: "0 1px 2px 0 rgba(15, 23, 42, 0.04)",
+        subtle: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+        card: "0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04)",
+        lift: "0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.03)",
+        modal: "0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04)",
       },
       keyframes: {
-        "slide-in": {
-          from: { opacity: "0", transform: "translateY(-4px)" },
-          to: { opacity: "1", transform: "none" },
+        "rise-in": {
+          from: { opacity: "0", transform: "translateY(4px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
         },
         "drawer-in": {
           from: { transform: "translateX(100%)" },
-          to: { transform: "none" },
+          to: { transform: "translateX(0)" },
         },
-        breathe: { "0%,100%": { opacity: "1" }, "50%": { opacity: "0.35" } },
       },
       animation: {
-        "slide-in": "slide-in 240ms ease-out",
-        "drawer-in": "drawer-in 220ms cubic-bezier(0.32,0.72,0,1)",
-        breathe: "breathe 1.8s ease-in-out infinite",
+        "rise-in": "rise-in 200ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "drawer-in": "drawer-in 240ms cubic-bezier(0.16, 1, 0.3, 1)",
       },
     },
   },
   plugins: [],
-} satisfies Config;
+};
+
+export default config;
+
+

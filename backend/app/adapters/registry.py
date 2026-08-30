@@ -41,7 +41,6 @@ class Providers:
     meter: CostMeter
     search: Any
     maps: Any
-    video: Any
     mail: Any
     notes: list[str] = field(default_factory=list)
 
@@ -53,7 +52,6 @@ class Providers:
             "llm": type(self.llm).__name__,
             "search": type(self.search).__name__,
             "maps": type(self.maps).__name__,
-            "video": type(self.video).__name__,
             "mail": type(self.mail).__name__,
         }
 
@@ -88,26 +86,26 @@ def build(settings: Settings, *, llm: Any | None = None) -> Providers:
         store = MemoryStore()
         if settings.use_cloud_infra:
             notes.append(
-                "VDS_USE_CLOUD_INFRA is set but VDS_PROJECT_ID is not: falling back to "
+                "SUPPLYME_USE_CLOUD_INFRA is set but SUPPLYME_PROJECT_ID is not: falling back to "
                 "the in-process store and bus"
             )
         else:
             notes.append(
                 "state is in-process: missions do not survive a restart. Set "
-                "VDS_USE_CLOUD_INFRA=true with a Firestore database to persist them."
+                "SUPPLYME_USE_CLOUD_INFRA=true with a Firestore database to persist them."
             )
 
     if llm is None:
         if not (settings.project_id or settings.gemini_api_key):
             raise RuntimeError(
-                "No model configured. Set VDS_PROJECT_ID for Vertex AI, or "
-                "VDS_GEMINI_API_KEY for the Gemini Developer API."
+                "No model configured. Set SUPPLYME_PROJECT_ID for Vertex AI, or "
+                "SUPPLYME_GEMINI_API_KEY for the Gemini Developer API."
             )
         from .gemini_llm import GeminiLLM
 
         llm = GeminiLLM(settings, meter=meter)
 
-    from .google_providers import GoogleSearchProvider, PlacesProvider, YouTubeProvider
+    from .google_providers import GoogleSearchProvider, PlacesProvider
 
     # Search has two real implementations and no unconfigured state: with a
     # Programmable Search engine it queries one, and without it falls back to
@@ -116,20 +114,17 @@ def build(settings: Settings, *, llm: Any | None = None) -> Providers:
     notes.append(
         "search: Programmable Search engine"
         if settings.search_api_key and settings.search_engine_id
-        else "search: Gemini search grounding (no VDS_SEARCH_ENGINE_ID configured)"
+        else "search: Gemini search grounding (no SUPPLYME_SEARCH_ENGINE_ID configured)"
     )
 
-    _require(settings.maps_api_key, "VDS_MAPS_API_KEY", "Google Places")
+    _require(settings.maps_api_key, "SUPPLYME_MAPS_API_KEY", "Google Places")
     maps: Any = PlacesProvider(settings)
-
-    _require(settings.youtube_api_key, "VDS_YOUTUBE_API_KEY", "the YouTube Data API")
-    video: Any = YouTubeProvider(settings)
 
     mail_provider: Any = _build_mail(settings, notes)
 
     return Providers(
         settings=settings, store=store, bus=bus, scheduler=scheduler, llm=llm,
-        meter=meter, search=search, maps=maps, video=video, mail=mail_provider,
+        meter=meter, search=search, maps=maps, mail=mail_provider,
         notes=notes,
     )
 
@@ -171,7 +166,7 @@ def _real_mail(settings: Settings, notes: list[str]) -> Any:
     provider = SmtpImapMailProvider(settings)
     _require(
         settings.smtp_user and settings.smtp_password,
-        "VDS_SMTP_USER / VDS_SMTP_PASSWORD",
+        "SUPPLYME_SMTP_USER / SUPPLYME_SMTP_PASSWORD",
         "the mailbox",
     )
     notes.append(
@@ -196,7 +191,7 @@ def _redirected(provider: Any, settings: Settings, notes: list[str]) -> Any:
     from .mail_redirect import RedirectingMailProvider
 
     notes.append(
-        f"VDS_MAIL_REDIRECT_TO is set: every outbound email really sends, but to "
+        f"SUPPLYME_MAIL_REDIRECT_TO is set: every outbound email really sends, but to "
         f"{target} rather than to the supplier"
     )
     return RedirectingMailProvider(provider, target)

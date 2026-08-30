@@ -34,3 +34,7 @@ secrets/
 *.pem
 *credentials*.json
 *token*.json
+
+# Personal working notes — not part of the submission.
+prompt.md
+docs/DEMO.md

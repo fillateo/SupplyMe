@@ -78,11 +78,6 @@ class TestTools:
         assert result["places"]
         assert "not evidence of manufacturing capability" in result["places"][0]["note"]
 
-    async def test_video_results_flag_the_suppliers_own_channel(self, providers):
-        tools = {t.name: t for t in build_tools(providers)}
-        result = await tools["search_videos"].func(query="Aroma Nusantara factory tour")
-        assert all("self_published" in video for video in result["videos"])
-
 
 def test_the_scripted_model_keeps_the_deterministic_research_agent():
     """A tool loop is non-deterministic by design and must not run in tests."""

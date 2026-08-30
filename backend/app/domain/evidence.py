@@ -28,7 +28,6 @@ SOURCE_WEIGHT: dict[SourceType, float] = {
     SourceType.NEWS: 0.65,
     SourceType.MAPS_LISTING: 0.55,
     SourceType.DIRECTORY: 0.45,
-    SourceType.YOUTUBE: 0.40,
     SourceType.SEARCH_RESULT: 0.30,
     SourceType.UNKNOWN: 0.20,
 }
@@ -49,7 +48,6 @@ SUPPLIER_SOURCES = frozenset(
     {
         SourceType.SUPPLIER_EMAIL,
         SourceType.OFFICIAL_WEBSITE,
-        SourceType.YOUTUBE,
     }
 )
 

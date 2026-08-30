@@ -25,13 +25,13 @@ from typing import ClassVar
 import httpx
 
 from ..config import Settings
-from ..ports.base import PageContent, Place, SearchHit, Video
+from ..ports.base import PageContent, Place, SearchHit
 
 log = logging.getLogger(__name__)
 
 #: The `Mozilla/5.0 (compatible; …)` shape is the crawler convention — it is what
 #: Googlebot and bingbot send — and it still names this tool and where to
-#: complain about it. The plainer `VendorDiscoveryShortcut/0.1 (…)` form was
+#: complain about it. The plainer `SupplyMe/0.1 (…)` form was
 #: being 403'd outright by supplier sites behind a WAF, which is a large part of
 #: why live research read nothing. robots.txt is still obeyed either way: that,
 #: not the header, is where a site says whether it wants to be read.
@@ -45,7 +45,7 @@ GROUNDING_REDIRECT_HOST = "vertexaisearch.cloud.google.com"
 RESOLVE_TIMEOUT = 8.0
 
 USER_AGENT = (
-    "Mozilla/5.0 (compatible; VendorDiscoveryShortcut/0.1; +https://github.com/nesso-labs)"
+    "Mozilla/5.0 (compatible; SupplyMe/0.1; +https://github.com/nesso-labs)"
 )
 
 #: Sent with every page fetch. A request with no Accept header looks like a
@@ -377,40 +377,3 @@ def _to_place(raw: dict) -> Place:
         business_status=raw.get("businessStatus"),
         types=tuple(raw.get("types", [])),
     )
-
-
-class YouTubeProvider:
-    def __init__(self, settings: Settings) -> None:
-        self._key = settings.youtube_api_key
-        self._client = httpx.AsyncClient(timeout=15.0)
-
-    async def search_videos(self, query: str, *, limit: int = 5) -> list[Video]:
-        if not self._key:
-            return []
-        response = await self._client.get(
-            "https://www.googleapis.com/youtube/v3/search",
-            params={
-                "key": self._key, "part": "snippet", "q": query,
-                "type": "video", "maxResults": min(limit, 10),
-            },
-        )
-        if response.status_code != 200:
-            return []
-        videos = []
-        for item in response.json().get("items", []):
-            snippet = item.get("snippet", {})
-            video_id = (item.get("id") or {}).get("videoId", "")
-            videos.append(
-                Video(
-                    video_id=video_id,
-                    title=snippet.get("title", ""),
-                    channel=snippet.get("channelTitle", ""),
-                    description=snippet.get("description", ""),
-                    url=f"https://www.youtube.com/watch?v={video_id}",
-                    published_at=snippet.get("publishedAt"),
-                )
-            )
-        return videos
-
-    async def close(self) -> None:
-        await self._client.aclose()

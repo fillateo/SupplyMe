@@ -162,7 +162,7 @@ async def handle_supply_chain_planned(orc: Orchestrator, event: Event) -> list[E
     """Fan out: one discovery branch per required node, all running in parallel."""
     nodes = await orc.repo.list(SupplyChainNode, mission_id=event.mission_id)
     return [
-        event.child(EventType.VENDOR_DISCOVERY_STARTED, node_id=node.id, node_key=node.key)
+        event.child(EventType.SUPPLIER_DISCOVERY_STARTED, node_id=node.id, node_key=node.key)
         for node in nodes
         if node.required
     ]
@@ -173,7 +173,7 @@ async def handle_supply_chain_planned(orc: Orchestrator, event: Event) -> list[E
 # ==========================================================================
 
 
-@on(EventType.VENDOR_DISCOVERY_STARTED)
+@on(EventType.SUPPLIER_DISCOVERY_STARTED)
 async def handle_discovery_started(orc: Orchestrator, event: Event) -> list[Event]:
     mission = await orc.repo.mission(event.mission_id)
     node = await orc.repo.load(SupplyChainNode, event.payload["node_id"])
@@ -443,10 +443,10 @@ async def _run_research(
             market=mission.market, website=vendor.website,
             mission_id=mission.id, vendor_id=vendor.id,
         )
-    pages, hits, place, videos = await _research_sources(orc, vendor, mission)
+    pages, hits, place = await _research_sources(orc, vendor, mission)
     return await orc.agents.research.investigate(
         vendor_name=vendor.name, node_names=node_names, pages=pages, hits=hits,
-        place=place, videos=videos, wanted_fields=wanted,
+        place=place, wanted_fields=wanted,
         mission_id=mission.id, vendor_id=vendor.id,
     )
 
@@ -557,7 +557,7 @@ async def _fetch(orc: Orchestrator, url: str) -> Any:
 
 async def _research_sources(
     orc: Orchestrator, vendor: Vendor, mission: Mission
-) -> tuple[list[Any], list[Any], Any, list[Any]]:
+) -> tuple[list[Any], list[Any], Any]:
     depth = orc.settings.max_research_depth
     query = f"{vendor.name} {mission.market or ''}".strip()
 
@@ -566,7 +566,6 @@ async def _research_sources(
         tasks.append(orc.providers.search.fetch(vendor.website))
     if vendor.place_id:
         tasks.append(orc.providers.maps.place_details(vendor.place_id))
-    tasks.append(orc.providers.video.search_videos(f"{vendor.name} factory", limit=3))
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
     hits = _ok(results[0], [])
@@ -580,8 +579,6 @@ async def _research_sources(
     place = None
     if vendor.place_id:
         place = _ok(results[cursor], None)
-        cursor += 1
-    videos = _ok(results[cursor], [])
 
     # Follow a bounded number of the vendor's own pages. Other domains are read
     # only when they are about this vendor, which the search snippet establishes.
@@ -597,7 +594,7 @@ async def _research_sources(
         )
         pages.extend(p for p in (_ok(f, None) for f in fetched) if p is not None)
 
-    return pages, hits, place, videos
+    return pages, hits, place
 
 
 def _ok(result: Any, default: Any) -> Any:
@@ -639,14 +636,8 @@ async def handle_brand_claim(orc: Orchestrator, event: Event) -> list[Event]:
         *(orc.providers.search.fetch(url) for url in to_read), return_exceptions=True
     )
     pages = [p for p in (_ok(f, None) for f in fetched) if p is not None]
-    (video_result,) = await asyncio.gather(
-        orc.providers.video.search_videos(f"{vendor.name} {brand}", limit=3),
-        return_exceptions=True,
-    )
-    videos = _ok(video_result, [])
-
     investigation = await orc.agents.brand_evidence.investigate(
-        vendor_name=vendor.name, brand=brand, hits=hits[:8], pages=pages, videos=videos,
+        vendor_name=vendor.name, brand=brand, hits=hits[:8], pages=pages,
         mission_id=mission.id, vendor_id=vendor.id,
     )
 

@@ -22,7 +22,7 @@ class EventType(StrEnum):
     MISSION_CREATED = "mission.created"
     REQUIREMENTS_CREATED = "requirements.created"
     SUPPLY_CHAIN_PLANNED = "supply_chain.planned"
-    VENDOR_DISCOVERY_STARTED = "vendor.discovery.started"
+    SUPPLIER_DISCOVERY_STARTED = "supplier.discovery.started"
     VENDOR_DISCOVERED = "vendor.discovered"
     VENDOR_RESEARCH_STARTED = "vendor.research.started"
     EVIDENCE_FOUND = "evidence.found"

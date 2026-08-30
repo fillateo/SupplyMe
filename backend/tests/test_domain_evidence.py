@@ -116,14 +116,6 @@ class TestBrandRelationship:
         assert classification is BrandEvidenceClass.STRONG_EVIDENCE
         assert independent == 2
 
-    def test_a_youtube_video_does_not_confirm_a_customer(self):
-        # A factory tour proves a factory exists, not who its customers are.
-        classification, _, _, independent = classify_brand_relationship(
-            [make(SourceType.YOUTUBE, "https://youtube.example.com/watch")]
-        )
-        assert classification is BrandEvidenceClass.SUPPLIER_REPORTED
-        assert independent == 0
-
     def test_nothing_found_says_so(self):
         classification, _, confidence, _ = classify_brand_relationship([])
         assert classification is BrandEvidenceClass.NO_PUBLIC_EVIDENCE
