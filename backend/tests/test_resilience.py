@@ -122,9 +122,69 @@ class TestProviderFailure:
         await runtime.start(concurrency=8)
         try:
             mission = await run_to_completion(runtime, OBJECTIVE)
-            # No vendors can be found without search, but the mission must not hang.
-            assert mission.status.value in ("completed", "discovering", "planning")
-            assert mission.status.value != "failed"
+            # Web search is gone but Places is not, so suppliers are still found —
+            # which is the point: losing one source costs the mission that
+            # source's results, not the run. It used to be enough to assert the
+            # mission had not *failed*; that also accepted `discovering`, which is
+            # the hang covered below.
+            assert mission.status.value == "completed", (
+                f"the mission did not finish: {mission.status.value}"
+            )
+            assert await runtime.repo.list(Recommendation, mission_id=mission.id)
+        finally:
+            await runtime.stop()
+
+    async def test_a_mission_that_discovers_nobody_still_reaches_an_answer(self):
+        """The hang, reproduced: every source dead, so no supplier is ever found.
+
+        A live mission did this — five discovery branches came back empty — and
+        sat in `discovering` for twenty-two hours. Nothing downstream could move
+        it: every route to a recommendation runs through `vendor.updated`, and
+        that needs a vendor. Finding nobody is an answer, and the mission has to
+        be able to give it.
+        """
+        runtime = build()
+
+        async def no_search(query, *, limit=8):
+            return []
+
+        async def no_places(query, *, region=""):
+            return []
+
+        runtime.providers.search.search = no_search
+        runtime.providers.maps.search_places = no_places
+        await runtime.start(concurrency=8)
+        try:
+            mission = await run_to_completion(runtime, OBJECTIVE, max_polls=300)
+            assert await runtime.repo.list(Vendor, mission_id=mission.id) == []
+            assert mission.status.value == "completed", (
+                f"a mission that found no suppliers never terminated: "
+                f"{mission.status.value}"
+            )
+            # And it says so, rather than going quiet.
+            recommendations = await runtime.repo.list(Recommendation, mission_id=mission.id)
+            assert recommendations, "no recommendation was produced to explain the gap"
+            assert recommendations[-1].selections == []
+        finally:
+            await runtime.stop()
+
+    async def test_exactly_one_recommendation_when_every_branch_finishes_empty(self):
+        """Every empty branch calls the completion check; they must not each fire."""
+        runtime = build()
+
+        async def nothing(*args, **kwargs):
+            return []
+
+        runtime.providers.search.search = nothing
+        runtime.providers.maps.search_places = nothing
+        await runtime.start(concurrency=8)
+        try:
+            mission = await run_to_completion(runtime, OBJECTIVE, max_polls=300)
+            recommendations = await runtime.repo.list(Recommendation, mission_id=mission.id)
+            assert len(recommendations) == 1, (
+                f"{len(recommendations)} recommendations for one mission — the "
+                "concurrent finishers did not collide on one dedup key"
+            )
         finally:
             await runtime.stop()
 

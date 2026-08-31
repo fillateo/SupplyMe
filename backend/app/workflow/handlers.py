@@ -200,7 +200,7 @@ async def handle_discovery_started(orc: Orchestrator, event: Event) -> list[Even
     if not hits and not places:
         node.status = NodeStatus.BLOCKED
         await orc.repo.save(node)
-        return []
+        return await _maybe_finish(orc, event)
 
     result = await orc.agents.discovery.extract(
         node_key=node.key, node_name=node.name, hits=hits[:12], places=places[:8],
@@ -282,7 +282,11 @@ async def handle_discovery_started(orc: Orchestrator, event: Event) -> list[Even
 
     node.status = NodeStatus.RESEARCHING
     await orc.repo.save(node)
-    return emitted
+    if emitted:
+        return emitted
+    # This branch found nobody. If it was the last one still running and the
+    # mission has no suppliers at all, nothing downstream will ever fire.
+    return await _maybe_finish(orc, event)
 
 
 @on(EventType.VENDOR_DISCOVERED)
@@ -1356,16 +1360,36 @@ def _summarize_thread(thread: EmailThread) -> str:
 
 
 async def _maybe_finish(orc: Orchestrator, event: Event) -> list[Event]:
-    """Emit the recommendation once no vendor is still in play."""
+    """Emit the recommendation once no vendor is still in play.
+
+    "No vendor in play" includes never having had one. Discovery finding nobody
+    used to return early here, so a mission whose searches all came back empty
+    sat in `discovering` for good: no vendor meant no `vendor.updated`, and every
+    route to a recommendation runs through one. A live mission did exactly that
+    and was still sitting there twenty-two hours later, with nothing on screen
+    saying why.
+
+    Finding nobody is an answer. It is not a reason to never answer.
+    """
     vendors = await orc.repo.list(Vendor, mission_id=event.mission_id)
-    if not vendors:
-        return []
     in_play = [
         v for v in vendors
         if v.status not in (VendorStatus.QUALIFIED, VendorStatus.REJECTED)
     ]
     if in_play:
         return []
+
+    if not vendors:
+        # Only terminal once every branch has come back, or the first node to
+        # return nothing would end a mission the others were still working on.
+        nodes = await orc.repo.list(SupplyChainNode, mission_id=event.mission_id)
+        if not nodes or any(
+            n.status in (NodeStatus.PENDING, NodeStatus.DISCOVERING) for n in nodes
+        ):
+            return []
+
+    # Every branch emits the same payload here, so concurrent finishers collide
+    # on one dedup key and exactly one recommendation is produced.
     return [event.child(EventType.RECOMMENDATION_READY, version=str(len(vendors)))]
 
 

@@ -291,7 +291,7 @@ cd backend && .venv/bin/python scripts/check_models.py --project YOUR_PROJECT --
 ./run.sh            # API on :8080, console on :3000
 ./run.sh mission    # one whole mission in the terminal, start to finish
 ./run.sh mail       # read the mailbox now instead of waiting for the poll
-./run.sh test       # 381 tests, ~58s, no network
+./run.sh test       # 383 tests, ~58s, no network
 ./run.sh status     # what is running, and what it has spent
 ./run.sh stop
 ./run.sh clean      # build caches only — never source or .env
@@ -439,7 +439,7 @@ vendor's full dossier (`GET .../vendors/{vendor_id}`), the live ranking
 ```bash
 ./run.sh test
 # or
-cd backend && .venv/bin/python -m pytest -q     # 381 tests, ~58 seconds, no network
+cd backend && .venv/bin/python -m pytest -q     # 383 tests, ~58 seconds, no network
 ```
 
 - **Unit** — evidence classification, identity resolution, quote normalisation, conflict detection, scoring, number parsing, policy, injection defence, and the ADK tool guard

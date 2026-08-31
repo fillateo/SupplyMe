@@ -63,6 +63,7 @@ one level up, so no handler can forget it:
 | Worker died mid-handler | Reservations are leases; an expired lease is taken over |
 | Transient failure | Bounded retry with exponential backoff, then mission failure |
 | Unprocessable event | `MissionNotFound` / `VendorNotFound` are dropped, never retried |
+| Nothing found at all | Discovery coming back empty is an answer: `_maybe_finish` still emits a recommendation once every branch is in, so a mission cannot sit in `discovering` forever |
 | Irreversible action | A second reservation keyed on `mission+vendor+action+version` |
 | Concurrent writers | `store.mutate` — a Firestore transaction, an asyncio lock in memory |
 
