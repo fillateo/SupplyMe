@@ -220,8 +220,12 @@ computation: `MOQ 500 fits an order of 500`, not a progress bar.
   depends on no vendor SDK
 * **State & messaging** — Firestore, Pub/Sub push with dead-lettering, Cloud
   Tasks for follow-ups and retries
-* **The outside world** — Google Programmable Search, Google Places, Gmail API
-  or SMTP + IMAP on one app password
+* **The outside world** — Google Programmable Search, Google Places, and the
+  mailbox: SMTP out and IMAP in on a single app password, which is what runs.
+  The Gmail API push path is implemented behind the same port and its workflow
+  half is exercised on every run, but the OAuth half has never been pointed at a
+  live mailbox — so replies arrive on a one-minute Cloud Scheduler poll rather
+  than being pushed
 * **Console** — Next.js 15, React 19, TypeScript, Tailwind; proxies every API
   call server-side so no credential ever reaches client JavaScript
 * **Infrastructure** — Cloud Run (scale to zero), Secret Manager, Cloud
@@ -346,6 +350,24 @@ things we read — they are things that broke.
 provider is the live service or the process refuses to start and *names the
 variable that is missing*. It made the build harder and every result
 trustworthy.
+
+## What we would tell a reviewer to distrust
+
+Four things, because a submission that lists only its strengths is asking to be
+checked on them:
+
+* **The Gmail push path has never run against a live mailbox.** It is
+  implemented, and the workflow half of it is exercised on every test run, but
+  the OAuth consent screen was never set up. IMAP polling is what actually runs.
+* **Currencies are never converted.** Quotes in different currencies are shown
+  side by side and excluded from the price comparison rather than guessed at.
+* **Cost scales with the shortlist, not the ambition.** Eight suppliers is $0.29;
+  twelve is $0.78 and, in the run we measured, did not reach a recommendation.
+  The lever is `SUPPLYME_MAX_VENDORS_PER_MISSION`, and we would rather say so than
+  publish only the cheaper number.
+* **The API has no authentication.** Cloud Run is deliberately public so a judge
+  can open the link. What bounds it is the per-mission spend caps, the outreach
+  cap, and the mail redirect — not the door.
 
 ## What's next for SupplyMe
 
