@@ -157,6 +157,17 @@ variable "max_usd_per_mission" {
   description = "Hard stop. A mission that reaches this fails with a reason instead of spending more."
 }
 
+variable "max_model_calls_per_mission" {
+  type    = number
+  default = 300
+
+  description = <<-EOT
+    The other hard stop, and the one that catches a loop making cheap calls
+    quickly rather than expensive ones slowly. Reaching it fails the mission with
+    a reason on the record, and is deliberately not retried.
+  EOT
+}
+
 variable "billing_account" {
   type        = string
   default     = ""

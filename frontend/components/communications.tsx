@@ -6,8 +6,10 @@ import type { Thread } from "@/lib/types";
 import { StatusChip } from "./primitives";
 
 /*
- * Communications Hub: Clean email outreach feed with
- * delivery tracking, verified vendor responses, and commitment summaries.
+ * Every thread the mission opened, and what each reply answered.
+ *
+ * The asked/answered split is not cosmetic: it is what decides whether a
+ * follow-up is owed, so it has to show the same numbers the workflow acted on.
  */
 
 export function Communications({
@@ -51,7 +53,7 @@ export function Communications({
             Outreach Threads ({threads.length})
           </h2>
           <span className="text-xs text-slate-500">
-            Automated negotiations and quotation inquiries
+            Every message, in the order it was sent
           </span>
         </div>
 
@@ -63,7 +65,7 @@ export function Communications({
             <p className="text-base font-semibold text-slate-800">No Supplier Outreach Dispatched</p>
             <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-slate-500">
               {live
-                ? "The agent automatically drafts customized quotation requests as soon as candidates are qualified."
+                ? "The agent writes to a supplier once it knows what it still cannot find out about them."
                 : "This mission concluded without initiating supplier communications."}
             </p>
           </div>

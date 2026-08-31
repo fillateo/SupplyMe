@@ -3,9 +3,12 @@
 import type { Dimension, Fact, Provenance, Trust } from "@/lib/types";
 
 /*
- * Provenance Marks: Clear, understated classification badges indicating
- * how a fact was obtained (multi-source corroboration, written quote,
- * catalog listing, supplier claim, inferred, or conflicting).
+ * How a displayed fact was obtained.
+ *
+ * Every state here is one app/domain/evidence.py can actually produce. Two that
+ * it cannot used to be listed anyway — including an "Estimated / by the AI
+ * reasoning engine" badge, which describes the opposite of how this system
+ * works: the model extracts claims and never rates them.
  */
 
 type MarkStyle = { label: string; className: string; icon: string; hint: string };
@@ -27,37 +30,25 @@ const PROVENANCE: Record<Provenance, MarkStyle> = {
     label: "Published",
     icon: "🌐",
     className: "bg-slate-100 text-slate-700 border-slate-200",
-    hint: "Stated on a public catalog or official listing we indexed.",
-  },
-  supplier_reported: {
-    label: "Supplier Claim",
-    icon: "⚠",
-    className: "bg-amber-50 text-amber-700 border-amber-200",
-    hint: "Supplier's self-reported claim. No independent corroboration found.",
-  },
-  estimated: {
-    label: "Estimated",
-    icon: "~",
-    className: "bg-amber-50 text-amber-700 border-amber-200",
-    hint: "Estimated by the AI reasoning engine. No direct source states this.",
+    hint: "Published on a page we read — the supplier's own site, or a listing about them.",
   },
   inferred: {
     label: "Inferred",
     icon: "∷",
     className: "bg-purple-50 text-purple-700 border-purple-200",
-    hint: "Derived from adjacent facts. Not stated outright by a single source.",
+    hint: "Supported only by sources too weak to count as published or corroborated.",
   },
   conflicting: {
-    label: "Disputed",
+    label: "Sources differ",
     icon: "⚡",
     className: "bg-rose-50 text-rose-700 border-rose-200",
-    hint: "Multiple sources disagree on this figure. Active dispute.",
+    hint: "Two sources give different values. The better-sourced one is shown.",
   },
   unknown: {
-    label: "Unestablished",
+    label: "Unknown",
     icon: "—",
     className: "bg-slate-50 text-slate-500 border-slate-200",
-    hint: "Not established yet. No source found.",
+    hint: "No source has answered this yet.",
   },
 };
 
@@ -128,7 +119,7 @@ export function TrustBreakdown({ trust }: { trust: Trust }) {
     <div className="space-y-3 rounded-lg bg-slate-50/80 p-3.5 border border-slate-200">
       <div className="flex items-center justify-between pb-2 border-b border-slate-200">
         <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-          Trust Breakdown Dimensions
+          Evidence by dimension
         </span>
         <span className="text-xs font-bold text-slate-900 font-mono">
           Overall: {Math.round(trust.overall * 100)}%
@@ -266,11 +257,6 @@ const STATUS_STYLES: Record<string, { label: string; tone: string; dotColor: str
   },
   discovering: {
     label: "Active Discovery",
-    tone: "bg-blue-50 text-blue-700 border-blue-200",
-    dotColor: "bg-blue-500",
-  },
-  researching_mission: {
-    label: "Researching",
     tone: "bg-blue-50 text-blue-700 border-blue-200",
     dotColor: "bg-blue-500",
   },

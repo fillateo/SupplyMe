@@ -2,8 +2,12 @@
 
 Follow-ups ("no reply after 48h"), retry backoff and non-response timeouts all
 need an event delivered later. In the cloud that is Cloud Tasks posting back to
-the service; locally it is an asyncio timer with a compressed clock so a
-two-day follow-up is observable inside a demo.
+the service; locally it is an asyncio timer.
+
+Both take a `speedup`, which is 1.0 everywhere in `app/` — only the test suite
+passes anything else, so that a suite covering a 48-hour follow-up finishes in
+under a minute. See `compressible` in app/ports/base.py for which delays are
+exempt from it, and why.
 """
 
 from __future__ import annotations
@@ -16,7 +20,7 @@ from ..domain.ids import new_id
 
 
 class LocalScheduler:
-    """asyncio-backed. `speedup` compresses wall-clock delays for demos."""
+    """asyncio-backed. `speedup` compresses wall-clock delays; 1.0 in production."""
 
     def __init__(self, bus: Any, *, speedup: float = 1.0) -> None:
         self._bus = bus
@@ -27,8 +31,8 @@ class LocalScheduler:
         self, event: Event, *, delay_seconds: float, compressible: bool = True
     ) -> str:
         task_id = new_id("task")
-        # Only business waits compress. An infrastructure backoff that gets
-        # divided by 2000 stops being a backoff.
+        # Only business waits compress. An infrastructure backoff divided by
+        # 2000 stops being a backoff.
         delay = delay_seconds / self._speedup if compressible else delay_seconds
 
         async def _fire() -> None:
@@ -71,16 +75,11 @@ class CloudTasksScheduler:
     async def schedule(
         self, event: Event, *, delay_seconds: float, compressible: bool = True
     ) -> str:
-        # The demo clock is not a property of the local scheduler; it is a
-        # property of the deployment. A demo on Cloud Run holds the same real
-        # 48-hour follow-up timer, so a mission reaches `awaiting_response` and
-        # then looks broken to whoever opened the link — the queue is working
-        # exactly as asked, and nothing says so.
-        #
-        # `compressible` is what keeps this honest. Business time compresses:
-        # waiting two days for a supplier is a fact about suppliers. Retry
-        # backoff does not, because shortening it lands the retries inside the
-        # same overloaded window they exist to avoid.
+        # A shortened clock belongs to the caller, not to the scheduler, so this
+        # implementation honours `compressible` identically to the local one —
+        # which is what the signature test in tests/test_resilience.py is for. A
+        # scheduler that quietly dropped the argument would fail only in the
+        # cloud, on the first follow-up timer of the first real mission.
         import time
 
         delay = delay_seconds / self._speedup if compressible else delay_seconds

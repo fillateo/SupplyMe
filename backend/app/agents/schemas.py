@@ -4,7 +4,7 @@ Every model call in the system returns one of these. Two conventions run
 throughout:
 
 * Unknown is representable. Optional fields exist so the model can decline to
-  answer instead of inventing a number to satisfy the schema — §36.
+  answer instead of inventing a number to satisfy the schema.
 * Anything asserted about the outside world carries a `source_url` and an
   `excerpt`, so it can become an Evidence record. A claim with no excerpt is
   downgraded by app/domain/evidence.py rather than trusted.
@@ -271,7 +271,10 @@ class QuoteExtraction(BaseModel):
 
 
 class SelectionNarrative(BaseModel):
-    node_key: str
+    node_key: str = Field(
+        description="The node key exactly as it appears in square brackets in the "
+        "supplied ranking, e.g. 'glass_bottle'. Not the human-readable name."
+    )
     vendor_id: str
     why: list[str] = Field(description="Reasons drawn only from the supplied facts")
 

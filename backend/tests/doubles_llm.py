@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import re
 
-from app.adapters.scripted_llm import ScriptedLLM
 from app.agents.schemas import (
     BrandFinding,
     BrandInvestigation,
@@ -32,6 +31,7 @@ from app.agents.schemas import (
 from app.domain.models import SourceType
 
 from . import doubles_world as world
+from .scripted_llm import ScriptedLLM
 
 NODES = [
     ("bottle", "50ml glass perfume bottle", ("pump", "cap")),
@@ -102,9 +102,13 @@ def _discovery(prompt: str, untrusted: str | None) -> DiscoveryResult | SearchQu
         )
 
     node_key = _between(prompt, "node key: ", ")")
+    # The candidates arrive in the untrusted block, not the prompt: search
+    # results are written by whoever owns the page, so discovery hands them to
+    # the model delimited, exactly as the research agent does with a webpage.
+    candidates = f"{prompt}\n{untrusted or ''}"
     found: list[DiscoveredVendor] = []
     for vendor in world.VENDORS:
-        if vendor.name not in prompt:
+        if vendor.name not in candidates:
             continue
         if node_key not in vendor.node_keys:
             continue
@@ -378,7 +382,12 @@ def _extract_quote(prompt: str, body: str) -> QuoteExtraction:
 
 
 def _recommendation(prompt: str, untrusted: str | None) -> RecommendationNarrative:
-    ranked_row = re.compile(r"- \[(?P<node>[^\]]+)\] (?P<name>.+?) — (?P<score>[\d.]+)/100")
+    # Mirrors _render_row: "- [node_key] Node Name: Vendor — 82.4/100 — City".
+    # The node KEY is what the real narrative agent is asked to answer with, and
+    # what the handler looks the annotation up by.
+    ranked_row = re.compile(
+        r"- \[(?P<node>[^\]]+)\] (?P<node_name>[^:]+): (?P<name>.+?) — (?P<score>[\d.]+)/100"
+    )
     selections = []
     for line in prompt.splitlines():
         match = ranked_row.match(line.strip())
@@ -386,7 +395,7 @@ def _recommendation(prompt: str, untrusted: str | None) -> RecommendationNarrati
             selections.append(
                 SelectionNarrative(
                     node_key=match.group("node"), vendor_id=match.group("name"),
-                    why=[f"scored {match.group('score')}/100 on the mission's weights"],
+                    why=[f"narrated: scored {match.group('score')}/100 on the mission's weights"],
                 )
             )
     return RecommendationNarrative(

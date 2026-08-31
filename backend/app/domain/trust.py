@@ -21,16 +21,6 @@ from .models import (
     Vendor,
 )
 
-DIMENSIONS = (
-    "identity",
-    "capability",
-    "moq",
-    "pricing",
-    "lead_time",
-    "brand_evidence",
-    "contact",
-)
-
 
 @dataclass(frozen=True)
 class Dimension:
@@ -65,9 +55,7 @@ PROVENANCE_SCORE: dict[Provenance, float] = {
     Provenance.VERIFIED: 0.95,
     Provenance.DIRECT_QUOTE: 0.90,
     Provenance.PUBLICLY_LISTED: 0.70,
-    Provenance.SUPPLIER_REPORTED: 0.60,
     Provenance.INFERRED: 0.35,
-    Provenance.ESTIMATED: 0.30,
     Provenance.CONFLICTING: 0.25,
     Provenance.UNKNOWN: 0.0,
 }

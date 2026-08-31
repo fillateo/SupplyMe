@@ -27,6 +27,7 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from ..adapters.gemini_llm import current_mission
 from ..config import Settings
 from ..domain.cost import BudgetExceeded
 from ..domain.events import EXTERNAL_ACTION_EVENTS, Event, EventType
@@ -125,6 +126,10 @@ class Orchestrator:
         await self._restore_spend(event.mission_id)
         await self._record(event, status="started")
         started = time.perf_counter()
+        # Names the mission for every model call this handler causes, including
+        # the ones made somewhere that never sees a mission id: grounded search,
+        # reached through the Search port, and ADK's own model wrapper.
+        attribution = current_mission.set(event.mission_id)
         try:
             next_events = await handler(self, event)
         except BudgetExceeded as exc:
@@ -143,10 +148,9 @@ class Orchestrator:
         except Exception as exc:
             await self._on_failure(event, exc)
             return
+        finally:
+            current_mission.reset(attribution)
 
-        await self.store.complete(
-            f"evt:{event.key}", {"emitted": [e.type.value for e in next_events]}
-        )
         await self._record(
             event,
             status="ok",
@@ -158,6 +162,15 @@ class Orchestrator:
 
         for next_event in next_events:
             await self.emit(next_event)
+
+        # Complete only after every child event is actually published: if
+        # publish fails partway through, this event stays uncompleted and a
+        # retry re-runs the handler and re-emits everything. That is safe —
+        # each child event dedupes on its own key — whereas completing first
+        # would let a publish failure silently drop the events it named.
+        await self.store.complete(
+            f"evt:{event.key}", {"emitted": [e.type.value for e in next_events]}
+        )
 
     async def _restore_spend(self, mission_id: str) -> None:
         """Teach this process what the mission has already spent elsewhere.
@@ -376,6 +389,11 @@ class Orchestrator:
         mission.status = MissionStatus.FAILED
         mission.failure_reason = reason
         await self.repo.save(mission)
+        # So the terminal state actually appears on the activity timeline —
+        # ARCHITECTURE.md documents mission.failed as a first-class event.
+        await self.emit(
+            Event(type=EventType.MISSION_FAILED, mission_id=mission_id, payload={"reason": reason})
+        )
 
     # -- observability ------------------------------------------------------
 

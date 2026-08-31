@@ -1,6 +1,8 @@
+//: Mirrors app/domain/models.py::Provenance — only the states
+//: app/domain/evidence.py can actually compute.
 export type Provenance =
-  | "verified" | "direct_quote" | "supplier_reported" | "publicly_listed"
-  | "estimated" | "inferred" | "conflicting" | "unknown";
+  | "verified" | "direct_quote" | "publicly_listed"
+  | "inferred" | "conflicting" | "unknown";
 
 export type Fact = {
   value: string | number | null;

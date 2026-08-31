@@ -1,8 +1,12 @@
 """In-process store.
 
-Used by tests and by `make demo` so the whole workflow can be exercised without
-a cloud project. It implements the same contract as the Firestore adapter,
-including the atomic reservation that makes external actions idempotent.
+What a local run uses when `SUPPLYME_USE_CLOUD_INFRA` is off, so the workflow can
+be exercised without provisioning Firestore. It implements the same contract as
+the Firestore adapter, including the atomic reservation that makes external
+actions idempotent — so what works against one works against the other.
+
+The difference that matters: nothing here survives a restart, and `/api/health`
+says so rather than leaving it to be found out.
 """
 
 from __future__ import annotations

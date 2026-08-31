@@ -47,9 +47,13 @@ resource "google_secret_manager_secret" "smtp_password" {
   depends_on = [google_project_service.enabled]
 }
 
-# The value is not in this repository and is not created by this root. Put it in
-# once, by hand, from the machine that has it:
+# REQUIRED MANUAL STEP. This root creates the secret but deliberately not its
+# value — an app password does not belong in a tfvars file or a state bucket. A
+# Cloud Run revision cannot start until a version exists, so do this once,
+# before the first apply that creates the service:
 #
-#   gcloud secrets versions add supply-me-smtp-password --data-file=-
+#   gcloud secrets versions add supply-me-smtp-password --project PROJECT \
+#     --data-file=-
 #
-# `ignore_changes` on the secret keeps a later apply from arguing with that.
+# Terraform never reads or rotates it afterwards, so a later apply leaves
+# whatever version is current alone.

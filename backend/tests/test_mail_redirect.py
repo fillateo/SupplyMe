@@ -14,7 +14,7 @@ import pytest
 from app.adapters.mail_redirect import RedirectingMailProvider
 from app.ports.base import InboundMail, SentMail
 
-TESTER = "jiarji.project@gmail.com"
+TESTER = "operator@example.com"
 SUPPLIER = "contact@premiumparfum.example.com"
 
 

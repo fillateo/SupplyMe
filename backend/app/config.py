@@ -1,7 +1,9 @@
 """Runtime configuration.
 
-Everything that differs between LIVE and DEMO mode is resolved here and nowhere
-else. The agent/workflow code never reads environment variables directly.
+Every setting is read here and nowhere else: the agents, the workflow and the
+adapters are handed a `Settings` and never reach for the environment themselves.
+There is no mode switch — a provider is bound to the real service or the process
+refuses to start (see app/adapters/registry.py).
 """
 
 from __future__ import annotations
@@ -16,8 +18,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class ApprovalPolicy(StrEnum):
     """How much the agent may do without a human in the loop."""
 
-    AUTONOMOUS = "autonomous"          # no approvals; used by the test suite
-    EXTERNAL_ACTIONS = "external"      # approve first email/call per vendor (default)
+    AUTONOMOUS = "autonomous"          # the default: nothing waits for a human
+    EXTERNAL_ACTIONS = "external"      # approve the first email to each vendor
     STRICT = "strict"                  # approve every outbound action
 
 
@@ -62,11 +64,11 @@ class Settings(BaseSettings):
     #: Whether to use Firestore, Pub/Sub and Cloud Tasks instead of the
     #: in-process store, bus and scheduler.
     #:
-    #: Deliberately independent of `mode`. Running against the real Google
-    #: product APIs and running on Google's infrastructure are different
-    #: decisions: locally you usually want real Search and Places with an
-    #: in-process store, because provisioning Firestore just to try the thing
-    #: out is a tax on curiosity. Terraform sets this true on Cloud Run.
+    #: Running against the real Google product APIs and running on Google's own
+    #: infrastructure are separate decisions: locally you usually want real
+    #: Search and Places with an in-process store, because provisioning
+    #: Firestore just to try the thing out is a tax on curiosity. Terraform sets
+    #: this true on Cloud Run.
     use_cloud_infra: bool = False
 
     # --- Google Cloud -------------------------------------------------------
@@ -95,9 +97,11 @@ class Settings(BaseSettings):
 
     # --- Infrastructure -----------------------------------------------------
     firestore_database: str = "(default)"
-    pubsub_topic: str = "vds-workflow"
+    #: Terraform sets both from `var.service_name`; these defaults only matter
+    #: to a local run that has turned cloud infrastructure on by hand.
+    pubsub_topic: str = "supply-me-workflow"
     pubsub_push_token: str = ""            # shared secret on the push endpoint
-    tasks_queue: str = "vds-followups"
+    tasks_queue: str = "supply-me-followups"
     public_base_url: str = "http://localhost:8080"
 
     # --- External product integrations -------------------------------------
@@ -180,13 +184,6 @@ class Settings(BaseSettings):
     #: the single largest runaway risk in the system.
     max_research_llm_calls: int = Field(default=12, ge=1, le=200)
 
-    #: Thinking tokens are billed as output, and on 2.5-flash they were roughly
-    #: 60% of a measured mission's output spend. Extraction and classification —
-    #: reading a price out of an email, deciding whether a search result is a
-    #: manufacturer — do not benefit from it, so the fast tier gets none.
-    #: Planning and adjudication do benefit, so the reasoning tier keeps a
-    #: bounded allowance. -1 means "let the model decide", which is the default
-    #: and the expensive option.
     #: Google Places is billed per request and is the most expensive call this
     #: system makes — roughly an order of magnitude more than a Gemini call. A
     #: mission fans out over every supply-chain node, so this caps how many
@@ -194,6 +191,13 @@ class Settings(BaseSettings):
     #: finds the same suppliers and costs far less.
     max_maps_queries_per_node: int = Field(default=1, ge=0, le=5)
 
+    #: Thinking tokens are billed as output, and on 2.5-flash they were roughly
+    #: 60% of a measured mission's output spend. Extraction and classification —
+    #: reading a price out of an email, deciding whether a search result is a
+    #: manufacturer — do not benefit from it, so the fast tier gets none.
+    #: Planning and adjudication do benefit, so the reasoning tier keeps a
+    #: bounded allowance. -1 means "let the model decide", which is the
+    #: expensive option.
     fast_thinking_budget: int = Field(default=0, ge=-1, le=32768)
     reasoning_thinking_budget: int = Field(default=2048, ge=-1, le=32768)
     llm_timeout_seconds: float = 90.0

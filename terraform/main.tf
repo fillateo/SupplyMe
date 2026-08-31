@@ -9,8 +9,8 @@ locals {
     "cloudtasks.googleapis.com",
     "cloudscheduler.googleapis.com",
     "aiplatform.googleapis.com",
-    # Vertex cannot reach Gemini 3.x on this project; the Developer API can.
-    # See gemini.tf.
+    # Only used when var.use_vertex is false; see gemini.tf. Vertex is the
+    # default and does reach Gemini 3.x, from the `global` endpoint.
     "generativelanguage.googleapis.com",
     "apikeys.googleapis.com",
     # Evidence the agent reads: business listings.

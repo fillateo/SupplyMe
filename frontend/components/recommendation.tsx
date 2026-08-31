@@ -4,9 +4,12 @@ import type { Recommendation, Selection } from "@/lib/types";
 import { ConfidenceMeter } from "./primitives";
 
 /*
- * Strategic Recommendation & Sourcing Decision Board:
- * Executive analysis, mathematical fit rankings, unit BOM cost aggregation,
- * and tactical risk triage.
+ * The finished report: which supplier was chosen for each component line, why,
+ * and what the mission never managed to establish.
+ *
+ * The ranking is computed in app/domain/scoring.py before the narrative agent
+ * ever runs, and the agent may not reorder it — so every score shown here is
+ * arithmetic the "how the score was reached" panel can reproduce line by line.
  */
 
 export function RecommendationPanel({
@@ -29,8 +32,8 @@ export function RecommendationPanel({
         </p>
         <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-slate-500">
           {live
-            ? "The multi-criteria ranking algorithm activates automatically once candidate research, pricing verification, and email inquiries have been concluded across all BOM nodes."
-            : "This mission ended before enough verified candidates could be ranked."}
+            ? "Ranking runs by itself once every supplier has either been qualified or ruled out."
+            : "This mission ended before there was anything to rank."}
         </p>
       </div>
     );
@@ -44,7 +47,7 @@ export function RecommendationPanel({
           <div className="flex items-center gap-2 pb-2 mb-2 border-b border-blue-100">
             <span className="h-2 w-2 rounded-full bg-blue-600" />
             <h2 className="text-xs font-semibold uppercase tracking-wider text-blue-700">
-              Executive Sourcing Strategy & Assessment
+              Summary
             </h2>
           </div>
           <p className="text-sm leading-relaxed text-slate-800 sm:text-base">
@@ -67,7 +70,7 @@ export function RecommendationPanel({
 
           {recommendation.estimated_unit_cost !== null && (
             <div className="flex items-baseline gap-2 rounded-lg bg-emerald-50 px-3.5 py-1.5 border border-emerald-200">
-              <span className="text-xs font-medium text-emerald-800">Estimated Total Unit BOM:</span>
+              <span className="text-xs font-medium text-emerald-800">Quoted cost per unit:</span>
               <span className="text-base font-bold text-emerald-800 font-mono">
                 {currencyFormat(recommendation.estimated_unit_cost)}
               </span>
@@ -96,7 +99,7 @@ export function RecommendationPanel({
             </h3>
           </div>
           <p className="text-xs text-slate-500">
-            Suppliers ruled out for this production batch profile (e.g. excessive MOQ threshold, missing certifications, or unverified claims).
+Ruled out for this batch — usually a minimum order far above what is being bought, or no way to contact them. The reason is on each row.
           </p>
 
           <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-slate-50/50 overflow-hidden">
@@ -211,7 +214,7 @@ function SelectionCard({
       {/* Score Components Accordion */}
       <details className="mt-3 border-t border-slate-100 pt-2.5">
         <summary className="cursor-pointer text-xs font-semibold text-blue-600 hover:text-blue-800">
-          ▶ View Mathematical Fit Breakdown & Criteria Weights
+          ▶ How the score was reached
         </summary>
         <div className="mt-2.5 space-y-2 rounded-lg bg-slate-50 p-3 border border-slate-200">
           <ul className="space-y-2">

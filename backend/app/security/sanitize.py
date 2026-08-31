@@ -83,15 +83,8 @@ def excerpt(text: str, *, limit: int = 400) -> str:
     return collapsed[:limit].rsplit(" ", 1)[0] + "…"
 
 
-_URL_RE = re.compile(r"https?://[^\s<>\"')]+")
-
-
 def sole_domain(url: str | None) -> str | None:
     if not url:
         return None
     host = url.split("://", 1)[-1].split("/", 1)[0].lower()
     return host[4:] if host.startswith("www.") else host
-
-
-def extract_urls(text: str) -> list[str]:
-    return list(dict.fromkeys(_URL_RE.findall(text)))

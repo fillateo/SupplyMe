@@ -114,28 +114,22 @@ uncomparable. What a bundle contains is now the supplier's statement, recorded
 from their reply; a bundle they did not explain is reported as uncomparable
 rather than assumed.
 
-Two live plans, from the same unchanged code:
+One plan, from a live run against *"a 1.5m solid oak dining table for export
+from Vietnam"* — a product this code has never been told anything about:
 
 ```
-Solid oak dining table, Vietnam          10,000mAh USB-C power bank
-─────────────────────────────────        ─────────────────────────────────
-fsc_oak_lumber                           battery_cell
-  Gỗ sồi FSC · KD Oak timber · Sawn oak    Li-Po cell · polymer cell
-furniture_hardware                       pcba
-  Phụ kiện ngũ kim · Connecting bolts      power bank PCB · mainboard
-protective_wood_coating                  enclosure
-  Sơn PU · Wood lacquer · Topcoat          plastic shell · aluminum housing
-flat_pack_packaging                      packaging
-  Thùng carton · PE foam inserts           gift box · color box · paper tray
-woodworking_and_assembly                 assembly_testing
-  Gia công đồ gỗ · Wood processing         EMS · contract manufacturing
-
-30 words → 5 nodes                       36 words → 6 nodes
+fsc-oak-lumber              FSC oak · gỗ sồi FSC · oak lumber · solid oak board
+woodworking-and-finishing   wood machining · gia công gỗ · PU finishing · sơn PU
+kd-hardware                 KD fittings · phụ kiện ngành gỗ · connecting bolts
+flatpack-packaging          carton box · thùng carton · flatpack box
 ```
 
-Neither list appears anywhere in `app/`. `set`, `paket` and `kit` resolve to
-`package` in both, because bundling is a property of quotations rather than of
-an industry — and that is the only vocabulary the code ships with.
+None of those words appears anywhere in `app/`, in any language. The plan is
+regenerated per mission, so a second run words it differently — what is fixed is
+that the vocabulary comes from the plan and not from a table. The only component
+vocabulary the code ships with is that `set`, `paket` and `kit` all mean
+`package`, because bundling is a property of quotations rather than of an
+industry.
 
 ## ✨ Key Features
 
@@ -147,7 +141,7 @@ an industry — and that is the only vocabulary the code ships with.
 
 ### Evidence With Provenance
 - **The model extracts claims; it never rates them** — `app/domain/evidence.py` scores a claim from its source and nothing else
-- **Provenance on every displayed fact** — `verified`, `direct quote`, `published`, `supplier says`, `inferred`, `sources differ`, `unknown`
+- **Provenance on every displayed fact** — `verified`, `direct quote`, `published`, `inferred`, `sources differ`, `unknown`. Six states, because six is what the evidence engine can actually compute; a badge for a seventh would be a claim about the system rather than about the fact
 - **Diminishing returns** — twenty directory listings copying one press release score *lower* than the manufacturer's own spec sheet
 - **Click through to the excerpt** — verbatim text, URL, and retrieval time, in the console
 
@@ -174,24 +168,30 @@ an industry — and that is the only vocabulary the code ships with.
 ## 🤖 Agent Architecture
 
 Seven agents, each with an explicit tool allowlist in `app/domain/policy.py`.
-**The allowlist is the security boundary, not a comment** — ADK's
-`before_tool_callback` runs it on every tool invocation, and a denial is returned
-to the model as a result so the agent carries on with the tools it does hold.
+**It is enforced at runtime in the one place an agent chooses its own tool
+calls**: ADK's `before_tool_callback` runs `policy.check()` on every tool
+invocation inside the Research agent's ADK loop, and a denial is returned to
+the model as a result so the agent carries on with the tools it does hold
+(`app/agents/adk_research.py`). The other six agents never call a tool
+directly — each is one structured call, and the handler that reads its output
+is the only code that touches a provider, so their allowlist is a contract
+enforced by code structure and held to the same table by
+`tests/test_security_policy.py`, not by a runtime gate on every call.
 
 | Agent | May | May not |
 | --- | --- | --- |
 | **Mission** | read the objective, write vendors | search, read, email, spend |
 | **Supply chain** | decompose | any tool at all |
 | **Discovery** | search, Maps, read pages, write vendors | email |
-| **Research** | search, read, Maps, write evidence | **email, spend** |
+| **Research** | search, read, Maps, write evidence, write vendors | **email, spend** |
 | **Brand evidence** | search, read, write evidence | **email, spend** |
-| **Communication** | draft, send, read mail | alter scores |
+| **Communication** | draft, send, read mail, write evidence (recording an extracted quote) | alter scores |
 | **Recommendation** | write scores | send anything |
 
 The two agents that read attacker-controlled content — Research and Brand
 Evidence — hold no tool that can reach the outside world. If a supplier's page
-convinces the model of something, the worst it can do is record a bad claim,
-which the evidence engine then rates on its source.
+convinces the model of something, the worst it can do is record a bad claim or
+a vendor record, which the evidence engine then rates on its source.
 
 ### Where Google ADK is used, and why only there
 
@@ -242,8 +242,8 @@ later causes the system to email and ask.
 ### 1. Clone and configure
 
 ```bash
-git clone <repository-url>
-cd vendor-discovery
+git clone https://github.com/fillateo/SupplyMe.git
+cd SupplyMe
 cp backend/.env.example backend/.env
 # Edit backend/.env with your project and credentials
 ```
@@ -258,12 +258,17 @@ SUPPLYME_VERTEX_LOCATION=global
 SUPPLYME_MAPS_API_KEY=your_places_key
 
 # The mailbox, in both directions — one Gmail app password
-SUPPLYME_SMTP_USER=you@gmail.com
+SUPPLYME_SMTP_USER=sourcing@example.com
 SUPPLYME_SMTP_PASSWORD=your_app_password
 
-# The one safety valve. Set it.
-SUPPLYME_MAIL_REDIRECT_TO=you@gmail.com
+# The one safety valve. Set it — to a DIFFERENT mailbox from the one above.
+SUPPLYME_MAIL_REDIRECT_TO=you@example.com
 ```
+
+> Those two must not be the same address. Outreach is sent from `SMTP_USER` and
+> read back from it, and mail arriving from that address is discarded as our own
+> copy — so if they match, you answer as the supplier and the mission never hears
+> you.
 
 > ⚠️ **The addresses in a mission belong to real businesses**, read off their
 > real websites, and the distance between a good demonstration and an apology is
@@ -274,7 +279,7 @@ Then confirm which models your project can actually reach — reachability is a
 property of the project *and* the location, not of the model name:
 
 ```bash
-backend/scripts/check_models.py --project YOUR_PROJECT --location global
+cd backend && .venv/bin/python scripts/check_models.py --project YOUR_PROJECT --location global
 ```
 
 ### 3. Run the system
@@ -285,7 +290,7 @@ backend/scripts/check_models.py --project YOUR_PROJECT --location global
 ./run.sh            # API on :8080, console on :3000
 ./run.sh mission    # one whole mission in the terminal, start to finish
 ./run.sh mail       # read the mailbox now instead of waiting for the poll
-./run.sh test       # 354 tests, ~55s, no network
+./run.sh test       # 362 tests, ~55s, no network
 ./run.sh status     # what is running, and what it has spent
 ./run.sh stop
 ./run.sh clean      # build caches only — never source or .env
@@ -313,11 +318,12 @@ required one is a startup failure, not a fallback.
 | `SUPPLYME_VERTEX_LOCATION` | `global` | Where Vertex serves the model. Gemini 3.x answers from `global`; a named region 404s |
 | `SUPPLYME_LOCATION` | `us-central1` | Region for Cloud Tasks and friends. Must be a real region — Cloud Tasks rejects `global` |
 | `SUPPLYME_USE_CLOUD_INFRA` | `false` | Firestore / Pub/Sub / Cloud Tasks vs the in-process store, bus and scheduler |
-| `SUPPLYME_APPROVAL_POLICY` | `external` | `autonomous` \| `external` \| `strict` |
+| `SUPPLYME_APPROVAL_POLICY` | `autonomous` | `autonomous` \| `external` \| `strict`. Autonomous is safe because `SUPPLYME_MAIL_REDIRECT_TO` bounds the blast radius, not a human |
 | `SUPPLYME_SEARCH_API_KEY` / `SUPPLYME_SEARCH_ENGINE_ID` | — | Programmable Search; unset falls back to Gemini grounding |
 | `SUPPLYME_REASONING_MODEL` / `SUPPLYME_FAST_MODEL` | resolved | Empty = newest reachable model on the ladder |
 | `SUPPLYME_MAX_USD_PER_MISSION` | `1.00` | Hard stop — the mission fails with a reason rather than spending more |
-| `SUPPLYME_MAX_MODEL_CALLS_PER_MISSION` | `300` | Hard stop. A real mission over 8 suppliers uses about 100 |
+| `SUPPLYME_MAX_MODEL_CALLS_PER_MISSION` | `300` | Hard stop. 8 suppliers costs about 100 calls; 12 costs about 300 |
+| `SUPPLYME_MAX_VENDORS_PER_MISSION` | `12` | The single biggest lever on cost. Lower it first |
 | `SUPPLYME_MAX_RESEARCH_LLM_CALLS` | `12` | Ceiling on one ADK tool loop — ADK's own default is 500 |
 | `SUPPLYME_MAX_CONCURRENT_RESEARCH` | `3` | Caps the widest fan-out so a mission cannot rate-limit itself |
 | `SUPPLYME_FAST_THINKING_BUDGET` | `0` | Thinking is billed as output and buys nothing on extraction |
@@ -357,13 +363,18 @@ use the push path instead.
 
 ## 💰 Cost
 
-A mission over the live web is **around 100 model calls and $0.25–$0.35** on
-`gemini-3.5-flash`. One run over eight real suppliers made 98 calls on 562,000
-input tokens and cost **$0.29** — measured from the API's own token counts, not
-estimated.
+Measured from the API's own token counts, on `gemini-3.5-flash`:
 
-Input tokens dominate, and reading real pages is why: a supplier's website is
-tens of thousands of tokens where a fixture was a paragraph.
+| Mission | Model calls | Cost | Outcome |
+| --- | --- | --- | --- |
+| 8 suppliers, shortlist capped low | 98 | $0.29 | completed |
+| 12 suppliers, default caps | 296 | $0.78 | stopped at `awaiting_response`, still short of a recommendation |
+
+**Cost scales with how many suppliers get researched, not with the mission**, and
+the second row is the one to plan against: every admitted supplier is a tool loop
+reading whole websites, and input tokens are almost the entire bill. On a fixed
+balance, lower `SUPPLYME_MAX_VENDORS_PER_MISSION` before anything else — a
+shortlist of five researched properly costs a third of twelve researched badly.
 
 | Guard | Value | Effect |
 | --- | --- | --- |
@@ -380,7 +391,7 @@ so the caps are what bounds it rather than a switch.
 
 - **Prompt-injection defence** — untrusted content is delimited, labelled as data, and injection phrasings defanged before the model sees it (`app/security/sanitize.py`)
 - **Structured output only** — there is no free-form channel from a supplier's text to an action
-- **Least privilege, executed** — the agent tool allowlist runs on every invocation rather than describing intent
+- **Least privilege, executed where it matters most** — ADK's `before_tool_callback` checks the allowlist on every tool call inside the Research agent's loop, the one place an agent chooses its own tool calls; the other six agents have no tool loop to gate, so their allowlist is a contract enforced by code structure and held to the same table by `tests/test_security_policy.py`, not a runtime check on every call
 - **Secrets in Secret Manager** — nothing reaches the browser; the console proxies server-side, so no API credential is ever in client JavaScript
 - **Idempotency reservations** — every external action reserves before it runs, keyed on `mission + vendor + action + version`
 
@@ -402,7 +413,12 @@ so the caps are what bounds it rather than a switch.
 - **Supplier cards** — provenance state on each fact, evidence drawer behind each one
 - **Conflict view** — what the website said, what the email said, and how it was resolved
 - **Communications** — every thread, with asked / answered / unanswered questions
-- **Adjustable weights** — `PUT /api/missions/{id}/weights` re-ranks without re-researching
+
+The API also exposes `PUT /api/missions/{id}/weights` to re-rank a mission
+against new priorities without re-researching, and read endpoints for a single
+vendor's full dossier (`GET .../vendors/{vendor_id}`), the live ranking
+(`GET .../ranking`) and vendor map coordinates (`GET .../map`) — all covered by
+`tests/test_api.py`, none yet wired to a console control.
 
 ### Key API endpoints
 
@@ -422,7 +438,7 @@ so the caps are what bounds it rather than a switch.
 ```bash
 ./run.sh test
 # or
-cd backend && .venv/bin/python -m pytest -q     # 354 tests, ~55 seconds, no network
+cd backend && .venv/bin/python -m pytest -q     # 362 tests, ~55 seconds, no network
 ```
 
 - **Unit** — evidence classification, identity resolution, quote normalisation, conflict detection, scoring, number parsing, policy, injection defence, and the ADK tool guard

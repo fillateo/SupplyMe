@@ -7,20 +7,23 @@ Retrieval policy, applied here rather than in the agents:
   URLs out of the grounding metadata, so the system still has real citations.
 * Page fetches are single, polite GETs: robots.txt is honoured, a real UA is
   sent, redirects are capped, and a disallowed or oversized page comes back as
-  `blocked_reason` rather than being retried harder. §10 asks for no aggressive
-  scraping and no bypassing of access controls; a blocked page is simply a page
-  the mission does not get evidence from.
+  `blocked_reason` rather than being retried harder. Nothing here scrapes
+  aggressively or works around an access control; a blocked page is simply a
+  page the mission does not get evidence from.
 """
 
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import re
+import socket
 import urllib.robotparser
 from dataclasses import replace
 from html.parser import HTMLParser
-from typing import ClassVar
+from typing import Any, ClassVar
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -29,12 +32,6 @@ from ..ports.base import PageContent, Place, SearchHit
 
 log = logging.getLogger(__name__)
 
-#: The `Mozilla/5.0 (compatible; …)` shape is the crawler convention — it is what
-#: Googlebot and bingbot send — and it still names this tool and where to
-#: complain about it. The plainer `SupplyMe/0.1 (…)` form was
-#: being 403'd outright by supplier sites behind a WAF, which is a large part of
-#: why live research read nothing. robots.txt is still obeyed either way: that,
-#: not the header, is where a site says whether it wants to be read.
 #: Search grounding hands back links to Google's own redirector rather than to
 #: the page it read. Every downstream judgement is made on a URL — is this the
 #: supplier's own site, is this source independent of them, which domain does
@@ -44,8 +41,14 @@ log = logging.getLogger(__name__)
 GROUNDING_REDIRECT_HOST = "vertexaisearch.cloud.google.com"
 RESOLVE_TIMEOUT = 8.0
 
+#: The `Mozilla/5.0 (compatible; …)` shape is the crawler convention — it is what
+#: Googlebot and bingbot send — and it still names this tool and where to
+#: complain about it. The plainer `SupplyMe/0.1 (…)` form was being 403'd
+#: outright by supplier sites behind a WAF, which is a large part of why live
+#: research read nothing. robots.txt is still obeyed either way: that, not the
+#: header, is where a site says whether it wants to be read.
 USER_AGENT = (
-    "Mozilla/5.0 (compatible; SupplyMe/0.1; +https://github.com/nesso-labs)"
+    "Mozilla/5.0 (compatible; SupplyMe/0.1; +https://github.com/fillateo/SupplyMe)"
 )
 
 #: Sent with every page fetch. A request with no Accept header looks like a
@@ -57,6 +60,30 @@ FETCH_HEADERS = {
 }
 FETCH_TIMEOUT = 15.0
 MAX_PAGE_BYTES = 800_000
+
+
+def _resolves_to_internal_address(host: str) -> bool:
+    """True if `host` is, or resolves to, a loopback/private/link-local address.
+
+    `read_page` fetches whatever URL the research agent's tool loop decides to
+    open, and that decision is steered by page content the agent read a
+    moment earlier — content an attacker controls. Without this check, a
+    crafted page could point the agent at the Cloud Run metadata server
+    (169.254.169.254) or another internal service and exfiltrate its
+    response as "research". Resolution failure is treated as unsafe: there is
+    nothing to fetch either way.
+    """
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return True
+    for family, *_rest, sockaddr in infos:
+        if family not in (socket.AF_INET, socket.AF_INET6):
+            continue
+        ip = ipaddress.ip_address(sockaddr[0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            return True
+    return False
 
 
 class _TextExtractor(HTMLParser):
@@ -148,8 +175,12 @@ class _TextExtractor(HTMLParser):
 
 
 class GoogleSearchProvider:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, meter: Any = None) -> None:
         self._settings = settings
+        #: Grounded search is a Gemini call, so it is billed like one. Which
+        #: mission to bill comes from gemini_llm.current_mission, because the
+        #: Search port has no mission to pass down.
+        self._meter = meter
         self._client = httpx.AsyncClient(
             timeout=FETCH_TIMEOUT, headers=dict(FETCH_HEADERS), follow_redirects=True
         )
@@ -185,20 +216,40 @@ class GoogleSearchProvider:
         ]
 
     async def _grounded(self, query: str, limit: int) -> list[SearchHit]:
-        """Gemini + Google Search grounding, read for its citations."""
+        """Gemini + Google Search grounding, read for its citations.
+
+        This is a Gemini call like any other, and for a while it was the only one
+        that behaved as though it were not: outside the gate, so a mission's
+        parallel discovery opened a dozen simultaneous requests and Vertex
+        answered 429 to most; and outside the meter, so the spend a mission
+        reported excluded every search it ran. On a deployment with no
+        Programmable Search engine — which is the default — that is most of the
+        calls the mission makes.
+        """
         from google.genai import types
 
-        from .gemini_llm import _client, resolve_model
+        from .gemini_llm import (
+            _client,
+            _record_usage,
+            acquire_model_slot,
+            current_mission,
+            resolve_model,
+        )
 
         client = _client(self._settings)
         model = await resolve_model(self._settings, prefer_fast=True)
-        response = await client.aio.models.generate_content(
-            model=model,
-            contents=f"Search the web for: {query}. List what you find with sources.",
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())]
-            ),
-        )
+        gate = await acquire_model_slot()
+        try:
+            response = await client.aio.models.generate_content(
+                model=model,
+                contents=f"Search the web for: {query}. List what you find with sources.",
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(google_search=types.GoogleSearch())]
+                ),
+            )
+        finally:
+            gate.release()
+        _record_usage(self._meter, current_mission.get(), model, response)
         hits: list[SearchHit] = []
         for candidate in getattr(response, "candidates", None) or []:
             metadata = getattr(candidate, "grounding_metadata", None)
@@ -271,11 +322,29 @@ class GoogleSearchProvider:
         return False, "disallowed by robots.txt"
 
     async def fetch(self, url: str) -> PageContent:
+        host = urlsplit(url).hostname
+        if not host or await asyncio.to_thread(_resolves_to_internal_address, host):
+            return PageContent(
+                url=url, title="", text="", fetched=False,
+                blocked_reason="blocked: internal or unresolvable address",
+            )
         allowed, reason = await self._allowed(url)
         if not allowed:
             return PageContent(url=url, title="", text="", fetched=False, blocked_reason=reason)
         try:
             response = await self._client.get(url)
+            # `follow_redirects` is on, so the address checked above is not
+            # necessarily the address that answered. A page that redirects to
+            # 169.254.169.254 would otherwise walk straight past the check that
+            # exists to stop exactly that.
+            final = urlsplit(str(response.url)).hostname
+            if final and final != host and await asyncio.to_thread(
+                _resolves_to_internal_address, final
+            ):
+                return PageContent(
+                    url=url, title="", text="", fetched=False,
+                    blocked_reason="blocked: redirected to an internal address",
+                )
         except httpx.HTTPError as exc:
             return PageContent(
                 url=url, title="", text="", fetched=False, blocked_reason=f"fetch failed: {exc}"

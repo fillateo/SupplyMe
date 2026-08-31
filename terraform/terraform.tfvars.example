@@ -20,8 +20,12 @@ console_image = "us-central1-docker.pkg.dev/your-project-id/supply-me/console:la
 # decided, on purpose, to write to them — /api/health states which it is.
 # The app password for smtp_user goes in Secret Manager, never here.
 
-smtp_user        = "you@gmail.com"
-mail_redirect_to = "you@gmail.com"
+# These must be two different mailboxes. Outreach is sent from smtp_user and
+# read back from it, and a reply from that same address is discarded as our own
+# copy — so pointing mail_redirect_to at it means you answer as the supplier and
+# the mission never hears you.
+smtp_user        = "sourcing@example.com"
+mail_redirect_to = "you@example.com"
 
 # autonomous | external | strict. Autonomous is the point: the agent acts
 # without being authorised each time. mail_redirect_to above is what bounds it.

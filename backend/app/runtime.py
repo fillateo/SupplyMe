@@ -16,6 +16,7 @@ from .agents import Agents
 from .config import Settings, get_settings
 from .domain.events import Event, EventType
 from .domain.models import Mission, MissionStatus, SearchScope
+from .domain.models import utcnow as _utcnow
 from .workflow import handlers as _handlers  # noqa: F401  (registers handlers)
 from .workflow.context import Repo
 from .workflow.orchestrator import Orchestrator
@@ -48,7 +49,65 @@ class Runtime:
     async def start(self, concurrency: int = 6) -> None:
         if hasattr(self.providers.bus, "start"):
             await self.providers.bus.start(concurrency)
+        await self.release_stale_approvals()
         await self.resume_pending_follow_ups()
+
+    async def release_stale_approvals(self) -> int:
+        """Let go of approvals the current policy would never have asked for.
+
+        An approval is raised under whatever policy was in force at the time, and
+        the policy outlives it. Loosen the policy — `external` to `autonomous`,
+        say — and every approval already pending stays pending, because nothing
+        revisits a decision that has already been recorded as needed. The mission
+        is then blocked on a question the system has stopped asking, and the
+        console tells whoever opens it that a human is required by a deployment
+        whose whole claim is that no human is.
+
+        So the policy is re-evaluated on startup. Anything it would now allow is
+        granted automatically and the paused event replayed; anything it would
+        still hold — a follow-up under `strict`, an order under any policy — is
+        left exactly where it is.
+        """
+        from .domain.models import Approval, ApprovalStatus
+        from .domain.policy import ActionType, approval_for
+
+        try:
+            approvals = await self.repo.list(Approval, status=ApprovalStatus.PENDING.value)
+        except Exception:  # a store that cannot list is not a reason to fail startup
+            log.exception("could not read approvals while releasing stale ones")
+            return 0
+
+        released = 0
+        for approval in approvals:
+            try:
+                action = ActionType(approval.action_type)
+            except ValueError:
+                continue  # an action type this build no longer has
+            # `first_contact_with_vendor` is the strictest reading, so anything
+            # cleared here would be cleared however the thread actually stands.
+            if approval_for(
+                action, self.settings.approval_policy, first_contact_with_vendor=True
+            ).requires_approval:
+                continue
+            if approval.resume_event is None:
+                continue
+
+            approval.status = ApprovalStatus.AUTO_GRANTED
+            approval.decided_by = "policy"
+            approval.decided_at = _utcnow()
+            await self.repo.save(approval)
+            await self.orchestrator.emit(Event.model_validate(approval.resume_event))
+            released += 1
+
+        if released:
+            log.warning(
+                "stale_approvals_released",
+                extra={
+                    "status": f"{released} approval(s) predated "
+                    f"policy={self.settings.approval_policy.value} and were auto-granted"
+                },
+            )
+        return released
 
     async def resume_pending_follow_ups(self) -> int:
         """Restart whatever a lost scheduler queue left stranded.

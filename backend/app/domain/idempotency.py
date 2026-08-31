@@ -8,17 +8,8 @@ record changed, hence a new version) is allowed through while a replay is not.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from .ids import stable_id
 
 
 def action_key(mission_id: str, vendor_id: str, action_type: str, version: int | str = 0) -> str:
     return stable_id("act", mission_id, vendor_id, action_type, str(version))
-
-
-@dataclass(frozen=True)
-class Reservation:
-    key: str
-    acquired: bool
-    existing_result: dict | None = None

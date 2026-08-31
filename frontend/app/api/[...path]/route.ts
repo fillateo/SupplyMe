@@ -17,7 +17,16 @@
 const API_BASE_URL = () =>
   (process.env.API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
 
+function isSafeSegment(segment: string): boolean {
+  return segment.length > 0 && segment !== "." && segment !== ".." && !segment.includes("/");
+}
+
 async function proxy(request: Request, path: string[]): Promise<Response> {
+  if (!path.every(isSafeSegment)) {
+    // A "." / ".." / empty segment could otherwise walk the joined URL back
+    // out of the /api/ prefix on the backend host it's forwarded to.
+    return Response.json({ detail: "invalid path" }, { status: 400 });
+  }
   const search = new URL(request.url).search;
   const target = `${API_BASE_URL()}/api/${path.join("/")}${search}`;
 
@@ -54,6 +63,13 @@ export async function GET(request: Request, { params }: Params) {
 }
 
 export async function POST(request: Request, { params }: Params) {
+  return proxy(request, (await params).path);
+}
+
+// PUT is not decorative: `PUT /api/missions/{id}/weights` is how the ranking is
+// re-run against new priorities. Without this export Next answers 405 and the
+// call fails on this hop, while the API itself would have accepted it.
+export async function PUT(request: Request, { params }: Params) {
   return proxy(request, (await params).path);
 }
 

@@ -2,18 +2,21 @@
 
 import type { Conflict } from "@/lib/types";
 
+//: Keyed by Conflict.resolution_action. Deliberately phrased as what will
+//: happen rather than what has: this line renders while a conflict is still
+//: `open`, before anything has been written to anybody.
 const ACTION_COPY: Record<string, string> = {
-  email: "A follow-up email has been sent to the supplier to clarify the discrepancy",
-  none: "No external verification route available",
+  email: "This will be put to the supplier in a follow-up",
+  none: "There is no way to ask the supplier about it",
 };
 
 const STATUS_META: Record<string, { label: string; badge: string }> = {
   open: {
-    label: "Discrepancy Found",
+    label: "Sources differ",
     badge: "bg-rose-50 text-rose-700 border-rose-200",
   },
   resolving: {
-    label: "Clarification In Progress",
+    label: "Asking the supplier",
     badge: "bg-amber-50 text-amber-700 border-amber-200",
   },
   resolved: {
@@ -21,7 +24,7 @@ const STATUS_META: Record<string, { label: string; badge: string }> = {
     badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
   },
   unresolvable: {
-    label: "Unresolvable",
+    label: "Left unresolved",
     badge: "bg-slate-100 text-slate-600 border-slate-200",
   },
 };
@@ -44,7 +47,7 @@ export function ConflictNotice({ conflict }: { conflict: Conflict }) {
             {meta.label}
           </span>
           <span className="text-xs font-semibold text-slate-800 capitalize">
-            {conflict.field.replace(/_/g, " ")} Variance
+            {conflict.field.replace(/_/g, " ")}
           </span>
         </div>
       </header>

@@ -69,6 +69,7 @@ export default function MissionConsole() {
   > | null>(null);
 
   const [loadError, setLoadError] = useState<{ status?: number } | null>(null);
+  const [decideError, setDecideError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("Bill of materials");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<{ title: string; records: Evidence[] } | null>(null);
@@ -176,8 +177,13 @@ export default function MissionConsole() {
   const pending = approvals.filter((approval) => approval.status === "pending");
 
   async function decide(approvalId: string, approved: boolean) {
-    await api.decide(approvalId, approved);
-    await refresh();
+    setDecideError(null);
+    try {
+      await api.decide(approvalId, approved);
+      await refresh();
+    } catch (err: any) {
+      setDecideError(err?.message ?? "could not reach the API");
+    }
   }
 
   if (!mission || !counts) {
@@ -187,12 +193,12 @@ export default function MissionConsole() {
         <main className="mx-auto max-w-2xl px-6 py-24 text-center">
           <div className="card p-8 bg-white border border-slate-200 rounded-xl">
             <h1 className="text-2xl font-bold text-slate-900">
-              {gone ? "Mission Not Found" : "API Unreachable"}
+              {gone ? "Mission not found" : "Could not load this mission"}
             </h1>
             <p className="mt-2 text-xs leading-relaxed text-slate-500">
               {gone
-                ? "In-memory missions do not persist across backend restarts without database persistence enabled."
-                : "Unable to communicate with the local API at :8080. Ensure the backend daemon is running."}
+                ? "There is no mission with this id. Missions are only kept between restarts when the API is running against Firestore."
+                : "The API did not answer for this mission. Other missions may still open."}
             </p>
             <div className="mt-6">
               <Link href="/" className="btn btn-primary">
@@ -270,7 +276,7 @@ export default function MissionConsole() {
               value={counts.qualified}
               accent={counts.qualified > 0}
               icon="✓"
-              hint="Suppliers verified for production"
+              hint="Every required fact known, no unresolved disagreement"
             />
             <ReadoutCard
               label="Candidates"
@@ -295,13 +301,13 @@ export default function MissionConsole() {
               value={counts.open_conflicts}
               alarm={counts.open_conflicts > 0}
               icon="⚡"
-              hint="Active source discrepancies"
+              hint="Facts two sources disagree on"
             />
             <ReadoutCard
               label="Evidence Records"
               value={counts.evidence}
               icon="🛡"
-              hint="Authenticated sources on file"
+              hint="Sources recorded, each with the excerpt it came from"
             />
           </div>
         </div>
@@ -354,19 +360,22 @@ export default function MissionConsole() {
                   )}
                 </div>
 
-                <div className="flex shrink-0 gap-2 sm:self-center">
-                  <button
-                    onClick={() => decide(approval.id, true)}
-                    className="btn btn-primary px-3.5 py-1.5 text-xs"
-                  >
-                    Authorize & Send ↗
-                  </button>
-                  <button
-                    onClick={() => decide(approval.id, false)}
-                    className="btn btn-quiet px-3.5 py-1.5 text-xs text-rose-700 hover:bg-rose-50"
-                  >
-                    Hold Back
-                  </button>
+                <div className="flex shrink-0 flex-col items-end gap-1 sm:self-center">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => decide(approval.id, true)}
+                      className="btn btn-primary px-3.5 py-1.5 text-xs"
+                    >
+                      Authorize & Send ↗
+                    </button>
+                    <button
+                      onClick={() => decide(approval.id, false)}
+                      className="btn btn-quiet px-3.5 py-1.5 text-xs text-rose-700 hover:bg-rose-50"
+                    >
+                      Hold Back
+                    </button>
+                  </div>
+                  {decideError && <p className="text-xs text-rose-700">{decideError}</p>}
                 </div>
               </div>
             ))}
@@ -411,7 +420,7 @@ export default function MissionConsole() {
                   <p className="text-base font-semibold text-slate-800">No Supplier Candidates Yet</p>
                   <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-slate-500">
                     {live
-                      ? "Discovery is searching trade registries and catalogs. Suppliers appear as soon as identified."
+                      ? "Discovery is searching the open web and Google Places. Suppliers appear as soon as they are identified."
                       : "This mission terminated without discovering suppliers."}
                   </p>
                 </div>
@@ -524,7 +533,7 @@ export default function MissionConsole() {
           </div>
 
           <p className="px-1 text-xs leading-relaxed text-slate-400">
-            Real-time audit stream of all discovery actions. The mission continues in background if you navigate away.
+Every entry is a stored workflow event, not a progress animation. The mission carries on if you close this tab.
           </p>
         </aside>
       </div>

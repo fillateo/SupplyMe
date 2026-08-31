@@ -79,6 +79,49 @@ class TestReadingWhatTheSupplierActuallyWrote:
         assert _header(EmailMessage(), "In-Reply-To") == ""
 
 
+class TestTheRedirectMailboxMustNotBeTheSendingMailbox:
+    """The one configuration that silently breaks the whole demo.
+
+    Outreach is redirected to a mailbox the operator owns, and they answer from
+    it as the supplier. If that mailbox is the same one that sends, the reply
+    arrives from our own address and is dropped as our own copy — so the mission
+    waits forever on an answer already sitting in the inbox, and nothing says
+    why. Both example configs used to suggest exactly that pairing.
+    """
+
+    def test_a_reply_from_a_second_mailbox_is_read(self):
+        from app.adapters.imap_mail import SmtpImapMailProvider
+
+        provider = SmtpImapMailProvider(
+            Settings(smtp_user="sourcing@example.com", smtp_password="x", project_id="p")
+        )
+        assert provider._is_our_own("you@example.com") is False
+
+    def test_a_reply_from_the_sending_mailbox_is_discarded(self):
+        from app.adapters.imap_mail import SmtpImapMailProvider
+
+        provider = SmtpImapMailProvider(
+            Settings(smtp_user="sourcing@example.com", smtp_password="x", project_id="p")
+        )
+        assert provider._is_our_own("sourcing@example.com") is True
+
+    def test_the_example_config_does_not_pair_them(self):
+        """The docs are the thing that gets this wrong, so assert on the docs."""
+        import pathlib
+        import re
+
+        text = pathlib.Path(__file__).parents[2].joinpath(
+            "terraform/terraform.tfvars.example"
+        ).read_text()
+        smtp = re.search(r'^smtp_user\s*=\s*"([^"]+)"', text, re.M)
+        redirect = re.search(r'^mail_redirect_to\s*=\s*"([^"]+)"', text, re.M)
+        assert smtp and redirect
+        assert smtp.group(1) != redirect.group(1), (
+            "the example pairs the sending mailbox with the redirect target, "
+            "which is the one setup where a reply never reaches the mission"
+        )
+
+
 class TestOurOwnMailIsNotASupplierReply:
     """Emailing the mailbox that sends puts a copy in its own inbox. Reading it
     back would have the mission answering itself, and quoting itself as

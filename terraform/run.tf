@@ -24,7 +24,9 @@ resource "google_cloud_run_v2_service" "api" {
   # reproducible from this file.
   deletion_protection = false
 
-  # Only the load balancer and the push identity reach it; see the IAM binding.
+  # Reachable from the internet. Who may actually invoke it is decided by the
+  # IAM bindings below — the push identity and the console always, and everyone
+  # else only while `publicly_readable` is true.
   ingress = "INGRESS_TRAFFIC_ALL"
 
   template {
@@ -119,6 +121,10 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "SUPPLYME_MAX_USD_PER_MISSION"
         value = tostring(var.max_usd_per_mission)
+      }
+      env {
+        name  = "SUPPLYME_MAX_MODEL_CALLS_PER_MISSION"
+        value = tostring(var.max_model_calls_per_mission)
       }
 
       # Only when it is the credential actually in use. Mounting a key the

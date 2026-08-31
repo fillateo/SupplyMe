@@ -6,26 +6,26 @@ import type { Evidence } from "@/lib/types";
 import { ConfidenceMeter } from "./primitives";
 
 const SOURCE_LABEL: Record<string, string> = {
-  official_website: "Official Supplier Website",
-  brand_website: "Client Brand Website",
-  maps_listing: "Google Maps Verified Location",
-  directory: "Trade Directory / B2B Registry",
-  news: "News & Press Report",
-  industry_publication: "Industry Trade Publication",
-  search_result: "Search Engine Index Snippet",
-  supplier_email: "Direct Supplier Email Correspondence",
-  unknown: "External Source",
+  official_website: "Supplier's own website",
+  brand_website: "The brand's own website",
+  maps_listing: "Google Maps listing",
+  directory: "Trade directory listing",
+  news: "News report",
+  industry_publication: "Trade publication",
+  search_result: "Search result snippet",
+  supplier_email: "Email from the supplier",
+  unknown: "Source not identified",
 };
 
 const SOURCE_CAVEAT: Record<string, string> = {
   maps_listing:
-    "Proves physical entity existence and location footprint. Public reviews do not guarantee production tolerance or batch SLA.",
+    "Evidence that the business exists at an address. Reviews are not evidence of what it can manufacture, and are not scored as such.",
   official_website:
-    "Supplier's self-published marketing claim. Cross-referenced against public directories.",
+    "The supplier describing itself. Recorded as their claim, never as confirmation of it.",
   search_result:
-    "Search result snippet only — full document content not yet scraped.",
+    "A search snippet only. The page behind it was not read, so this carries the least weight of any source.",
   supplier_email:
-    "Direct written representation received in the mission mailbox.",
+    "The supplier answering us directly, in writing. The strongest source this system has.",
 };
 
 const STRENGTH_TONE: Record<string, { label: string; tone: string }> = {
@@ -42,7 +42,7 @@ const STRENGTH_TONE: Record<string, { label: string; tone: string }> = {
     tone: "bg-amber-50 text-amber-700 border-amber-200",
   },
   none: {
-    label: "No Backing Citation",
+    label: "No excerpt",
     tone: "bg-rose-50 text-rose-700 border-rose-200",
   },
 };
@@ -89,7 +89,7 @@ export function EvidenceDrawer({
         <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50/90 px-6 py-5">
           <div className="min-w-0">
             <span className="text-xs font-semibold uppercase tracking-wider text-blue-600">
-              Source Evidence Audit
+              Where this came from
             </span>
             <h2 className="mt-1 truncate text-lg font-bold text-slate-900">{title}</h2>
             <p className="mt-0.5 text-xs text-slate-500">
@@ -111,7 +111,7 @@ export function EvidenceDrawer({
             <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center bg-slate-50">
               <p className="text-sm font-medium text-slate-700">No citations recorded</p>
               <p className="mt-1 text-xs text-slate-500">
-                This figure is unestablished or estimated by the model without direct citation.
+                No source has stated this yet. Nothing is filled in on its behalf.
               </p>
             </div>
           )}
@@ -179,7 +179,7 @@ export function EvidenceDrawer({
 
                 {SOURCE_CAVEAT[record.source_type] && (
                   <p className="border-t border-slate-100 bg-slate-50 px-4 py-2.5 text-xs leading-relaxed text-slate-500">
-                    <span className="font-semibold text-slate-700">Methodology Note: </span>
+                    <span className="font-semibold text-slate-700">What this proves: </span>
                     {SOURCE_CAVEAT[record.source_type]}
                   </p>
                 )}

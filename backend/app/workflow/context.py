@@ -3,13 +3,18 @@
 Handlers need the same handful of reads (the mission, its nodes, a vendor and
 its evidence) constantly. This wraps the store so those reads are one call, and
 so every write goes through `save`, which is the single place that stamps
-`updated_at` and appends to the activity timeline.
+`updated_at`.
+
+Reads are deliberately forgiving of documents older than the schema reading
+them — see `_readable`.
 """
 
 from __future__ import annotations
 
 import logging
 from typing import Any, TypeVar
+
+from pydantic import ValidationError
 
 from ..domain.models import (
     Approval,
@@ -72,11 +77,14 @@ class Repo:
 
     async def load(self, model: type[T], doc_id: str) -> T | None:
         raw = await self._store.get(COLLECTIONS[model], doc_id)
-        return model.model_validate(raw) if raw else None
+        if raw is None:
+            return None
+        return _readable(model, raw, doc_id)
 
     async def list(self, model: type[T], **where: Any) -> list[T]:
         rows = await self._store.query(COLLECTIONS[model], where=where or None)
-        return [model.model_validate(r) for r in rows]
+        found = (_readable(model, row, row.get("id", "?")) for row in rows)
+        return [obj for obj in found if obj is not None]
 
     async def mission(self, mission_id: str) -> Mission:
         found = await self.load(Mission, mission_id)
@@ -101,6 +109,34 @@ class Repo:
 
     async def vendor_quotes(self, vendor_id: str) -> list[Quote]:
         return await self.list(Quote, vendor_id=vendor_id)
+
+
+def _readable[M](model: type[M], raw: dict[str, Any], doc_id: str) -> M | None:
+    """Validate one stored document, or drop it and say so.
+
+    Firestore has no migrations, so a document written by an older build outlives
+    the schema that wrote it. Validating strictly meant one such document took
+    down every read of its collection: five evidence records carrying a
+    `source_type` from a since-removed integration turned three endpoints into a
+    500 and the console into "API Unreachable".
+
+    A record nobody can parse is a record the mission has to do without, which is
+    the same position it is in for a page that would not load. Losing it is a
+    thinner dossier; refusing to answer at all is an outage.
+    """
+    try:
+        return model.model_validate(raw)
+    except ValidationError as exc:
+        log.warning(
+            "unreadable_document",
+            extra={
+                "status": f"{model.__name__} {doc_id} predates the current schema",
+                "error": "; ".join(
+                    f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors()[:3]
+                ),
+            },
+        )
+        return None
 
 
 class MissionNotFound(LookupError):

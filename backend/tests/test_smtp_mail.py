@@ -18,7 +18,7 @@ from app.adapters.smtp_mail import SmtpMailProvider
 from app.config import Settings
 
 SUPPLIER = "contact@premiumparfum.example.com"
-TESTER = "jiarji.project@gmail.com"
+TESTER = "operator@example.com"
 
 
 def settings(**kw) -> Settings:

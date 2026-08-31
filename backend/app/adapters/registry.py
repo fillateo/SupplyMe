@@ -110,7 +110,7 @@ def build(settings: Settings, *, llm: Any | None = None) -> Providers:
     # Search has two real implementations and no unconfigured state: with a
     # Programmable Search engine it queries one, and without it falls back to
     # Gemini's own search grounding. Both read the live web.
-    search: Any = GoogleSearchProvider(settings)
+    search: Any = GoogleSearchProvider(settings, meter=meter)
     notes.append(
         "search: Programmable Search engine"
         if settings.search_api_key and settings.search_engine_id

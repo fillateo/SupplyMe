@@ -2,7 +2,7 @@
 
 Cloud Logging reads `severity` and `jsonPayload` from stdout JSON. Emitting the
 mission, event and agent ids on every line is what makes "why did the agent pick
-this vendor" answerable with a log filter instead of a debugger — §54.
+this vendor" answerable with a log filter instead of a debugger.
 """
 
 from __future__ import annotations

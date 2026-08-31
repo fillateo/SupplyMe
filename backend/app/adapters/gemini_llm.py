@@ -6,8 +6,8 @@ Three deliberate choices:
   The agents never parse prose, and untrusted content therefore has no channel
   through which to produce anything but schema-shaped data.
 * **Two-tier routing.** Extraction and classification run on the fast model;
-  planning and adjudication run on the reasoning model. §55 asks for this and it
-  is where most of the cost sits.
+  planning and adjudication run on the reasoning model, which is where most of
+  the cost sits.
 * **Resolved, not assumed, model ids.** `resolve_model` probes a preference
   ladder once per process, so the deployment uses the newest model the project
   can actually reach instead of a hardcoded name that may 404.
@@ -19,6 +19,7 @@ import asyncio
 import logging
 import random
 import time
+from contextvars import ContextVar
 from typing import Any, TypeVar
 
 from google import genai
@@ -33,6 +34,14 @@ log = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 _RESOLVED: dict[str, str] = {}
+
+#: Which mission the current task is working for, so a model call made somewhere
+#: that does not carry a mission id can still be billed to one. Two callers need
+#: this: ADK's own model wrapper, which owns the call stack between `investigate`
+#: and the request, and grounded search, which is reached through the Search port
+#: and so never sees a mission. Set by the orchestrator for the length of a
+#: handler; a ContextVar is what keeps concurrent branches apart.
+current_mission: ContextVar[str] = ContextVar("supplyme_mission_id", default="")
 
 #: Vertex returns 429 under sustained parallel load, which is exactly what a
 #: fan-out over a dozen vendors produces. This is a queueing problem, not a

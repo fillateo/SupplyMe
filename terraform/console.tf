@@ -6,18 +6,20 @@
 # not anyone has the console open. Deploying them together would tie the
 # workflow's availability to a UI it does not need.
 #
-# The browser talks only to this service. `next.config.mjs` rewrites /api/* to
-# the API server-side, so no API origin, token or credential is ever in client
-# JavaScript, and there is no CORS preflight in production.
+# The browser talks only to this service. A route handler at
+# `app/api/[...path]/route.ts` forwards /api/* to the API server-side, so no API
+# origin, token or credential is ever in client JavaScript, and there is no CORS
+# preflight in production. It is a handler rather than a `rewrites()` entry
+# because rewrites are resolved at build time, when API_BASE_URL does not exist.
 
 resource "google_service_account" "console" {
   account_id   = "${var.service_name}-console"
   display_name = "SupplyMe console"
 }
 
-# The console reaches the API as itself. In demo mode the API is public anyway,
-# but granting this explicitly is what lets `mode = "live"` lock the API down
-# to named callers without the console losing access.
+# The console reaches the API as itself. While `publicly_readable` is true the
+# API accepts anyone anyway, but granting this explicitly is what lets that be
+# turned off without the console losing access.
 resource "google_cloud_run_v2_service_iam_member" "console_can_call_api" {
   project  = var.project_id
   location = google_cloud_run_v2_service.api.location
@@ -60,9 +62,8 @@ resource "google_cloud_run_v2_service" "console" {
         startup_cpu_boost = true
       }
 
-      # Read when the Next server boots and resolves its rewrites, so the
-      # console follows whichever API this root deployed rather than a URL
-      # anyone had to paste.
+      # Read at request time by the proxy route, so the console follows whichever
+      # API this root deployed rather than a URL anyone had to paste.
       env {
         name  = "API_BASE_URL"
         value = google_cloud_run_v2_service.api.uri

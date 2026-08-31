@@ -11,19 +11,19 @@ const SCOPES: { value: SearchScope; label: string; hint: string; icon: string }[
   {
     value: "city",
     label: "Metro",
-    hint: "Only suppliers close enough to visit for an on-site audit.",
+    hint: "Only suppliers in or around the city you name.",
     icon: "📍",
   },
   {
     value: "country",
     label: "Domestic",
-    hint: "Every province and industrial zone inside the country you name.",
+    hint: "Anywhere inside the country you name.",
     icon: "🏭",
   },
   {
     value: "global",
     label: "Cross-border",
-    hint: "Worldwide sourcing, including freight and customs lead times.",
+    hint: "Anywhere in the world. Importing is assumed, so distance is not penalised.",
     icon: "🌐",
   },
 ];
@@ -131,8 +131,9 @@ export default function MissionsPage() {
                 Say what you want to make.
               </h1>
               <p className="mt-3 max-w-xl text-[0.9375rem] leading-relaxed text-slate-600">
-                The agent builds the bill of materials, finds certified manufacturers, writes the
-                inquiries, and checks every price and certificate back to its source.
+                The agent works out what the product is made of, finds manufacturers for every
+                part, writes the inquiries itself, and reports each number with the source it
+                was read from.
               </p>
             </section>
 
@@ -317,7 +318,7 @@ export default function MissionsPage() {
 
                       <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5 text-xs text-slate-500">
                         <span className="flex items-center gap-2">
-                          <span>{mission.market ?? "Domestic"}</span>
+                          <span>{mission.market ?? "Market not set"}</span>
                           <span className="text-slate-300">·</span>
                           <span>{mission.emails_sent} sent</span>
                         </span>

@@ -4,9 +4,11 @@ import type { ActivityEntry } from "@/lib/types";
 import { formatClock } from "./evidence-drawer";
 
 /*
- * Real-Time Telemetry Log:
- * Clean chronological activity stream of agent actions,
- * validations, and status transitions.
+ * The stored workflow event log, newest first.
+ *
+ * Each label names what the event actually is. `followup.required` in particular
+ * means a follow-up is now owed, not that one has gone out — reading it as
+ * "sent" makes the feed claim an email that may never be written.
  */
 
 const EVENT_META: Record<string, { label: string; icon: string }> = {
@@ -15,10 +17,10 @@ const EVENT_META: Record<string, { label: string; icon: string }> = {
   "supply_chain.planned": { label: "BOM Generated", icon: "▥" },
   "supplier.discovery.started": { label: "Search Dispatched", icon: "⌕" },
   "vendor.discovered": { label: "Candidate Found", icon: "⚑" },
-  "vendor.research.started": { label: "Profile Scraped", icon: "≡" },
-  "evidence.found": { label: "Evidence Verified", icon: "✓" },
-  "brand.claim.found": { label: "Brand Relationship Found", icon: "🏷" },
-  "brand.claim.adjudicated": { label: "Brand Claim Verified", icon: "⚖" },
+  "vendor.research.started": { label: "Supplier Researched", icon: "≡" },
+  "evidence.found": { label: "Evidence Recorded", icon: "✓" },
+  "brand.claim.found": { label: "Brand Claim Found", icon: "🏷" },
+  "brand.claim.adjudicated": { label: "Brand Claim Judged", icon: "⚖" },
   "vendor.qualified": { label: "Supplier Qualified", icon: "✓✓" },
   "vendor.rejected": { label: "Supplier Disqualified", icon: "✕" },
   "vendor.contact.required": { label: "Outreach Required", icon: "✉" },
@@ -29,9 +31,9 @@ const EVENT_META: Record<string, { label: string; icon: string }> = {
   "email.sent": { label: "Email Dispatched", icon: "↗" },
   "email.received": { label: "Supplier Replied", icon: "↙" },
   "quote.extracted": { label: "Quote Extracted", icon: "$" },
-  "conflict.detected": { label: "Discrepancy Detected", icon: "⚡" },
-  "followup.required": { label: "Follow-up Sent", icon: "↻" },
-  "vendor.updated": { label: "Dossier Updated", icon: "∷" },
+  "conflict.detected": { label: "Sources Disagree", icon: "⚡" },
+  "followup.required": { label: "Follow-up Needed", icon: "↻" },
+  "vendor.updated": { label: "Next Step Decided", icon: "∷" },
   "recommendation.ready": { label: "Rankings Computed", icon: "★" },
   "mission.completed": { label: "Mission Completed", icon: "✔" },
   "mission.failed": { label: "Execution Stopped", icon: "⚠" },
@@ -106,7 +108,7 @@ export function ActivityFeed({
               }`}
             >
               {/* Event Timestamp */}
-              <time className="w-13 shrink-0 pt-0.5 font-mono text-[0.65rem] text-slate-400">
+              <time className="w-14 shrink-0 pt-0.5 font-mono text-[0.65rem] text-slate-400">
                 {formatClock(entry.recorded_at)}
               </time>
 

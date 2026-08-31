@@ -1,4 +1,4 @@
-"""§29, §30, §53: redelivery, provider failure, restart, and injection.
+"""Redelivery, provider failure, restart, and injection.
 
 These are the tests that decide whether the workflow is a Taskmaster or a demo.
 Everything here breaks something on purpose and asserts the mission still ends
@@ -306,6 +306,52 @@ class TestUnprocessableEvents:
             assert len(after) == before
         finally:
             await runtime.stop()
+
+
+class TestDocumentsOlderThanTheSchema:
+    """Firestore has no migrations, so a stored document outlives its schema.
+
+    Not hypothetical: five evidence records written while the system still had a
+    telephony integration carry `source_type="supplier_call"`. Removing that enum
+    member made every read of the collection raise, so `/api/missions/{id}`,
+    `/vendors` and `/evidence` all answered 500 for that mission and the console
+    showed "API Unreachable" — over a record none of them needed.
+    """
+
+    async def test_a_record_from_a_removed_enum_value_is_skipped_not_fatal(self):
+        from app.domain.models import Evidence
+
+        runtime = build()
+        current = Evidence(
+            mission_id="m", vendor_id="v", claim="readable", evidence_excerpt="x" * 70
+        )
+        await runtime.repo.save(current)
+        await runtime.providers.store.put(
+            "evidence",
+            "ev_legacy",
+            current.model_dump(mode="json")
+            | {"id": "ev_legacy", "source_type": "supplier_call"},
+        )
+
+        readable = await runtime.repo.list(Evidence, mission_id="m")
+        assert [r.id for r in readable] == [current.id], (
+            "one unreadable document must not take the whole collection with it"
+        )
+        assert await runtime.repo.load(Evidence, "ev_legacy") is None
+        assert await runtime.repo.load(Evidence, current.id) is not None
+
+    async def test_an_unparseable_vendor_is_absent_rather_than_an_outage(self):
+        from app.domain.models import Vendor
+        from app.workflow.context import VendorNotFound
+
+        runtime = build()
+        # No `name`, which every current Vendor has and no older one need have.
+        await runtime.providers.store.put(
+            "vendors", "ven_legacy", {"id": "ven_legacy", "mission_id": "m"}
+        )
+        assert await runtime.repo.list(Vendor, mission_id="m") == []
+        with pytest.raises(VendorNotFound):
+            await runtime.repo.vendor("ven_legacy")
 
 
 class TestPromptInjection:

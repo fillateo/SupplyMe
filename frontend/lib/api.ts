@@ -15,7 +15,7 @@ export class ApiError extends Error {
   }
 }
 
-/** Requests go to the Next.js origin and are proxied server-side (next.config.mjs). */
+/** Requests go to the Next.js origin and are proxied server-side — see app/api/[...path]/route.ts. */
 async function get<T>(path: string): Promise<T> {
   const response = await fetch(path, { cache: "no-store" });
   if (!response.ok) {

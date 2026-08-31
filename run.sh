@@ -287,7 +287,7 @@ print_banner() {
   mail_note="$("$PY" -c "
 import json, sys
 notes = json.loads(sys.argv[1]).get('notes', [])
-print(next((n for n in notes if 'REDIRECT' in n or 'real email over SMTP' in n), ''))
+print(next((n for n in notes if 'REDIRECT' in n or n.startswith('mail:')), ''))
 " "$health" 2>/dev/null || echo "")"
   [ -n "$mail_note" ] && printf '%s\n' "  ${YELLOW}mail${OFF}      ${DIM}$mail_note${OFF}"
 
@@ -295,10 +295,10 @@ print(next((n for n in notes if 'REDIRECT' in n or 'real email over SMTP' in n),
   bound="$("$PY" -c "
 import json, sys
 p = json.loads(sys.argv[1]).get('providers', {})
-print(', '.join(f'{k}={p[k]}' for k in ('search','maps','video','mail') if k in p))
+print(', '.join(f'{k}={p[k]}' for k in ('search','maps','mail') if k in p))
 " "$health" 2>/dev/null || echo "")"
   [ -n "$bound" ] && printf '%s\n' "  tools     $bound"
-  printf '%s\n' "  spend     ${YELLOW}live${OFF} ${DIM}— \$0.09-0.13 per mission; ./run.sh status to check${OFF}"
+  printf '%s\n' "  spend     ${YELLOW}live${OFF} ${DIM}— see docs/COST.md; ./run.sh status for this process${OFF}"
   echo
   printf '%s\n' "  ${DIM}Press ${OFF}Start sourcing${DIM}, then look for:${OFF}"
   printf '%s\n' "  ${DIM}  · the supplier with the red 'disagreement' badge — website said MOQ 500,${OFF}"
@@ -348,10 +348,15 @@ cmd_dev() {
     info "gcloud not on PATH; using the credentials at $adc"
   fi
 
-  local project
+  local project vertex
   project="$(grep -E '^SUPPLYME_PROJECT_ID=' "$BACKEND/.env" | head -1 | cut -d= -f2 | tr -d '[:space:]')"
-  say "checking which Gemini models $project can reach"
-  (cd "$BACKEND" && "$PY" scripts/check_models.py --project "$project" 2>/dev/null \
+  # The Vertex endpoint, not SUPPLYME_LOCATION: reachability is a property of the
+  # project and the endpoint together, and Gemini 3.x answers only from `global`.
+  # Passing the region here reported every 3.x model as unreachable.
+  vertex="$(grep -E '^SUPPLYME_VERTEX_LOCATION=' "$BACKEND/.env" | head -1 | cut -d= -f2 | tr -d '[:space:]')"
+  say "checking which Gemini models $project can reach from ${vertex:-global}"
+  (cd "$BACKEND" && "$PY" scripts/check_models.py --project "$project" \
+      --location "${vertex:-global}" 2>/dev/null \
       | tail -5 | sed 's/^/    /') || warn "model check failed; starting anyway"
 
   start_services
@@ -381,7 +386,7 @@ total = spend.get("since_startup") or {}
 caps = spend.get("caps_per_mission") or {}
 
 print("  model    " + d["providers"]["llm"])
-print("  mode     " + d["mode"] + " / " + d["approval_policy"])
+print("  policy   " + d["approval_policy"])
 
 if total:
     usd = total.get("usd", 0.0)

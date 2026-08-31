@@ -62,13 +62,19 @@ class EvidenceStrength(StrEnum):
 
 
 class Provenance(StrEnum):
-    """The status shown next to any displayed fact."""
+    """The status shown next to any displayed fact.
+
+    Every member is one `evidence.provenance_for` can actually return, or that a
+    handler assigns outright. Two more used to sit here — `supplier_reported` and
+    `estimated` — which nothing ever computed, so the console shipped a badge and
+    a tooltip for states no fact could hold. `estimated` was the worse of the
+    two: it described the model guessing a value, which is the one thing this
+    system is built not to do.
+    """
 
     VERIFIED = "verified"                  # >=2 independent sources agree
     DIRECT_QUOTE = "direct_quote"          # supplier stated it to us, in writing
-    SUPPLIER_REPORTED = "supplier_reported"
     PUBLICLY_LISTED = "publicly_listed"
-    ESTIMATED = "estimated"
     INFERRED = "inferred"
     CONFLICTING = "conflicting"
     UNKNOWN = "unknown"

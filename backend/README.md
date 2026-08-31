@@ -13,7 +13,7 @@ feature that no longer exists.
 ```bash
 uv venv --python 3.12 .venv && VIRTUAL_ENV=.venv uv pip install -e ".[dev]"
 
-.venv/bin/python -m pytest -q                  # 354 tests, ~55s, no network
+.venv/bin/python -m pytest -q                  # 362 tests, ~55s, no network
 .venv/bin/python scripts/run_mission.py --project YOUR_PROJECT   # a whole mission
 .venv/bin/uvicorn app.api.main:app --port 8080
 ```
@@ -27,7 +27,7 @@ uv venv --python 3.12 .venv && VIRTUAL_ENV=.venv uv pip install -e ".[dev]"
 | `app/domain/` | The decisions the model is not allowed to make: evidence, conflicts, scoring, quotes, identity, cost, policy |
 | `app/agents/` | The ones it is. Six structured calls and one ADK tool loop |
 | `app/workflow/` | The orchestrator and its handlers — durability lives here, not in the handlers |
-| `app/ports/` | Protocols for every external dependency. The LIVE/DEMO seam |
+| `app/ports/` | Protocols for every external dependency. The seam the test doubles bind to |
 | `app/adapters/` | One implementation of each port per environment |
 | `app/api/` | FastAPI: mission routes, Pub/Sub push, Cloud Tasks, Gmail webhook |
 | `scripts/` | `run_mission.py`, `check_models.py`, `gmail_auth.py` |

@@ -3,8 +3,8 @@
 import type { SupplyChainNode, Vendor } from "@/lib/types";
 
 /*
- * Bill of Materials Matrix: Clean, hierarchical component cards
- * with pipeline density indicators and synergy callouts.
+ * The supply chain the planning agent derived, one card per component line,
+ * each showing how far its candidates have got.
  */
 
 const STAGE_META: Record<string, { fill: string; label: string; order: number }> = {
@@ -115,7 +115,7 @@ export function SupplyChain({
         <p className="text-base font-semibold text-slate-800">Decomposing Bill of Materials</p>
         <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-slate-500">
           {live
-            ? "Analyzing the product specification to determine required components and packaging."
+            ? "Working out which components this product needs before anything is searched for."
             : "This mission terminated before the bill of materials could be decomposed."}
         </p>
       </div>
@@ -226,11 +226,11 @@ export function SupplyChain({
           <div className="flex items-center gap-2">
             <span className="text-indigo-600 text-base">✦</span>
             <h3 className="text-sm font-semibold text-indigo-950">
-              Multi-Component Manufacturer Synergies
+              Suppliers covering more than one line
             </h3>
           </div>
           <p className="mt-1 text-xs leading-relaxed text-indigo-900/80">
-            Consolidating multiple component lines with a single certified manufacturer reduces communication overhead, simplifies shipping, and streamlines regulatory compliance.
+These suppliers said they can cover more than one component line. Fewer suppliers means fewer conversations to run and fewer quotes to reconcile — the system does not assess shipping or compliance.
           </p>
 
           <ul className="mt-3.5 space-y-2 divide-y divide-indigo-100">

@@ -13,23 +13,25 @@ import {
 } from "./primitives";
 
 /*
- * Brand Relationship Classification Badges
+ * What a "we produce for Brand X" claim is actually supported by. The wording
+ * here has to match what app/domain/evidence.py::classify_brand_relationship
+ * measures — which is the source of each mention, and nothing else.
  */
 const BRAND_COPY: Record<string, { label: string; tone: string; meaning: string }> = {
   verified: {
     label: "Brand Site Verified",
     tone: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    meaning: "Corroborated directly by the client brand's public disclosure or supplier list",
+    meaning: "The brand's own website states the relationship",
   },
   strong_evidence: {
-    label: "Trade Press Verified",
+    label: "Independently Reported",
     tone: "bg-blue-50 text-blue-700 border-blue-200",
-    meaning: "Verified across independent trade press and industry publications",
+    meaning: "Stated by two or more sources that are not the supplier",
   },
   indirect_evidence: {
     label: "Indirect Citation",
     tone: "bg-indigo-50 text-indigo-700 border-indigo-200",
-    meaning: "Corroborated through third-party regulatory or logistics filings",
+    meaning: "Something other than the supplier mentions it, but does not state it outright",
   },
   supplier_reported: {
     label: "Unverified Claim",
@@ -44,7 +46,7 @@ const BRAND_COPY: Record<string, { label: string; tone: string; meaning: string 
   no_public_evidence: {
     label: "No Record Found",
     tone: "bg-slate-100 text-slate-500 border-slate-200",
-    meaning: "No independent registry record found",
+    meaning: "Nothing outside the supplier's own claim was found",
   },
 };
 
@@ -93,7 +95,7 @@ export function VendorCard({
             )}
           </div>
           <p className="mt-1 flex items-center gap-2 text-xs text-slate-500">
-            <span>{place || "Location not established"}</span>
+            <span>{place || "Location unknown"}</span>
             {vendor.node_keys.length > 0 && (
               <>
                 <span className="text-slate-300">·</span>
@@ -108,7 +110,7 @@ export function VendorCard({
         <div className="flex shrink-0 items-center gap-2">
           {openConflicts.length > 0 && (
             <span className="rounded px-2 py-0.5 text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-              ⚡ {openConflicts.length} Disputed
+              ⚡ {openConflicts.length} disagreement{openConflicts.length === 1 ? "" : "s"}
             </span>
           )}
           <StatusChip status={vendor.status} />
@@ -138,7 +140,7 @@ export function VendorCard({
         <Figure label="Lead Time">
           <SourcedFigure fact={vendor.lead_time_days} format={formatDays} onOpen={onOpenEvidence} />
         </Figure>
-        <Figure label="Confidence Score">
+        <Figure label="Evidence confidence">
           <div className="flex items-center gap-2">
             <ConfidenceMeter
               value={vendor.trust.overall}
@@ -175,7 +177,7 @@ export function VendorCard({
             <section className="space-y-3">
               <div className="flex items-center gap-2">
                 <span className="text-amber-600 text-sm font-bold">⚡</span>
-                <h4 className="text-sm font-semibold text-slate-800">Disputed Data Variance</h4>
+                <h4 className="text-sm font-semibold text-slate-800">Where sources disagree</h4>
               </div>
               {vendor.conflicts.map((conflict) => (
                 <ConflictNotice key={conflict.id} conflict={conflict} />
@@ -186,7 +188,7 @@ export function VendorCard({
           {/* Claimed Brand Relationships */}
           {vendor.brand_relationships.length > 0 && (
             <section className="space-y-3">
-              <h4 className="text-sm font-semibold text-slate-800">Customer Portfolio & Brand Claims</h4>
+              <h4 className="text-sm font-semibold text-slate-800">Brands they claim to work with</h4>
               <div className="space-y-2">
                 {groupByClassification(vendor.brand_relationships).map(
                   ([classification, brands]) => {
@@ -219,7 +221,7 @@ export function VendorCard({
 
           {/* Trust Score Breakdown */}
           <section className="space-y-2">
-            <h4 className="text-sm font-semibold text-slate-800">Confidence Model Breakdown</h4>
+            <h4 className="text-sm font-semibold text-slate-800">How confident, and in what</h4>
             <TrustBreakdown trust={vendor.trust} />
           </section>
 
@@ -235,12 +237,12 @@ export function VendorCard({
             <Figure label="Payment Terms">
               <SourcedFigure fact={vendor.payment_terms} onOpen={onOpenEvidence} />
             </Figure>
-            <Figure label="Customization Capabilities">
+            <Figure label="Customization">
               <SourcedFigure fact={vendor.customization} onOpen={onOpenEvidence} />
             </Figure>
-            <Figure label="Direct Supplier Contact">
+            <Figure label="Contact route">
               <span className="break-all text-xs font-medium text-slate-800 font-mono">
-                {vendor.email ?? vendor.phone ?? "None verified"}
+                {vendor.email ?? vendor.phone ?? "None found"}
               </span>
             </Figure>
           </dl>

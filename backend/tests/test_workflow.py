@@ -250,6 +250,93 @@ class TestApprovalGate:
             await runtime.stop()
 
 
+class TestTheNarrativeAgentIsActuallyConsulted:
+    """Its output was being thrown away, and nothing noticed.
+
+    The ranking shown to the narrative agent named each node by its display name,
+    while the handler looked the returned annotation up by node key. Every lookup
+    missed and fell through to the score explanations — which read plausibly, so
+    the substitution was invisible in the console and in this suite.
+    """
+
+    async def test_the_selection_reasons_come_from_the_agent_not_the_fallback(
+        self, completed
+    ):
+        runtime, mission = completed
+        recommendation = (await runtime.repo.list(Recommendation, mission_id=mission.id))[-1]
+        assert recommendation.selections
+        narrated = [
+            s for s in recommendation.selections
+            if any(reason.startswith("narrated:") for reason in s.get("why", []))
+        ]
+        assert narrated, (
+            "every selection fell back to its score explanation, so the "
+            "recommendation agent's output never reached the report"
+        )
+
+
+class TestLooseningThePolicyUnblocksWhatItAlreadyHeld:
+    """An approval outlives the policy that asked for it.
+
+    A deployment switched from `external` to `autonomous` kept six approvals
+    pending on its best mission, because nothing revisits a decision already
+    recorded as needed. The mission sat blocked, and the console announced that a
+    human was required by a service whose entire claim is that none is.
+    """
+
+    async def test_pending_approvals_are_granted_when_the_policy_no_longer_needs_them(self):
+        settings = Settings(approval_policy=ApprovalPolicy.EXTERNAL_ACTIONS)
+        runtime = build_runtime(settings)
+        await runtime.start(concurrency=8)
+        try:
+            mission = await runtime.create_mission(OBJECTIVE)
+            await runtime.drain(timeout=120)
+            pending = [
+                a for a in await runtime.repo.list(Approval, mission_id=mission.id)
+                if a.status is ApprovalStatus.PENDING
+            ]
+            assert pending, "nothing was held back to release"
+            assert not runtime.providers.mail.sent
+        finally:
+            await runtime.stop()
+
+        # The same store, restarted under a policy that asks for nothing.
+        relaxed = build_runtime(Settings(approval_policy=ApprovalPolicy.AUTONOMOUS))
+        relaxed.providers.store = runtime.providers.store
+        relaxed.orchestrator.store = runtime.providers.store
+        relaxed.repo._store = runtime.providers.store
+        relaxed.orchestrator.repo._store = runtime.providers.store
+        await relaxed.start(concurrency=8)
+        try:
+            await relaxed.drain(timeout=120)
+            still_pending = [
+                a for a in await relaxed.repo.list(Approval, mission_id=mission.id)
+                if a.status is ApprovalStatus.PENDING
+            ]
+            assert not still_pending, (
+                "an approval the current policy would never have asked for is "
+                "still blocking the mission"
+            )
+            assert relaxed.providers.mail.sent, "the released events never actually sent"
+        finally:
+            await relaxed.stop()
+
+    async def test_an_order_is_still_held_under_every_policy(self):
+        """Loosening the policy must not release what no policy may auto-approve."""
+        from app.domain.policy import ActionType
+
+        runtime = build_runtime(Settings(approval_policy=ApprovalPolicy.AUTONOMOUS))
+        binding = Approval(
+            mission_id="msn_x", vendor_id="ven_x",
+            action_type=ActionType.PLACE_ORDER.value,
+            resume_event={"type": "email.sent", "mission_id": "msn_x", "payload": {}},
+        )
+        await runtime.repo.save(binding)
+        assert await runtime.release_stale_approvals() == 0
+        held = await runtime.repo.load(Approval, binding.id)
+        assert held is not None and held.status is ApprovalStatus.PENDING
+
+
 class TestResolvedConflictsAffectTheOutcome:
     """Resolving a disagreement has to change the answer, or it was theatre."""
 

@@ -1,9 +1,10 @@
 """Port definitions.
 
 Every external dependency is a Protocol here and an adapter in app/adapters/.
-LIVE and DEMO differ only in which adapter is bound — never in the workflow, the
-agents, or the events they emit. That is what lets the demo prove the same code
-path that production would run.
+Nothing above this line knows which adapter is bound, which is what lets the test
+suite drive whole missions against doubles while the product itself has nothing
+to fall back to: `app/adapters/registry.py` builds the real service or refuses to
+start, and the doubles live in `tests/`.
 """
 
 from __future__ import annotations
@@ -101,9 +102,12 @@ class MailProvider(Protocol):
         thread_id: str | None = None,
         mission_id: str = "",
     ) -> SentMail:
-        """Send mail. `mission_id` is context for the demo provider, which has to
-        stand in for the Gmail push webhook's thread-to-mission lookup; the live
-        Gmail adapter ignores it."""
+        """Send mail.
+
+        `mission_id` is context for logging and for any provider that has to
+        resolve a reply back to its mission itself. The Gmail and SMTP adapters
+        ignore it: an inbound message is matched by its mail headers instead.
+        """
         ...
     async def fetch_thread(self, provider_thread_id: str) -> list[InboundMail]: ...
     async def history(self, since_token: str | None = None) -> tuple[list[InboundMail], str]: ...
@@ -167,10 +171,12 @@ class Scheduler(Protocol):
     ) -> str:
         """Deliver `event` later.
 
-        `compressible` says whether the demo clock may shorten this delay.
-        Waiting two days for a supplier is business time and should compress in a
-        demo. Backing off from a rate limit is not: shortening it makes the
-        retries land inside the same overloaded window they were meant to avoid.
+        `compressible` says whether a shortened clock may apply to this delay.
+        Waiting two days for a supplier is business time, and a test that waits
+        it out is a test nobody runs. Backing off from a rate limit is not:
+        shortening it lands the retries inside the same overloaded window they
+        exist to avoid. Both schedulers run at a speedup of 1.0 unless a caller
+        asks otherwise, and nothing in `app/` does — only `tests/fixtures.py`.
         """
         ...
 

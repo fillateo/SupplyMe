@@ -1,9 +1,13 @@
-"""Deterministic stand-in for Gemini.
+"""Deterministic stand-in for Gemini, for the test suite.
 
-Used by the test suite and by offline demo runs. It is not a mock of an LLM in
-the "returns a fixed blob" sense — each agent registers a handler that builds a
-real, schema-valid response from the prompt, so the workflow exercises the same
-branches. Anything unregistered raises rather than returning something plausible.
+Not a mock in the "returns a fixed blob" sense: each agent registers a handler
+that builds a real, schema-valid response from the prompt it was given, so the
+workflow takes the same branches it would against a model. Anything unregistered
+raises rather than quietly returning something plausible.
+
+It lives here rather than in `app/` on purpose. The product has no simulated
+model — `app/adapters/registry.py` builds a real client or refuses to start —
+and a double reachable from `app/` is a door into exactly that.
 """
 
 from __future__ import annotations

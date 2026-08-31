@@ -82,27 +82,34 @@ class DiscoveryAgent(Agent):
         self, *, node_key: str, node_name: str, hits: list[SearchHit], places: list[Place],
         market: str | None, scope_note: str = "", mission_id: str = "",
     ) -> DiscoveryResult:
-        lines = [
-            f"Sourcing '{node_name}' (node key: {node_key}) in {market or 'any market'}.",
-            f"Geographic scope: {scope_note or 'the stated market'}.",
-        ]
+        prompt = (
+            f"Sourcing '{node_name}' (node key: {node_key}) in {market or 'any market'}.\n"
+            f"Geographic scope: {scope_note or 'the stated market'}.\n\n"
+            "The search results and map listings below are the candidates. Return the "
+            "entries that are genuine suppliers of this component, and use node key "
+            f"'{node_key}' where the source supports it."
+        )
+
+        # Search titles and snippets are written by whoever owns the page, which
+        # is exactly the position a supplier's own website is in. They get the
+        # same delimiting: this agent reads the open web before anything has
+        # decided the results are trustworthy.
+        sources: list[str] = []
         if hits:
-            lines.append("\nWeb results:")
+            sources.append("WEB RESULTS")
             for hit in hits:
-                lines.append(f"- {hit.title}\n  {hit.url}\n  {hit.snippet}")
+                sources.append(f"- {hit.title}\n  {hit.url}\n  {hit.snippet}")
         if places:
-            lines.append("\nGoogle Maps listings:")
+            sources.append("\nGOOGLE MAPS LISTINGS")
             for place in places:
                 detail = ", ".join(
                     filter(None, [place.address, place.phone, place.website, place.business_status])
                 )
-                lines.append(f"- {place.name} (place_id={place.place_id})\n  {detail}")
-        lines.append(
-            "\nReturn the entries that are genuine suppliers of this component. "
-            f"Use node key '{node_key}' where the source supports it."
-        )
+                sources.append(f"- {place.name} (place_id={place.place_id})\n  {detail}")
+
         return await self.call(
-            prompt="\n".join(lines), schema=DiscoveryResult, fast=True,
+            prompt=prompt, schema=DiscoveryResult, fast=True,
+            untrusted="\n".join(sources) if sources else None,
             mission_id=mission_id, event_type="vendor.discovered",
         )
 

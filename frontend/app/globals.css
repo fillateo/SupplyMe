@@ -3,13 +3,6 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --color-canvas: #f8fafc;
-    --color-surface: #ffffff;
-    --color-raised: #f1f5f9;
-    --color-line: #e2e8f0;
-  }
-
   html {
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
@@ -34,48 +27,12 @@
 }
 
 @layer components {
-  /* Clean Minimalist Cards */
   .card {
     background-color: #ffffff;
     border: 1px solid #e2e8f0;
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
     border-radius: 0.75rem;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  }
-
-  .card-hover {
-    @apply card;
-  }
-  .card-hover:hover {
-    border-color: #cbd5e1;
-    box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.05);
-  }
-
-  /* Typography primitives */
-  .label {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: #64748b;
-  }
-
-  .heading {
-    font-size: 0.9375rem;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    color: #0f172a;
-  }
-
-  .eyebrow {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #64748b;
-  }
-
-  .figure {
-    font-family: var(--font-mono), monospace;
-    font-variant-numeric: tabular-nums;
   }
 
   /* Clean sourced figure trigger */
@@ -101,7 +58,6 @@
     color: #1e40af;
   }
 
-  /* Clean Action Buttons */
   .btn {
     display: inline-flex;
     flex-shrink: 0;
@@ -146,16 +102,6 @@
     color: #0f172a;
   }
 
-  .btn-danger {
-    background-color: #ef4444;
-    color: #ffffff;
-    border: 1px solid #ef4444;
-  }
-
-  .btn-danger:hover:not(:disabled) {
-    background-color: #dc2626;
-  }
-
   /* Form Fields */
   .field {
     width: 100%;
@@ -186,27 +132,6 @@
   }
 }
 
-/* Diagonal stripe hatching for disputed facts */
-.hatch {
-  background-image: repeating-linear-gradient(
-    45deg,
-    rgba(239, 68, 68, 0.15) 0,
-    rgba(239, 68, 68, 0.15) 4px,
-    transparent 4px,
-    transparent 8px
-  );
-}
-
-.hatch-amber {
-  background-image: repeating-linear-gradient(
-    45deg,
-    rgba(217, 119, 6, 0.15) 0,
-    rgba(217, 119, 6, 0.15) 4px,
-    transparent 4px,
-    transparent 8px
-  );
-}
-
 .clamp-2 {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -214,7 +139,7 @@
   overflow: hidden;
 }
 
-/* Clean Scrollbars */
+/* Thin scrollbars for the panes that scroll independently */
 .scroll-thin {
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;

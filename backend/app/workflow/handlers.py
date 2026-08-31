@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Sequence
 from typing import Any
 
@@ -1069,8 +1070,8 @@ async def handle_email_received(orc: Orchestrator, event: Event) -> list[Event]:
     """Where the mission wakes up.
 
     Nothing about this path assumes a browser is open or that a user pressed
-    anything. Gmail pushed a notification, or the demo mail provider scheduled
-    one; either way the workflow resumes from stored state.
+    anything. Gmail pushed a notification, or the one-minute IMAP poll found
+    something; either way the workflow resumes from stored state.
     """
     mission = await orc.repo.mission(event.mission_id)
     thread = await _thread_for(orc, event)
@@ -1385,6 +1386,10 @@ async def handle_recommendation_ready(orc: Orchestrator, event: Event) -> list[E
         eligible = [r for r in ranked if not r["score"]["disqualified"]]
         if eligible:
             selections.append({"node_key": node.key, "node_name": node.name, **eligible[0]})
+            # This node has a supplier. Recorded so a finished mission does not
+            # leave every node reading "researching" forever.
+            node.status = NodeStatus.QUALIFIED
+            await orc.repo.save(node)
             alternatives.extend(
                 {"node_key": node.key, "node_name": node.name, **r} for r in eligible[1:3]
             )
@@ -1460,7 +1465,9 @@ async def rank_vendors(
             )
             packaged[vendor.id] = comparable[0] if comparable else None
 
-        priced = [p.unit_price for p in packaged.values() if p and p.unit_price]
+        priced = [
+            p.unit_price for p in packaged.values() if p is not None and p.unit_price is not None
+        ]
         cheapest = min(priced) if priced else None
 
         rows = []
@@ -1565,7 +1572,8 @@ def _render_ranking(
         for row in rejected:
             reasons = row["score"]["rejection_reasons"] or row["vendor"]["rejection_reasons"]
             lines.append(
-                f"- [{row['node_name']}] {row['vendor']['name']}: " + "; ".join(reasons)
+                f"- [{row['node_key']}] {row['node_name']}: {row['vendor']['name']}: "
+                + "; ".join(reasons)
             )
     if open_conflicts:
         lines.append("\nUNRESOLVED DISAGREEMENTS:")
@@ -1579,9 +1587,13 @@ def _render_ranking(
 
 def _render_row(row: dict[str, Any]) -> str:
     vendor, score, quote = row["vendor"], row["score"], row["quote"]
+    # The node KEY, not just its name: the narrative agent answers with whatever
+    # identifier it was shown, and the selection it annotates is looked up by key.
+    # Showing only the name meant every `why` missed its selection and silently
+    # fell back to the raw score explanations.
     head = (
-        f"- [{row['node_name']}] {vendor['name']} — {score['total']:.1f}/100"
-        f" — {vendor['city'] or 'location unknown'}"
+        f"- [{row['node_key']}] {row['node_name']}: {vendor['name']} "
+        f"— {score['total']:.1f}/100 — {vendor['city'] or 'location unknown'}"
     )
     detail = [f"    {c['name']}: {c['explanation']}" for c in score["components"]]
     if quote and quote.get("unit_price"):
@@ -1850,12 +1862,13 @@ def _brief_from_mission(mission: Mission, target_lead_time_days: int | None) -> 
 
 def _target_lead_days(mission: Mission) -> int | None:
     for criterion in mission.success_criteria:
-        import re
-
-        match = re.search(r"(\d+)\s*(?:working\s*)?days", criterion.lower())
+        match = _DAYS_RE.search(criterion.lower())
         if match:
             return int(match.group(1))
     return None
+
+
+_DAYS_RE = re.compile(r"(\d+)\s*(?:working\s*)?days")
 
 
 def _city_from(address: str | None) -> str | None:
