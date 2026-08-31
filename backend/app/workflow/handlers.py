@@ -161,12 +161,38 @@ async def handle_requirements_created(orc: Orchestrator, event: Event) -> list[E
 
 @on(EventType.SUPPLY_CHAIN_PLANNED)
 async def handle_supply_chain_planned(orc: Orchestrator, event: Event) -> list[Event]:
-    """Fan out: one discovery branch per required node, all running in parallel."""
+    """Fan out: one discovery branch per required node, all running in parallel.
+
+    Emitting nothing here strands the mission. Discovery is the only thing that
+    creates a vendor and every route to a recommendation runs through one, so a
+    fan-out of zero leaves the mission in `discovering` with nothing left to move
+    it. Two plans do that, and the model decides both: one with no nodes at all,
+    and one where it marked every node optional.
+    """
     nodes = await orc.repo.list(SupplyChainNode, mission_id=event.mission_id)
+    if not nodes:
+        return [
+            event.child(
+                EventType.MISSION_FAILED,
+                reason="the planner produced no supplier categories for this product",
+            )
+        ]
+
+    searchable = [node for node in nodes if node.required]
+    if not searchable:
+        # Nothing was marked required. Sourcing every optional component beats
+        # sourcing none of them — `required` is there to let the mission spend
+        # its effort on what matters, not to give it permission to do nothing.
+        log.info(
+            "no_required_nodes",
+            extra={"mission_id": event.mission_id,
+                   "status": f"all {len(nodes)} node(s) optional; discovering all of them"},
+        )
+        searchable = nodes
+
     return [
         event.child(EventType.SUPPLIER_DISCOVERY_STARTED, node_id=node.id, node_key=node.key)
-        for node in nodes
-        if node.required
+        for node in searchable
     ]
 
 
@@ -1463,6 +1489,28 @@ async def handle_mission_completed(orc: Orchestrator, event: Event) -> list[Even
 
 @on(EventType.MISSION_FAILED)
 async def handle_mission_failed(orc: Orchestrator, event: Event) -> list[Event]:
+    """Make the terminal state true, not just announced.
+
+    This was a timeline marker: the orchestrator's own `_fail_mission` sets the
+    status and then emits it, so nothing here had to. But that made the event
+    mean nothing on its own — a handler that emitted `mission.failed` got a line
+    in the activity feed and a mission still reading `discovering`. Setting it
+    here is idempotent for `_fail_mission` and correct for everyone else.
+    """
+    mission = await orc.repo.mission(event.mission_id)
+    if mission.status is MissionStatus.FAILED:
+        return []
+
+    reason = str(event.payload.get("reason") or "").strip() or "no reason recorded"
+
+    def _fail(record: Mission) -> None:
+        record.status = MissionStatus.FAILED
+        record.failure_reason = record.failure_reason or reason
+
+    await orc.repo.mutate(Mission, mission.id, _fail)
+    log.warning(
+        "mission_failed", extra={"mission_id": mission.id, "error": reason}
+    )
     return []
 
 

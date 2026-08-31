@@ -218,6 +218,86 @@ class TestActivityTimeline:
         assert any(e["caused_by"] for e in timeline)
 
 
+class TestAPlanThatCannotBeActedOn:
+    """Discovery is the only thing that creates a vendor, and every route to a
+    recommendation runs through one — so a fan-out of zero strands the mission in
+    `discovering` with nothing left to move it. The model decides the shape of the
+    plan, so it decides whether that happens.
+    """
+
+    async def _run(self, plan):
+        from app.runtime import Runtime
+
+        from .fixtures import build_providers
+
+        providers = build_providers(
+            Settings(approval_policy=ApprovalPolicy.AUTONOMOUS, use_adk_research=False)
+        )
+        providers.llm.register("supply_chain", lambda prompt, untrusted: plan)
+        runtime = Runtime(providers)
+        await runtime.start(concurrency=8)
+        try:
+            return runtime, await run_to_completion(runtime, OBJECTIVE, max_polls=300)
+        finally:
+            pass
+
+    async def test_a_plan_with_no_nodes_fails_with_a_reason(self):
+        from app.agents.schemas import SupplyChainPlan
+
+        runtime, mission = await self._run(SupplyChainPlan(nodes=[]))
+        try:
+            assert mission.status.value == "failed", (
+                f"a mission with nothing to source did not terminate: "
+                f"{mission.status.value}"
+            )
+            assert mission.failure_reason and "no supplier categories" in mission.failure_reason
+        finally:
+            await runtime.stop()
+
+    async def test_a_plan_where_nothing_is_required_still_sources_everything(self):
+        """`required` exists to focus the effort, not to permit doing nothing."""
+        from app.agents.schemas import PlannedNode, SupplyChainPlan
+
+        from .doubles_llm import NODES
+
+        plan = SupplyChainPlan(
+            nodes=[
+                PlannedNode(key=key, name=name, required=False,
+                            search_terms=[f"pabrik {key}"])
+                for key, name, _ in NODES
+            ]
+        )
+        runtime, mission = await self._run(plan)
+        try:
+            assert mission.status.value == "completed", (
+                f"every node optional stranded the mission: {mission.status.value}"
+            )
+            assert await runtime.repo.list(Vendor, mission_id=mission.id), (
+                "nothing was sourced even though the plan named components"
+            )
+        finally:
+            await runtime.stop()
+
+    async def test_the_failed_event_makes_the_state_true_on_its_own(self):
+        """It used to be a timeline marker: a line in the feed, and a mission
+        still reading `discovering`."""
+        from app.domain.models import MissionStatus
+
+        runtime = build_runtime(Settings(approval_policy=ApprovalPolicy.AUTONOMOUS))
+        await runtime.start(concurrency=4)
+        try:
+            mission = await runtime.create_mission(OBJECTIVE)
+            await runtime.handle(
+                Event(type=EventType.MISSION_FAILED, mission_id=mission.id,
+                      payload={"reason": "probe"})
+            )
+            reloaded = await runtime.repo.mission(mission.id)
+            assert reloaded.status is MissionStatus.FAILED
+            assert reloaded.failure_reason == "probe"
+        finally:
+            await runtime.stop()
+
+
 class TestApprovalGate:
     async def test_outreach_waits_for_approval_and_resumes_on_grant(self):
         """Under the default policy the first email to a vendor is held."""

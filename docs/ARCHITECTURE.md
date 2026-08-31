@@ -109,7 +109,7 @@ discriminator: `version=vendor.version`, `version=quote.id`,
 | `conflict.detected` | evidence engine | Routes to a targeted follow-up |
 | `followup.required` | conflict / timer | Asks only what is still missing |
 | `recommendation.ready` | completion check | Scores everything, writes the report |
-| `mission.completed` / `mission.failed` | terminal | — |
+| `mission.completed` / `mission.failed` | terminal | Sets the status; `mission.failed` carries the reason |
 
 ## Firestore collections
 
