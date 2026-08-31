@@ -2,10 +2,10 @@
 
 Two things matter beyond plain reads and writes:
 
-* `reserve` uses a `create` on a document id derived from the idempotency key.
-  Firestore rejects a create on an existing document, which gives us a
-  compare-and-set without a transaction — that is the whole basis for not
-  sending a supplier the same email twice.
+* `reserve` claims a document named by the idempotency key inside a Firestore
+  transaction, so two Cloud Run instances handling the same redelivered message
+  cannot both win the claim — that is the whole basis for not sending a
+  supplier the same email twice.
 * Every mission's events go into a subcollection, so the activity timeline is a
   single indexed range read rather than a scan.
 """

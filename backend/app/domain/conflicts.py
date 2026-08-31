@@ -132,18 +132,22 @@ def _question_for(field: str, groups: list[list[Evidence]]) -> str:
     which applies, rather than repeating what they already answered.
     """
     values = [g[0].value for g in groups]
+    # Evidence keeps each value as the source stated it, so "500 pcs" and 500
+    # both occur here. Comparing them needs numbers; a disagreement whose values
+    # yield none falls through to the generic question rather than crashing the
+    # handler that asked for it.
+    numbers = sorted(n for n in (as_number(v) for v in values) if n is not None)
 
-    if field == "moq":
-        low = min(v for v in values if isinstance(v, (int, float)))
-        high = max(v for v in values if isinstance(v, (int, float)))
+    if field == "moq" and len(numbers) >= 2:
+        low, high = numbers[0], numbers[-1]
         question = (
             f"Your published minimum order is {low:g} but we were quoted {high:g}. "
             f"Can you confirm whether {low:g} units is possible as a pilot order?"
         )
-    elif field == "unit_price":
+    elif field == "unit_price" and numbers:
         question = (
             "We have two different unit prices on file "
-            f"({', '.join(f'{v:g}' for v in values if isinstance(v, (int, float)))}). "
+            f"({', '.join(f'{n:g}' for n in numbers)}). "
             "Which applies at our quantity?"
         )
     elif field == "lead_time_days":

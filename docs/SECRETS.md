@@ -15,9 +15,9 @@ Nothing in this repository contains a credential, and the `.gitignore` refuses
 
 ## What reaches the browser
 
-Nothing. The console calls its own origin and Next.js proxies to the API
-server-side (`frontend/next.config.mjs`), so no key, token or service-account
-identity is ever present in client JavaScript.
+Nothing. The console calls its own origin and a route handler proxies to the
+API server-side (`frontend/app/api/[...path]/route.ts`), so no key, token or
+service-account identity is ever present in client JavaScript.
 
 ## Two locks on the ingress endpoints
 

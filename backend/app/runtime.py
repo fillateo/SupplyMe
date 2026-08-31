@@ -223,8 +223,12 @@ def _research_agent(providers: Any) -> Any:
         return None
     try:
         from .adapters.gemini_llm import _RESOLVED
+        from .config import MODEL_LADDER
 
-        model = settings.reasoning_model or _RESOLVED.get("reasoning") or "gemini-2.5-flash"
+        # Last resort is the head of the ladder, not a hardcoded older model:
+        # the ladder's first entry is the newest model this project prefers,
+        # and a literal here had quietly drifted a generation behind it.
+        model = settings.reasoning_model or _RESOLVED.get("reasoning") or MODEL_LADDER[0]
         from .agents.adk_research import AdkResearchAgent
 
         return AdkResearchAgent(providers, model, providers.store, llm=providers.llm)

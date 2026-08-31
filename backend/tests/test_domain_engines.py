@@ -331,6 +331,28 @@ class TestConflicts:
         ])
         assert found is not None and found.action == "email"
 
+    def test_a_disagreement_between_text_values_still_asks_a_question(self):
+        """Evidence keeps values as the source wrote them, so an MOQ can be
+        "500 pcs" rather than 500. Building the question used to take min()
+        over only the numeric values — an empty sequence when both sides are
+        text — which turned a detected conflict into a ValueError inside the
+        handler and cost the vendor its branch."""
+        found = detect("moq", [
+            evidence("moq", "500 pcs", SourceType.OFFICIAL_WEBSITE),
+            evidence("moq", "1.000 pcs", SourceType.SUPPLIER_EMAIL),
+        ])
+        assert found is not None
+        assert found.question
+        assert "500" in found.question and "1000" in found.question
+
+    def test_a_disagreement_with_no_numeric_reading_gets_the_generic_question(self):
+        found = detect("payment_terms", [
+            evidence("payment_terms", "50% DP", SourceType.OFFICIAL_WEBSITE),
+            evidence("payment_terms", "full prepayment", SourceType.SUPPLIER_EMAIL),
+        ])
+        assert found is not None
+        assert "disagree on payment terms" in found.question
+
     def test_detect_all_only_reports_material_fields(self):
         items = [
             evidence("moq", 500, SourceType.OFFICIAL_WEBSITE),
