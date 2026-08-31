@@ -14,7 +14,7 @@ import { formatClock } from "./evidence-drawer";
 const EVENT_META: Record<string, { label: string; icon: string }> = {
   "mission.created": { label: "Mission Initialized", icon: "✦" },
   "requirements.created": { label: "Objective Decomposed", icon: "⚙" },
-  "supply_chain.planned": { label: "BOM Generated", icon: "▥" },
+  "supply_chain.planned": { label: "Supply Chain Planned", icon: "▥" },
   "supplier.discovery.started": { label: "Search Dispatched", icon: "⌕" },
   "vendor.discovered": { label: "Candidate Found", icon: "⚑" },
   "vendor.research.started": { label: "Supplier Researched", icon: "≡" },
@@ -66,7 +66,7 @@ export function ActivityFeed({
   if (shown.length === 0) {
     return (
       <div className="py-6 text-center">
-        <p className="text-xs text-slate-400">Awaiting first telemetry event…</p>
+        <p className="text-xs text-slate-400">Nothing has happened yet…</p>
       </div>
     );
   }

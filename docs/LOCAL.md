@@ -122,6 +122,8 @@ Then:
   by side and what the system did about it.
 - **Recommendation** tab → *How the score was reached* — every point is a
   weight times a fit, with the sentence that produced it.
+- **Supply chain** tab — what the planner decided the product is made of, and how
+  far each component's candidates have got.
 
 Close the browser tab mid-mission and reopen it. The mission does not care.
 

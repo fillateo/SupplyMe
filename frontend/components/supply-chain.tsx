@@ -112,11 +112,11 @@ export function SupplyChain({
         <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600 font-bold">
           ⚙
         </div>
-        <p className="text-base font-semibold text-slate-800">Decomposing Bill of Materials</p>
+        <p className="text-base font-semibold text-slate-800">Working out the supply chain</p>
         <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-slate-500">
           {live
             ? "Working out which components this product needs before anything is searched for."
-            : "This mission terminated before the bill of materials could be decomposed."}
+            : "This mission ended before the supply chain was worked out."}
         </p>
       </div>
     );
@@ -131,10 +131,10 @@ export function SupplyChain({
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pb-3 border-b border-slate-200">
           <div>
             <h2 className="text-base font-semibold text-slate-900">
-              Bill of Materials Architecture
+              What this product is made of
             </h2>
             <p className="text-xs text-slate-500">
-              {nodes.length} component line{nodes.length === 1 ? "" : "s"} required for complete production
+              {nodes.length} component{nodes.length === 1 ? "" : "s"}, each needing its own supplier
             </p>
           </div>
 
@@ -180,7 +180,7 @@ export function SupplyChain({
                         </h3>
                         {!node.required && (
                           <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 border border-slate-200">
-                            Optional Component
+                            Optional
                           </span>
                         )}
                       </div>
@@ -208,7 +208,7 @@ export function SupplyChain({
 
                     {node.consolidates_with.length > 0 && (
                       <p className="mt-2 text-xs text-indigo-700 font-medium">
-                        ✦ Multi-line consolidation potential with:{" "}
+                        ✦ One supplier might cover this together with:{" "}
                         {node.consolidates_with.map((key) => key.replace(/-/g, " ")).join(", ")}
                       </p>
                     )}

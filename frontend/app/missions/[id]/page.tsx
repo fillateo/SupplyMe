@@ -18,10 +18,10 @@ import { RecommendationPanel } from "@/components/recommendation";
 import { SupplyChain } from "@/components/supply-chain";
 
 const TABS = [
-  { id: "Bill of materials", label: "Bill of Materials", icon: "▥" },
-  { id: "Suppliers", label: "Supplier Dossiers", icon: "🏢" },
+  { id: "Supply chain", label: "Supply chain", icon: "▥" },
+  { id: "Suppliers", label: "Suppliers", icon: "🏢" },
   { id: "Emails", label: "Communications", icon: "✉" },
-  { id: "Recommendation", label: "Strategic Ranking", icon: "★" },
+  { id: "Recommendation", label: "Recommendation", icon: "★" },
 ] as const;
 
 type Tab = (typeof TABS)[number]["id"];
@@ -31,10 +31,10 @@ const TERMINAL = new Set(["completed", "failed"]);
 type VendorFilter = "in_play" | "qualified" | "ruled_out" | "all";
 
 const VENDOR_FILTERS: { value: VendorFilter; label: string }[] = [
-  { value: "all", label: "All Candidates" },
+  { value: "all", label: "All" },
   { value: "qualified", label: "Qualified" },
-  { value: "in_play", label: "In Pipeline" },
-  { value: "ruled_out", label: "Ruled Out" },
+  { value: "in_play", label: "Still in play" },
+  { value: "ruled_out", label: "Ruled out" },
 ];
 
 function matchesFilter(vendor: Vendor, filter: VendorFilter): boolean {
@@ -70,7 +70,7 @@ export default function MissionConsole() {
 
   const [loadError, setLoadError] = useState<{ status?: number } | null>(null);
   const [decideError, setDecideError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("Bill of materials");
+  const [tab, setTab] = useState<Tab>("Supply chain");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<{ title: string; records: Evidence[] } | null>(null);
   const [logOpen, setLogOpen] = useState(false);
@@ -202,7 +202,7 @@ export default function MissionConsole() {
             </p>
             <div className="mt-6">
               <Link href="/" className="btn btn-primary">
-                ← Return to Missions Deck
+                ← Back to missions
               </Link>
             </div>
           </div>
@@ -213,7 +213,7 @@ export default function MissionConsole() {
       <main className="mx-auto max-w-2xl px-6 py-28 text-center">
         <div className="card p-8 flex flex-col items-center justify-center bg-white border border-slate-200 rounded-xl">
           <div className="h-7 w-7 animate-spin rounded-full border-2 border-slate-900 border-t-transparent mb-3" />
-          <p className="text-sm font-semibold text-slate-700">Loading Mission Console…</p>
+          <p className="text-sm font-semibold text-slate-700">Loading…</p>
         </div>
       </main>
     );
@@ -237,7 +237,7 @@ export default function MissionConsole() {
                 href="/"
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
               >
-                <span aria-hidden>←</span> Missions Deck
+                <span aria-hidden>←</span> Missions
               </Link>
 
               <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
@@ -266,10 +266,10 @@ export default function MissionConsole() {
 
           <div className="mt-4 grid grid-cols-2 gap-2.5 border-t border-slate-100 pt-3.5 sm:grid-cols-4 lg:grid-cols-7">
             <ReadoutCard
-              label="BOM Lines"
+              label="Components"
               value={nodes.length}
               icon="▥"
-              hint="Required component lines"
+              hint="Component lines this product needs a supplier for"
             />
             <ReadoutCard
               label="Qualified"
@@ -320,8 +320,8 @@ export default function MissionConsole() {
               <span className="text-amber-700 font-bold text-base">✋</span>
               <p className="text-xs font-bold text-amber-900 uppercase tracking-wider">
                 {pending.length === 1
-                  ? "Human Authorization Required: 1 Action Pending"
-                  : `Human Authorization Required: ${pending.length} Actions Pending`}
+                  ? "1 action is waiting for you to approve it"
+                  : `${pending.length} actions are waiting for you to approve them`}
               </p>
             </div>
 
@@ -339,7 +339,7 @@ export default function MissionConsole() {
                   )}
                   {approval.preview?.questions && (
                     <ul className="space-y-1 rounded bg-slate-50 p-2.5 border border-slate-200">
-                      <span className="text-xs font-medium text-slate-500 block mb-1">Target Inquiries:</span>
+                      <span className="text-xs font-medium text-slate-500 block mb-1">Questions it asks:</span>
                       {(approval.preview.questions as string[]).map((question, index) => (
                         <li key={index} className="flex gap-2 text-xs text-slate-700">
                           <span className="text-blue-600 font-bold">•</span>
@@ -351,7 +351,7 @@ export default function MissionConsole() {
                   {approval.preview?.body && (
                     <details className="mt-1">
                       <summary className="cursor-pointer text-xs font-semibold text-blue-600 hover:text-blue-800">
-                        ▶ Read draft correspondence
+                        ▶ Read the draft
                       </summary>
                       <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-sans text-xs leading-relaxed text-slate-800 border border-slate-200">
                         {approval.preview.body as string}
@@ -366,13 +366,13 @@ export default function MissionConsole() {
                       onClick={() => decide(approval.id, true)}
                       className="btn btn-primary px-3.5 py-1.5 text-xs"
                     >
-                      Authorize & Send ↗
+                      Approve & send ↗
                     </button>
                     <button
                       onClick={() => decide(approval.id, false)}
                       className="btn btn-quiet px-3.5 py-1.5 text-xs text-rose-700 hover:bg-rose-50"
                     >
-                      Hold Back
+                      Decline
                     </button>
                   </div>
                   {decideError && <p className="text-xs text-rose-700">{decideError}</p>}
@@ -409,7 +409,7 @@ export default function MissionConsole() {
             })}
           </nav>
 
-          {tab === "Bill of materials" && (
+          {tab === "Supply chain" && (
             <SupplyChain nodes={nodes} vendors={vendors} live={live} />
           )}
 
@@ -417,7 +417,7 @@ export default function MissionConsole() {
             <div className="space-y-4">
               {vendors.length === 0 ? (
                 <div className="card p-12 text-center border-dashed bg-white">
-                  <p className="text-base font-semibold text-slate-800">No Supplier Candidates Yet</p>
+                  <p className="text-base font-semibold text-slate-800">No suppliers yet</p>
                   <p className="mx-auto mt-1.5 max-w-md text-xs leading-relaxed text-slate-500">
                     {live
                       ? "Discovery is searching the open web and Google Places. Suppliers appear as soon as they are identified."
@@ -462,7 +462,7 @@ export default function MissionConsole() {
                   {shownVendors.length === 0 ? (
                     <div className="card p-8 text-center bg-white border border-slate-200 rounded-xl">
                       <p className="text-xs text-slate-500">
-                        No candidates match the active filter criteria.
+                        No suppliers match this filter.
                       </p>
                     </div>
                   ) : (
@@ -508,7 +508,7 @@ export default function MissionConsole() {
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-blue-600" />
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                  Agent Telemetry
+                  Activity
                 </span>
               </div>
               <div className="flex items-center gap-2">

@@ -251,7 +251,7 @@ const STATUS_STYLES: Record<string, { label: string; tone: string; dotColor: str
     dotColor: "bg-slate-400",
   },
   planning: {
-    label: "BOM Planning",
+    label: "Planning",
     tone: "bg-purple-50 text-purple-700 border-purple-200",
     dotColor: "bg-purple-500",
   },

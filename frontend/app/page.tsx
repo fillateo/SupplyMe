@@ -81,7 +81,7 @@ export default function MissionsPage() {
     api
       .missions()
       .then(setMissions)
-      .catch(() => setError("Cannot reach the API server on port 8080. Start the backend, then reload."))
+      .catch(() => setError("Could not reach the API. If you are running this locally, start the backend first."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -92,7 +92,7 @@ export default function MissionsPage() {
       const mission = await api.createMission(objective, { location, scope });
       window.location.href = `/missions/${mission.id}`;
     } catch {
-      setError("The mission could not be started. Check that the backend API is running, then try again.");
+      setError("The mission could not be started. The API did not accept it — try again.");
       setStarting(false);
     }
   }

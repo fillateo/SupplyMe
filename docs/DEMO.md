@@ -46,13 +46,13 @@ it on camera.
 | --- | --- | --- |
 | 0:00–0:25 | The friction, in one sentence: *"I want to start a perfume brand and I don't know who can actually make it."* | — |
 | 0:25–0:45 | Paste the objective, press **Start sourcing**, close the tab | `POST /api/missions` |
-| 0:45–1:25 | Reopen. Categories identified, discovery running in parallel across them | Supply chain tab |
-| 1:25–2:00 | Open a supplier. Real company, real address, real website — and the evidence drawer shows the page it was read from, with the retrieval time | Suppliers tab → expand → any figure |
-| 2:00–2:25 | A brand claim judged on its sources: the supplier's own word, versus something written by anyone else | Suppliers tab → brand panel |
-| 2:25–2:50 | The email it already sent, and what it personalised from — no approval step waited on you | Communications tab, sent thread |
+| 0:45–1:25 | Reopen. Components identified, discovery running in parallel across them | **Supply chain** tab |
+| 1:25–2:00 | Open a supplier. Real company, real address, real website — and the evidence drawer shows the page it was read from, with the retrieval time | **Suppliers** tab → expand → any figure |
+| 2:00–2:25 | A brand claim judged on its sources: the supplier's own word, versus something written by anyone else | **Suppliers** tab → *Brands they claim to work with* |
+| 2:25–2:50 | The email it already sent, and what it personalised from — no approval step waited on you | **Communications** tab, sent thread |
 | 2:50–3:20 | **Switch to the mailbox.** The email is there. Reply as the supplier — quote a price and a minimum order that contradicts their website | your inbox |
 | 3:20–3:45 | Back in the console: the reply is in, the quote extracted, and the disagreement is flagged | Activity feed, then the conflict panel |
-| 3:45–4:00 | It puts both numbers back to them in one targeted follow-up, and the recommendation names what it could not establish | Communications, Recommendation |
+| 3:45–4:00 | It puts both numbers back to them in one targeted follow-up, and the recommendation names what it could not establish | **Communications**, then **Recommendation** |
 
 The reply takes up to a minute to appear — Cloud Scheduler polls the mailbox
 once a minute. `./run.sh mail` reads it immediately if you would rather not wait
