@@ -37,7 +37,14 @@ services:
   # you remember to do. Writing the same document ids again is a no-op, so
   # re-running it is safe.
   seed:
-    build: ./backend
+    build:
+      context: ./backend
+      # Build over the host's network. On a machine behind WARP (or any VPN
+      # that takes over DNS), a container in the default build network cannot
+      # resolve pypi.org, and every build dies on `No matching distribution
+      # found` — which reads as a broken dependency rather than a broken
+      # resolver. Harmless where DNS already works.
+      network: host
     depends_on:
       firestore:
         condition: service_healthy
@@ -55,7 +62,14 @@ services:
     restart: "no"
 
   api:
-    build: ./backend
+    build:
+      context: ./backend
+      # Same reason as `seed`: build over the host's network. On a machine behind WARP (or any VPN
+      # that takes over DNS), a container in the default build network cannot
+      # resolve pypi.org, and every build dies on `No matching distribution
+      # found` — which reads as a broken dependency rather than a broken
+      # resolver. Harmless where DNS already works.
+      network: host
     depends_on:
       firestore:
         condition: service_healthy
@@ -97,7 +111,9 @@ services:
       start_period: 10s
 
   console:
-    build: ./frontend
+    build:
+      context: ./frontend
+      network: host
     depends_on:
       api:
         condition: service_healthy

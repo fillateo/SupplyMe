@@ -1,0 +1,45 @@
+# Overlay for a machine whose VPN has taken over the Docker bridge.
+#
+#   MOCK=true docker compose -f docker-compose.yml -f docker-compose.host.yml up -d
+#
+# Cloudflare WARP in exclude mode routes every private range into the tunnel —
+# `ip route get 172.19.0.3` comes back `dev CloudflareWARP` — so a published
+# container port is listening and unreachable at the same time, and a build
+# cannot resolve pypi.org. The containers are fine; the path from the host to
+# them is not.
+#
+# This drops the bridge and puts every service straight onto the host's network
+# stack, so there is no 172.x hop for the tunnel to swallow. Services then find
+# each other on 127.0.0.1 rather than by service name, which is why the two
+# addresses below are overridden.
+#
+# Linux only, and the emulator binds 0.0.0.0:8085 on the host rather than inside
+# a private network — fine on a laptop, not something to leave running on a
+# shared one.
+
+services:
+  firestore:
+    network_mode: host
+    ports: !reset []
+
+  seed:
+    network_mode: host
+    environment:
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8085
+      SUPPLYME_FIRESTORE_EMULATOR_HOST: 127.0.0.1:8085
+
+  api:
+    network_mode: host
+    ports: !reset []
+    environment:
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8085
+      SUPPLYME_FIRESTORE_EMULATOR_HOST: 127.0.0.1:8085
+
+  console:
+    network_mode: host
+    ports: !reset []
+    environment:
+      # No port mapping to translate 8080 to 3000 any more, so the server has to
+      # listen on the port the console is actually opened at.
+      PORT: 3000
+      API_BASE_URL: http://127.0.0.1:8080

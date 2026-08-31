@@ -311,6 +311,13 @@ docker compose up --build      # console on :3000, API on :8080, Firestore on :8
 docker compose down
 ```
 
+If a VPN has taken over the Docker bridge — containers healthy, nothing
+answering on :3000 — add the host-network overlay:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.host.yml up --build
+```
+
 Three services in the images the deployment runs: Google's **Firestore
 emulator**, the API, and the console. The API reaches the emulator through the
 same `FirestoreStore`, the same client library and the same transactions it
