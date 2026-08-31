@@ -366,8 +366,26 @@ def _extract_quote(prompt: str, body: str) -> QuoteExtraction:
         )
         (answered if got else unanswered).append(question)
 
+    # Which rung this price belongs to. The real instruction tells the model to
+    # "pick the rung for the quantity we are buying and set quantity to it", and
+    # the domain needs it: a price quoted at 1,000 units is not available to a
+    # buyer of 500, and leaving it None meant the workflow never exercised that.
+    rung = None
+    for pattern in (
+        rf"[Hh]arga di\s*{_NUM}\s*pcs",
+        rf"at\s*{_NUM}\s*(?:pcs|pieces|units)",
+        rf"[Uu]ntuk\s*{_NUM}\s*(?:set|pcs)",
+    ):
+        if match := re.search(pattern, body):
+            rung = int(_money(match.group(1)))
+            break
+    if rung is None and moq is not None:
+        # No rung stated: the price is the one that comes with their minimum.
+        rung = moq
+
     return QuoteExtraction(
         currency="IDR",
+        quantity=rung,
         line_items=[LineItem(component=name, unit_price=price)
                     for name, price in line_items.items()],
         moq=moq, lead_time_days=lead,

@@ -282,6 +282,68 @@ class TestApprovalGate:
             await runtime.stop()
 
 
+class TestTheResolvedRungIsWhatSurvives:
+    """End to end, over the whole workflow, on the mission the demo tells.
+
+    The supplier publishes MOQ 500, their sales desk quotes 1,000 at Rp 8.500,
+    the follow-up settles 500 as a pilot at a higher price. Two replies, two
+    quotes, and the buyer is purchasing 500 — so the Rp 8.500 rung is not a price
+    this order can have, however cheap it looks.
+    """
+
+    async def test_the_vendor_holds_both_rungs(self, completed):
+        runtime, mission = completed
+        target = next(
+            v for v in await runtime.repo.list(Vendor, mission_id=mission.id)
+            if "Kemasan Wangi" in v.name
+        )
+        quotes = await runtime.repo.vendor_quotes(target.id)
+        quantities = sorted(q.quantity for q in quotes if q.quantity)
+        assert quantities == [500, 1000], (
+            f"expected a rung at 500 and one at 1000, got {quantities}"
+        )
+
+    async def test_the_unreachable_rung_is_never_priced(self, completed):
+        """The whole point: settling the minimum must not hand back the volume price."""
+        from app.domain.quotes import ComponentVocabulary, comparable_set
+
+        runtime, mission = completed
+        nodes = await runtime.repo.list(SupplyChainNode, mission_id=mission.id)
+        vocabulary = ComponentVocabulary.from_nodes(nodes)
+        target = next(
+            v for v in await runtime.repo.list(Vendor, mission_id=mission.id)
+            if "Kemasan Wangi" in v.name
+        )
+        quotes = await runtime.repo.vendor_quotes(target.id)
+
+        comparable, incomparable = comparable_set(
+            quotes, ("bottle",), vocabulary=vocabulary, order_quantity=mission.quantity
+        )
+        assert all(q.unit_price != 8500.0 for q in comparable), (
+            "the vendor was priced on the 1,000-unit rung for an order of 500"
+        )
+        held = [q for q in incomparable if "not available" in " ".join(q.notes)]
+        assert held, "the unreachable rung was not held back with a reason"
+
+    async def test_it_would_be_priced_if_the_buyer_wanted_that_quantity(self, completed):
+        """The rung is not wrong, only out of reach — buy 1,000 and it applies."""
+        from app.domain.quotes import ComponentVocabulary, comparable_set
+
+        runtime, mission = completed
+        vocabulary = ComponentVocabulary.from_nodes(
+            await runtime.repo.list(SupplyChainNode, mission_id=mission.id)
+        )
+        target = next(
+            v for v in await runtime.repo.list(Vendor, mission_id=mission.id)
+            if "Kemasan Wangi" in v.name
+        )
+        comparable, _ = comparable_set(
+            await runtime.repo.vendor_quotes(target.id), ("bottle",),
+            vocabulary=vocabulary, order_quantity=1000,
+        )
+        assert any(q.unit_price == 8500.0 for q in comparable)
+
+
 class TestTheNarrativeAgentIsActuallyConsulted:
     """Its output was being thrown away, and nothing noticed.
 
