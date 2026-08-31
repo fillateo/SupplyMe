@@ -325,7 +325,7 @@ p = json.loads(sys.argv[1]).get('providers', {})
 print(', '.join(f'{k}={p[k]}' for k in ('search','maps','mail') if k in p))
 " "$health" 2>/dev/null || echo "")"
   [ -n "$bound" ] && printf '%s\n' "  tools     $bound"
-  printf '%s\n' "  spend     ${YELLOW}live${OFF} ${DIM}— see docs/COST.md; ./run.sh status for this process${OFF}"
+  printf '%s\n' "  spend     ${YELLOW}live${OFF} ${DIM}— ./run.sh status for this process${OFF}"
   echo
   printf '%s\n' "  ${DIM}Press ${OFF}Start sourcing${DIM}. What a run finds is up to the live web,${OFF}"
   printf '%s\n' "  ${DIM}so look for the shapes rather than for particular numbers:${OFF}"
@@ -550,7 +550,7 @@ if total:
     # Dollars only. app/domain/quotes.py refuses to convert a currency without a
     # dated rate, and printing a rupiah figure here from a constant in a shell
     # script would be the same invention this system declines to make about a
-    # supplier quote. docs/COST.md gives a rupiah range with its rate stated.
+    # supplier quote.
     print("  spent    {} model calls, ${:.4f} since startup".format(
         total.get("calls", 0), total.get("usd", 0.0)))
 if caps:

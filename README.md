@@ -40,8 +40,6 @@ That is a bad fit for search, and a good fit for an agent.
 
 ![SupplyMe architecture — browser to console to API, the event plane over Pub/Sub, Cloud Tasks and Cloud Scheduler, seven Gemini agents beside the deterministic engines, and every managed service reached through a Port](./docs/architecture.png)
 
-<sub>Vector original: [docs/architecture.svg](./docs/architecture.svg). Both are generated from `terraform/` and `backend/app/` as they actually are — regenerate with `python3 scripts/architecture_diagram.py`.</sub>
-
 ```mermaid
 flowchart TD
     B[Browser] --> C["Next.js console<br/>Cloud Run · proxies /api/* server-side"]
@@ -396,11 +394,8 @@ Each area has its own document with the detail this file summarises:
 
 - **[🧠 Backend](./backend/README.md)** - layout of the domain, agents, workflow, ports and adapters
 - **[🏗️ Architecture](./docs/ARCHITECTURE.md)** - the event model, durability, and why the orchestrator is shaped this way
-- **[💰 Cost](./docs/COST.md)** - measured spend per mission and where every dollar goes
 - **[🖥️ Local development](./docs/LOCAL.md)** - running without cloud infrastructure
 - **[🔐 Secrets](./docs/SECRETS.md)** - what is stored where, and what never reaches the browser
-- **[🎬 Demo](./docs/DEMO.md)** - both demo paths, timed, with the narration to read
-- **[📝 Devpost](./docs/DEVPOST.md)** - the submission write-up
 
 ## 🔧 Environment Variables
 
@@ -512,7 +507,7 @@ shortlist of five researched properly costs a third of twelve researched badly.
 
 | Guard | Value | Effect |
 | --- | --- | --- |
-| Spend ceiling | `$1.00` / mission | Fails the mission with a reason, and is deliberately **not retried**. Checked before every request on every path that spends; a few concurrent calls can still land after it fires, so treat it as a stop rather than a to-the-cent limit. See [docs/COST.md](./docs/COST.md) |
+| Spend ceiling | `$1.00` / mission | Fails the mission with a reason, and is deliberately **not retried**. Checked before every request on every path that spends; a few concurrent calls can still land after it fires, so treat it as a stop rather than a to-the-cent limit. |
 | Model calls | `300` / mission | Same |
 | ADK research loop | `12` calls | Against ADK's default of 500, the largest unattended-spend risk in the system |
 | Fast-tier thinking | `0` tokens | Thinking is billed as output; this alone cut cost per call ~60% |
