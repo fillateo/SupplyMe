@@ -15,7 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from .ids import new_id, stable_id
+from .ids import content_hash, new_id
 
 
 class EventType(StrEnum):
@@ -76,7 +76,7 @@ class Event(BaseModel):
         carries a byte-identical payload, collides.
         """
         canonical = json.dumps(self.payload, sort_keys=True, default=str)
-        return stable_id("k", self.mission_id, self.type.value, canonical)
+        return content_hash("k", self.mission_id, self.type.value, canonical)
 
     def child(self, type_: EventType, **payload: Any) -> Event:
         return Event(

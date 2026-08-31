@@ -1,0 +1,26 @@
+.gcloudignore
+.git
+.gitignore
+
+# gcloud builds submit only reads .gcloudignore/.gitignore from the directory
+# being uploaded (backend/), not the repo root — so without this file, its
+# default ignore list (just .git/.gitignore) would upload .env, the venv and
+# every cache directory to the Cloud Build staging bucket. Mirrors the
+# exclusions in the repo-root .gitignore.
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets — never uploaded as part of a build source archive.
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*credentials*.json
+*token*.json

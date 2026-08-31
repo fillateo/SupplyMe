@@ -95,6 +95,8 @@ def _moq_component(weight: float, vendor: Vendor, needed: int | None) -> Compone
     moq = as_number(fact.value) if fact.known else None
     if moq is None or needed is None:
         return Component("moq_fit", weight, 0.0, "MOQ unknown")
+    if needed <= 0:
+        return Component("moq_fit", weight, 0.0, "order quantity unknown")
     if moq <= needed:
         return Component(
             "moq_fit", weight, 1.0, f"MOQ {moq:g} fits an order of {needed:g}"

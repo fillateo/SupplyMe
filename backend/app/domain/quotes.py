@@ -222,5 +222,5 @@ def comparable_set(
         comparable = [pq for pq in comparable if pq.currency == dominant]
         incomparable.extend(held_back)
 
-    comparable.sort(key=lambda pq: pq.unit_price or float("inf"))
+    comparable.sort(key=lambda pq: pq.unit_price if pq.unit_price is not None else float("inf"))
     return comparable, incomparable

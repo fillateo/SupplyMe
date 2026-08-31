@@ -1,0 +1,13 @@
+.gcloudignore
+.git
+.gitignore
+
+# Same reasoning as backend/.gcloudignore: gcloud builds submit only reads an
+# ignore file from the directory being uploaded (frontend/), so without this,
+# node_modules/ and .next/ would be uploaded wholesale on every deploy.
+
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
