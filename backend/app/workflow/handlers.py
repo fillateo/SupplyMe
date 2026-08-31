@@ -930,6 +930,7 @@ async def handle_contact_required(orc: Orchestrator, event: Event) -> list[Event
         quantity=mission.quantity, unit_spec=mission.unit_spec, market=mission.market,
         node_names=node_names,
         missing_fields=list(event.payload.get("missing") or vendor.missing_fields),
+        buyer_name=orc.settings.buyer_name,
         mission_id=mission.id, vendor_id=vendor.id,
     )
 
@@ -1329,6 +1330,7 @@ async def handle_follow_up(orc: Orchestrator, event: Event) -> list[Event]:
         vendor_name=vendor.name, thread_summary=_summarize_thread(thread),
         unanswered=thread.unanswered or list(vendor.missing_fields),
         specific_question=event.payload.get("question"),
+        buyer_name=orc.settings.buyer_name,
         mission_id=mission.id, vendor_id=vendor.id,
     )
 

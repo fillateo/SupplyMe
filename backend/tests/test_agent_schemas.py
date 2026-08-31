@@ -22,6 +22,7 @@ import pytest
 from pydantic import BaseModel
 
 from app.agents import schemas as agent_schemas
+from app.agents.communication import sign
 
 
 def response_models() -> list[type[BaseModel]]:
@@ -130,3 +131,36 @@ class TestARequiredFieldMustBeAnswerableFromThePrompt:
                 f"SelectionNarrative requires `{name}` but a ranking row contains "
                 f"nothing the model could read it from"
             )
+
+
+# --- Outreach signatures ----------------------------------------------------
+# Three of five emails in a live mission went out ending in "[Your Name]" or
+# "[My Name]". The instruction now tells the model not to sign, but a prompt is
+# a request rather than a guarantee, so the guarantee lives in sign().
+
+
+@pytest.mark.parametrize(
+    "placeholder", ["[Your Name]", "[My Name]", "[Name]", "[Your Company]"]
+)
+def test_sign_replaces_a_placeholder_with_the_real_name(placeholder: str) -> None:
+    body = f"Hello,\n\nWhat is your MOQ?\n\nThank you,\n{placeholder}"
+    signed = sign(body, "Jait Ramadandi")
+    assert placeholder not in signed
+    assert signed.endswith("Thank you,\nJait Ramadandi")
+
+
+def test_sign_adds_a_sign_off_when_the_model_wrote_none() -> None:
+    assert sign("Hello,\n\nWhat is your MOQ?", "Jait Ramadandi") == (
+        "Hello,\n\nWhat is your MOQ?\n\nThanks,\nJait Ramadandi"
+    )
+
+
+def test_sign_without_a_name_leaves_no_dangling_sign_off() -> None:
+    """An unsigned email is terse. An invented name is a person who is not real."""
+    signed = sign("Hello,\n\nWhat is your MOQ?\n\nThanks,\n[Your Name]", "")
+    assert signed == "Hello,\n\nWhat is your MOQ?"
+
+
+def test_sign_does_not_eat_a_bracketed_figure_mid_body() -> None:
+    body = "We need 1,000 units [first batch] of the 50ml flacon.\n\nThanks,\n[Your Name]"
+    assert "[first batch]" in sign(body, "Jait Ramadandi")

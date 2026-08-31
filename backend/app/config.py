@@ -116,6 +116,12 @@ class Settings(BaseSettings):
     search_engine_id: str = ""
     gmail_sender: str = ""
 
+    #: Who the outreach is signed by. The model has no name to sign with and
+    #: will invent a bracketed placeholder if left to decide, which is what put
+    #: "[Your Name]" into three live supplier emails. Empty means no sign-off
+    #: block at all, which is honest; a name here is better.
+    buyer_name: str = ""
+
     #: SMTP, as the short path to real delivery. Gmail accepts an app password
     #: here, which needs no OAuth client and no consent screen. Outbound only:
     #: replies land in the inbox, not back in the mission.

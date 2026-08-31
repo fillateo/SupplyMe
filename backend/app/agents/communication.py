@@ -9,6 +9,8 @@ the workflow, which will not send anything the approval policy has not cleared.
 
 from __future__ import annotations
 
+import re
+
 from ..domain.policy import Tool
 from .base import Agent
 from .schemas import EmailDraft, QuoteExtraction
@@ -33,6 +35,11 @@ was not given to you. Never promise an order.
 
 questions_asked must contain one entry per distinct question in the body,
 phrased as the system will later match replies against.
+
+Do not write a sign-off. End the body with your last sentence or question.
+The system appends the signature, because it is the only part that knows who
+is sending. Never write a placeholder such as [Your Name] — a real supplier
+reads that as a mail-merge that was never finished.
 """.strip()
 
 QUOTE_INSTRUCTION = """
@@ -98,7 +105,36 @@ settle a disagreement, so a vague nudge wastes the only attempt available.
 
 questions_asked must contain one entry per distinct question in the body,
 phrased as the system will later match replies against.
+
+Do not write a sign-off, and never write a placeholder such as [Your Name].
+The system appends the signature.
 """.strip()
+
+
+_PLACEHOLDER = re.compile(r"^\s*\[[^\]\n]{0,40}\]\s*$", re.MULTILINE)
+_SIGN_OFF = re.compile(
+    r"(?:^|\n)[ \t]*(?:thanks|thank you|best|best regards|regards|sincerely|"
+    r"kind regards)[ \t]*,?[ \t]*$",
+    re.IGNORECASE,
+)
+
+
+def sign(body: str, buyer_name: str) -> str:
+    """Put a real signature on a draft, or none at all.
+
+    Instructing the model not to sign is not enough on its own: three of five
+    emails in a live mission went out ending in `[Your Name]` or `[My Name]`
+    anyway. So the placeholder is removed here rather than asked about, and the
+    sign-off is written by the only code that knows the sender's name. An empty
+    `buyer_name` leaves the body unsigned, which reads as terse; a fabricated
+    name would read as a real person who does not exist.
+    """
+    text = _PLACEHOLDER.sub("", body).rstrip()
+    if not buyer_name:
+        return _SIGN_OFF.sub("", text).rstrip()
+    if _SIGN_OFF.search(text):
+        return f"{text}\n{buyer_name}"
+    return f"{text}\n\nThanks,\n{buyer_name}"
 
 
 class CommunicationAgent(Agent):
@@ -119,6 +155,7 @@ class CommunicationAgent(Agent):
         market: str | None,
         node_names: list[str],
         missing_fields: list[str],
+        buyer_name: str = "",
         mission_id: str = "",
         vendor_id: str | None = None,
     ) -> EmailDraft:
@@ -135,10 +172,12 @@ class CommunicationAgent(Agent):
             "(use only these, or none):\n"
             + ("\n".join(f"- {f}" for f in vendor_facts) if vendor_facts else "- (none available)")
         )
-        return await self.call(
+        draft = await self.call(
             prompt=prompt, schema=EmailDraft, mission_id=mission_id, vendor_id=vendor_id,
             event_type="email.draft.created",
         )
+        draft.body = sign(draft.body, buyer_name)
+        return draft
 
     async def follow_up_email(
         self,
@@ -147,6 +186,7 @@ class CommunicationAgent(Agent):
         thread_summary: str,
         unanswered: list[str],
         specific_question: str | None,
+        buyer_name: str = "",
         mission_id: str = "",
         vendor_id: str | None = None,
     ) -> EmailDraft:
@@ -159,10 +199,12 @@ class CommunicationAgent(Agent):
             f"Still unanswered: {', '.join(unanswered) or 'none'}\n"
             + (f"Specific point to resolve: {specific_question}\n" if specific_question else "")
         )
-        return await self.call(
+        draft = await self.call(
             prompt=prompt, schema=EmailDraft, mission_id=mission_id, vendor_id=vendor_id,
             event_type="followup.required", instruction=FOLLOW_UP_INSTRUCTION,
         )
+        draft.body = sign(draft.body, buyer_name)
+        return draft
 
     async def extract_quote(
         self, *, body: str, questions_asked: list[str], currency_hint: str = "USD",

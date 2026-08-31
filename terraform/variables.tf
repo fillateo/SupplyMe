@@ -168,6 +168,17 @@ variable "max_model_calls_per_mission" {
   EOT
 }
 
+variable "buyer_name" {
+  type    = string
+  default = ""
+
+  description = <<-EOT
+    Who outreach is signed by. Left empty the emails go out unsigned, which is
+    terse but honest; the one thing that must not happen is the model inventing
+    a sign-off, which is how "[Your Name]" reached three live suppliers.
+  EOT
+}
+
 variable "max_vendors_per_category" {
   type    = number
   default = 2
