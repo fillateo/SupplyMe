@@ -196,8 +196,8 @@ def _masked(address: str) -> str:
 
     Printing it in full published the operator's own mailbox instead: the
     redirect address, and the sending one, which is the worse of the two to hand
-    out because it is a live SMTP account. A demo console linked from a public
-    submission page should not also be an address book.
+    out because it is a live SMTP account. A demo console with a publicly
+    reachable health endpoint should not also be an address book.
     """
     local, _, domain = address.strip().partition("@")
     if not domain:

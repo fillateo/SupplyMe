@@ -144,14 +144,14 @@ class TestARequiredFieldMustBeAnswerableFromThePrompt:
 )
 def test_sign_replaces_a_placeholder_with_the_real_name(placeholder: str) -> None:
     body = f"Hello,\n\nWhat is your MOQ?\n\nThank you,\n{placeholder}"
-    signed = sign(body, "Jait Ramadandi")
+    signed = sign(body, "Dana Reyes")
     assert placeholder not in signed
-    assert signed.endswith("Thank you,\nJait Ramadandi")
+    assert signed.endswith("Thank you,\nDana Reyes")
 
 
 def test_sign_adds_a_sign_off_when_the_model_wrote_none() -> None:
-    assert sign("Hello,\n\nWhat is your MOQ?", "Jait Ramadandi") == (
-        "Hello,\n\nWhat is your MOQ?\n\nThanks,\nJait Ramadandi"
+    assert sign("Hello,\n\nWhat is your MOQ?", "Dana Reyes") == (
+        "Hello,\n\nWhat is your MOQ?\n\nThanks,\nDana Reyes"
     )
 
 
@@ -163,4 +163,4 @@ def test_sign_without_a_name_leaves_no_dangling_sign_off() -> None:
 
 def test_sign_does_not_eat_a_bracketed_figure_mid_body() -> None:
     body = "We need 1,000 units [first batch] of the 50ml flacon.\n\nThanks,\n[Your Name]"
-    assert "[first batch]" in sign(body, "Jait Ramadandi")
+    assert "[first batch]" in sign(body, "Dana Reyes")

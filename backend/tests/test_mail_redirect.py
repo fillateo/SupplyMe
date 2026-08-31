@@ -123,8 +123,8 @@ class TestItIsOnlyBoundWhenItDoesSomething:
         cannot tell that from outside eventually writes to a stranger. Saying it
         does not require handing out the mailbox: the domain and the first two
         characters identify it to whoever owns it and to nobody else. The full
-        address here published the operator's own inbox to every reader of the
-        submission page that links the health endpoint.
+        address here published the operator's own inbox to everyone who can
+        reach the health endpoint.
         """
         from app.adapters.registry import _redirected
         from app.config import Settings

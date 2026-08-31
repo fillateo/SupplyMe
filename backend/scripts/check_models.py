@@ -1,9 +1,7 @@
 """Report which Gemini models this project can actually reach.
 
-The hackathon asks for a specific model generation, and a deployment that
-silently 404s to an older one is worse than one that says so. Run this before
-demoing, and paste the output into the submission if the answer is not what you
-expected.
+A deployment that silently 404s to an older model generation is worse than one
+that says so. Run this before a demo, when the answer matters more than usual.
 
     python scripts/check_models.py --project ID           # Vertex AI, from gcloud ADC
     python scripts/check_models.py --api-key $GEMINI_KEY  # Gemini Developer API

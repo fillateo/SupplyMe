@@ -390,8 +390,8 @@ class Orchestrator:
         mission.failure_reason = reason
         await self.repo.save(mission)
         await self._reap_stranded_vendors(mission_id, reason)
-        # So the terminal state actually appears on the activity timeline —
-        # ARCHITECTURE.md documents mission.failed as a first-class event.
+        # So the terminal state actually appears on the activity timeline:
+        # mission.failed is a first-class event, not a status flag.
         await self.emit(
             Event(type=EventType.MISSION_FAILED, mission_id=mission_id, payload={"reason": reason})
         )

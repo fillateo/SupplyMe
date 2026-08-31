@@ -5,9 +5,6 @@ qualified supply network, discovering suppliers, reading what they publish,
 emailing them, chasing replies for days, and reporting **where every single
 number came from**.
 
-Built for the Google × Devpost **All Things Agentic** hackathon, category
-**The Taskmaster**.
-
 ## 🎯 Project Overview
 
 SupplyMe is a sourcing and supplier-qualification platform that **finds,
@@ -241,11 +238,6 @@ later causes the system to email and ask.
   - Gmail app password for SMTP + IMAP, which sends and reads on one credential
   - Optional: Programmable Search key + engine ID; without one, search falls back to Gemini grounding
 
-> **No provider is ever simulated.** Each is the live service or the process
-> refuses to start, naming the variable that is missing. A mission either read
-> the real web, queried real business listings, called Gemini and wrote to a real
-> mailbox, or it never began.
->
 > `MOCK=true` is the one way to see it without credentials, and it runs no
 > mission at all — it replays a recording of one that did, with no provider bound
 > and nothing generated. It cannot be turned on in the deployment.
@@ -328,8 +320,7 @@ stand-in — and no Java, Python or Node is needed on the host.
 The emulator starts empty and forgets everything when it stops, so `up` seeds it
 first from the newest file in `~/supplyme-firestore-backups`. With no backups
 there yet it comes up empty and says so; `backend/scripts/export_firestore.py`
-writes one from a real Firestore, and [docs/LOCAL.md](docs/LOCAL.md) covers the
-whole loop. What Docker does **not** change: the model, search, Places and the
+writes one from a real Firestore. What Docker does **not** change: the model, search, Places and the
 mailbox are still the live services. Browsing seeded missions is free; starting
 a new one spends money.
 
@@ -387,15 +378,6 @@ resolved to, which is how you check the Gemini generation from outside the code:
 ```bash
 curl -s localhost:8080/api/health | jq '.model, .providers'
 ```
-
-## 📖 Component Documentation
-
-Each area has its own document with the detail this file summarises:
-
-- **[🧠 Backend](./backend/README.md)** - layout of the domain, agents, workflow, ports and adapters
-- **[🏗️ Architecture](./docs/ARCHITECTURE.md)** - the event model, durability, and why the orchestrator is shaped this way
-- **[🖥️ Local development](./docs/LOCAL.md)** - running without cloud infrastructure
-- **[🔐 Secrets](./docs/SECRETS.md)** - what is stored where, and what never reaches the browser
 
 ## 🔧 Environment Variables
 
@@ -488,7 +470,7 @@ Both read the same file: a straight export of Firestore, keyed by document path.
 `backend/scripts/export_firestore.py` writes one, `restore_local_db.py` installs
 it as the file store and `seed_emulator.py` loads it into the emulator — which is
 how the console can be shown on the missions that really ran, offline and
-without a Google Cloud project. See [docs/LOCAL.md](docs/LOCAL.md).
+without a Google Cloud project.
 
 ## 💰 Cost
 
@@ -616,51 +598,3 @@ are reachable from nowhere in `app/`. That distinction is the point: a double
 lets failures be provoked on demand, a supplier who never answers, one whose
 site contradicts their quote, while the product itself has nothing to fall back
 to.
-
-## ⚠️ Limitations
-
-- **Model reachability is per project and per location.** `gemini-3.5-flash` answers from Vertex's `global` endpoint and 404s from `us-central1`, with nothing in the error to suggest it exists elsewhere. Hence the ladder in `app/config.py`, `scripts/check_models.py`, and two separate location settings, since Cloud Tasks rejects `global`
-- **The ladder will fall back past `gemini-3.5-*` rather than refuse to start.** Its lower rungs are `gemini-3-flash-preview` and `gemini-2.5-*`, so a project that cannot reach a 3.5 model gets an older one instead of a startup failure. That is the right default for someone trying the thing out and the wrong one for a deployment that has to be on a stated generation, so pin `SUPPLYME_REASONING_MODEL` and `SUPPLYME_FAST_MODEL` where the generation matters, as the live deployment does, and read `/api/health` → `.model` to see which one answered
-- **The market defaults are American, and a default is a guess.** The *industry* is derived per mission and nothing in `app/` knows what a bottle is, but the locale has to default to something: `domain/contacts.py` looks for `/contact`, `/contact-us` and `/request-a-quote`, reads phone numbers in the shapes US sites publish them, and treats a bare ten-digit number as North American. `_region_code` and `_currency_for` cover about twenty markets and fall back to no region and USD. Two consequences worth knowing: a supplier who writes `021-5566778` is read as a US number rather than an Indonesian one, because nothing in the string says otherwise; and identity resolution only merges a foreign number across formats when the country code is written out. Sourcing outside the US works, the multilingual quote vocabulary is unchanged and a live run against Indonesian suppliers is what found most of the bugs in this repo, it just gets less local help
-- **The Gmail inbound path has not been run against a live mailbox.** It is implemented and its workflow half is exercised on every run; the OAuth half needs a consent screen this project has not set up. IMAP is what runs today
-- **Live research is only as good as what suppliers publish**, which in this industry is often a phone number and a WhatsApp link
-- **The spend cap is a stop, not a to-the-cent limit.** A live mission whose $1.00 ceiling fired after 222 model calls finished its accounting at $1.52 over 319, because the ADK tool loop and grounded search billed without re-checking the cap. Both check it now, but requests already in flight still land, so the real ceiling is the cap plus a few calls
-- **Currencies are never converted.** Quotes in different currencies are reported side by side and excluded from the price comparison rather than guessed at. The same rule holds for the report's own total: it is labelled in the currency the suppliers actually quoted, not the one the market implies, and it is withheld entirely when the selected quotes disagree on currency
-- **The console polls every two seconds** rather than streaming
-
-## 🗺️ Future Work
-
-- **Sample tracking** - a quotation is not a supplier until a sample arrives
-- **Negotiation memory across missions** - so a second product benefits from the first product's relationships
-- **A supplier-side portal** - so a supplier answers a structured form once instead of the same eight questions from every buyer
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run `./run.sh test` and keep it green; new behaviour needs a test that fails without it
-5. Submit a pull request
-
-Two conventions this repo holds to: the domain layer decides anything a wrong
-answer would be expensive, and the model is never asked to rate its own output.
-A change that moves scoring, evidence classification or conflict resolution into
-a prompt will be sent back.
-
-## 📄 License
-
-This project is licensed under the MIT License. See the [LICENSE](./LICENSE)
-file for details.
-
-## 🆘 Support
-
-For issues, questions, or feature requests:
-
-1. Check `GET /api/health` first. It names every adapter actually bound, the model each tier resolved to, and where mail is going
-2. Read the component document for the area, listed under [Component Documentation](#-component-documentation)
-3. Run `./run.sh status` to see what is running and what it has spent
-4. Open an issue on GitHub with the mission ID and the relevant log lines
-
----
-
-**Built for buyers who need to know where the number came from.**

@@ -6,7 +6,7 @@ Run from the repository root:
 
     python3 scripts/architecture_diagram.py
 
-Then render the PNG that Devpost wants, at 2x, with any headless Chromium:
+Then render the PNG at 2x, with any headless Chromium:
 
     chrome --headless=new --disable-gpu --hide-scrollbars \
       --force-device-scale-factor=2 --window-size=1680,1000 \

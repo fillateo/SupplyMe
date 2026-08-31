@@ -49,7 +49,7 @@ resource "google_cloud_scheduler_job" "mail_poll" {
 
     # Two locks, as on the Pub/Sub push endpoint: OIDC proves the caller is this
     # scheduler, and the shared secret still holds when the service is
-    # deliberately public so a judge can open it.
+    # deliberately made publicly reachable.
     headers = {
       "Content-Type" = "application/json"
       # The same shared secret the Pub/Sub push and Cloud Tasks endpoints carry.

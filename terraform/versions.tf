@@ -12,9 +12,9 @@ terraform {
     }
   }
 
-  # State lives in GCS in the same project. This is a standalone hackathon
-  # project and deliberately does not touch the nesso or cato state buckets —
-  # those planes stay isolated. Run `tofu init -backend-config=backend.hcl`.
+  # State lives in GCS in the same project. This deployment is self-contained:
+  # the bucket is its own and no other estate shares it. Run
+  # `tofu init -backend-config=backend.hcl`.
   backend "gcs" {}
 }
 

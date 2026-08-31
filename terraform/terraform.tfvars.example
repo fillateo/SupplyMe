@@ -56,7 +56,7 @@ publicly_readable = true
 max_instances = 4
 
 # Read replies through the Gmail API push path instead of the IMAP poll. Needs
-# an OAuth client and a consent screen; see docs/LOCAL.md.
+# an OAuth client and a consent screen.
 gmail_push = false
 
 # --- Cost -------------------------------------------------------------------

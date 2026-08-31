@@ -453,7 +453,7 @@ cmd_dev() {
   if mock_on; then
     export MOCK=true
     warn "MOCK=true: missions are replayed from a recording, not run"
-    info "no model, search, Places or mail provider is bound — see docs/LOCAL.md"
+    info "no model, search, Places or mail provider is bound"
     start_services
     print_banner
     return 0

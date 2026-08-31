@@ -26,7 +26,7 @@ tfplan*
 # run.sh working directory: pids, logs, displaced build caches
 .run/
 
-# Secrets — never committed. See docs/SECRETS.md.
+# Secrets — never committed.
 .env
 .env.*
 !.env.example
@@ -35,7 +35,7 @@ secrets/
 *credentials*.json
 *token*.json
 
-# Personal working notes — not part of the submission.
+# Personal working notes — not part of the repository.
 prompt.md
 RENAME-CLOUD-STEPS.sh
 
