@@ -15,6 +15,7 @@ from app.domain.models import (
     ConflictStatus,
     EmailThread,
     Evidence,
+    NodeStatus,
     Provenance,
     Quote,
     Recommendation,
@@ -74,6 +75,37 @@ class TestMissionReachesAnOutcome:
         ]
         assert rejected
         assert all(v.rejection_reasons for v in rejected)
+
+
+class TestTheSupplyChainRecordsItsOwnOutcome:
+    """A finished mission used to leave every node reading "researching".
+
+    `NodeStatus.QUALIFIED` existed and was never assigned, so the console showed
+    a completed mission whose components all still looked mid-flight — while the
+    same page showed the suppliers chosen for them.
+    """
+
+    async def test_a_node_with_a_chosen_supplier_is_marked_qualified(self, completed):
+        runtime, mission = completed
+        nodes = await runtime.repo.list(SupplyChainNode, mission_id=mission.id)
+        recommendation = (await runtime.repo.list(Recommendation, mission_id=mission.id))[-1]
+        selected = {s["node_key"] for s in recommendation.selections}
+        assert selected, "nothing was selected, so there is nothing to assert about"
+
+        by_key = {n.key: n for n in nodes}
+        for key in selected:
+            assert by_key[key].status is NodeStatus.QUALIFIED, (
+                f"node {key} has a chosen supplier but still reads "
+                f"{by_key[key].status.value}"
+            )
+
+    async def test_a_node_nobody_could_supply_is_not_marked_qualified(self, completed):
+        runtime, mission = completed
+        nodes = await runtime.repo.list(SupplyChainNode, mission_id=mission.id)
+        recommendation = (await runtime.repo.list(Recommendation, mission_id=mission.id))[-1]
+        selected = {s["node_key"] for s in recommendation.selections}
+        unselected = [n for n in nodes if n.key not in selected]
+        assert all(n.status is not NodeStatus.QUALIFIED for n in unselected)
 
 
 class TestEvidenceDiscipline:
