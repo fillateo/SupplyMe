@@ -77,8 +77,5 @@ class RedirectingMailProvider:
             mission_id=mission_id,
         )
 
-    async def fetch_thread(self, provider_thread_id: str) -> list[InboundMail]:
-        return await self._inner.fetch_thread(provider_thread_id)
-
     async def history(self, since_token: str | None = None) -> tuple[list[InboundMail], str]:
         return await self._inner.history(since_token)

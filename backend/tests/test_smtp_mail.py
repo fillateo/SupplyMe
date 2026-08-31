@@ -90,7 +90,6 @@ class TestTheMessageThatGoesOut:
 class TestReadingIsNotPretended:
     async def test_nothing_is_claimed_to_have_been_read(self, captured):
         provider, _ = captured
-        assert await provider.fetch_thread("anything") == []
         assert await provider.history(None) == ([], "0")
 
 

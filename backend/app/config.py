@@ -104,6 +104,12 @@ class Settings(BaseSettings):
     tasks_queue: str = "supply-me-followups"
     public_base_url: str = "http://localhost:8080"
 
+    #: Origins allowed to call the API from a browser directly. In the
+    #: deployment nothing does — the console proxies every call server-side, so
+    #: there is no preflight — and this exists for a developer pointing a
+    #: browser at the API while working on it.
+    cors_origins: str = "http://localhost:3000"
+
     # --- External product integrations -------------------------------------
     maps_api_key: str = ""
     search_api_key: str = ""

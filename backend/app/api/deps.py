@@ -55,6 +55,13 @@ def verify_push_token(
     subscription cannot set request headers at all, so it carries the same
     secret in the push endpoint's query string instead — accepting only the
     header rejects every workflow event the cloud deployment ever publishes.
+
+    `X-VDS-Token` keeps the project's former initials on purpose. It is a wire
+    name shared with a live Cloud Scheduler job and a Cloud Tasks queue that
+    were provisioned with it, so renaming it means a deployment whose mailbox
+    poll silently 403s until the next `tofu apply`. It is spelled the same in
+    terraform/scheduler.tf and adapters/scheduler.py; rename all three at once
+    or none.
     """
     expected = get_settings().pubsub_push_token
     if not expected:

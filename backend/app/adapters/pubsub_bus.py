@@ -1,9 +1,11 @@
 """Cloud Pub/Sub publisher.
 
 Delivery is a push subscription to `/events/pubsub` on the Cloud Run service —
-see terraform/pubsub.tf. The event's dedup `key` travels as a message attribute
-so the receiving side can reject a replay before doing any work, and so Pub/Sub's
-own `enable_message_ordering` is not load-bearing.
+see terraform/pubsub.tf. Deduplication is the orchestrator's job and it works off
+the decoded payload, so nothing here is load-bearing for correctness: the
+`dedup_key`, `event_type` and `mission_id` attributes are published so a message
+can be identified in the Pub/Sub console or a dead-letter pull without decoding
+its body.
 """
 
 from __future__ import annotations

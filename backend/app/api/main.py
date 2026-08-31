@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from ..config import get_settings
 from ..logging_setup import configure
 from . import deps, routes_events, routes_missions, routes_webhooks
 
@@ -41,11 +42,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        o.strip()
-        for o in os.environ.get("SUPPLYME_CORS_ORIGINS", "http://localhost:3000").split(",")
-        if o.strip()
-    ],
+    # Read through Settings like every other SUPPLYME_ variable. Reading it
+    # straight off the environment here was the one exception, which made
+    # app/config.py's claim to be the whole list untrue.
+    allow_origins=[o.strip() for o in get_settings().cors_origins.split(",") if o.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
 )

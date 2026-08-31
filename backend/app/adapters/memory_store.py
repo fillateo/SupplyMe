@@ -86,11 +86,6 @@ class MemoryStore:
             record = self._reservations.setdefault(key, {})
             record.update({"status": "done", "result": copy.deepcopy(result or {})})
 
-    async def reservation(self, key: str) -> dict[str, Any] | None:
-        async with self._lock:
-            found = self._reservations.get(key)
-            return copy.deepcopy(found) if found else None
-
 
 def _matches(row: dict[str, Any], key: str, expected: Any) -> bool:
     actual = row.get(key)

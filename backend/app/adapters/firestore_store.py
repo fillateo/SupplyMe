@@ -127,8 +127,5 @@ class FirestoreStore:
             merge=True,
         )
 
-    async def reservation(self, key: str) -> dict[str, Any] | None:
-        return await self.get(_RESERVATIONS, key)
-
     async def close(self) -> None:
         await asyncio.to_thread(self._client.close)

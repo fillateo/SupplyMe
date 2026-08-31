@@ -10,10 +10,10 @@ For proving that outreach genuinely sends, that ceremony buys nothing, and the
 message that lands in the inbox is identical either way. So this is the short
 path: real delivery, one credential.
 
-What it cannot do is read. `fetch_thread` and `history` return nothing, so a
-mission bound to this provider sends for real and then follows up on silence
-exactly as it would with a supplier who never answered — which is honest, and is
-already what live mode did when no mailbox was configured at all.
+What it cannot do is read: `history` returns nothing, so a mission bound to
+this provider alone sends for real and then follows up on silence exactly as it
+would with a supplier who never answered. `SmtpImapMailProvider` in
+imap_mail.py subclasses it to close that loop.
 """
 
 from __future__ import annotations
@@ -88,10 +88,6 @@ class SmtpMailProvider:
             server.ehlo()
             server.login(self._user, self._password)
             server.send_message(message)
-
-    async def fetch_thread(self, provider_thread_id: str) -> list[InboundMail]:
-        """SMTP does not read. A reply lands in the inbox, not in the mission."""
-        return []
 
     async def history(self, since_token: str | None = None) -> tuple[list[InboundMail], str]:
         return [], since_token or "0"

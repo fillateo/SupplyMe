@@ -67,15 +67,6 @@ class GmailProvider:
             provider_message_id=sent["id"], provider_thread_id=sent.get("threadId", "")
         )
 
-    async def fetch_thread(self, provider_thread_id: str) -> list[InboundMail]:
-        thread = await asyncio.to_thread(
-            lambda: self._service.users()
-            .threads()
-            .get(userId="me", id=provider_thread_id, format="full")
-            .execute()
-        )
-        return [_to_inbound(m) for m in thread.get("messages", [])]
-
     async def history(self, since_token: str | None = None) -> tuple[list[InboundMail], str]:
         """Messages added since `since_token`, plus the new token to store."""
         if not since_token:

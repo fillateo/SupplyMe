@@ -1436,8 +1436,9 @@ async def handle_recommendation_ready(orc: Orchestrator, event: Event) -> list[E
         eligible = [r for r in ranked if not r["score"]["disqualified"]]
         if eligible:
             selections.append({"node_key": node.key, "node_name": node.name, **eligible[0]})
-            # This node has a supplier. Recorded so a finished mission does not
-            # leave every node reading "researching" forever.
+            # This node has a supplier. Recorded on the node itself so
+            # `GET /api/missions/{id}` reports a finished plan as finished; the
+            # console draws each node's progress from its candidates instead.
             node.status = NodeStatus.QUALIFIED
             await orc.repo.save(node)
             alternatives.extend(
@@ -1907,12 +1908,12 @@ async def _detect_conflicts(
 async def _personalization_facts(orc: Orchestrator, vendor: Vendor) -> list[str]:
     """Only facts with a real source may appear in an outbound email."""
     evidence = await orc.repo.vendor_evidence(vendor.id)
-    usable = [
+    usable = evidence_engine.dedupe(
         e for e in evidence
         if e.evidence_excerpt
         and e.source_type in (SourceType.OFFICIAL_WEBSITE, SourceType.MAPS_LISTING,
                               SourceType.INDUSTRY_PUBLICATION, SourceType.NEWS)
-    ]
+    )
     return [f"{e.claim} (source: {e.source_url or e.source_type.value})" for e in usable[:6]]
 
 

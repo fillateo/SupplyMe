@@ -62,16 +62,6 @@ class VendorScore:
             ],
         }
 
-    def explain(self) -> str:
-        lines = [f"{self.vendor_name}: {self.total:.1f}/100"]
-        for c in self.components:
-            lines.append(
-                f"  {c.name:<14} {c.contribution * 100:5.1f} pts  ({c.explanation})"
-            )
-        for reason in self.rejection_reasons:
-            lines.append(f"  ! {reason}")
-        return "\n".join(lines)
-
 
 def _price_component(
     weight: float, quote: PackageQuote | None, cheapest: float | None

@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from app.adapters.mail_redirect import RedirectingMailProvider
-from app.ports.base import InboundMail, SentMail
+from app.ports.base import SentMail
 
 TESTER = "operator@example.com"
 SUPPLIER = "contact@premiumparfum.example.com"
@@ -27,9 +27,6 @@ class FakeMail:
     async def send(self, *, to, subject, body, thread_id=None, mission_id=""):
         self.sent.append({"to": to, "subject": subject, "body": body, "thread_id": thread_id})
         return SentMail(provider_message_id="msg_1", provider_thread_id="thr_1")
-
-    async def fetch_thread(self, provider_thread_id):
-        return [InboundMail("m", provider_thread_id, SUPPLIER, "Re: hi", "body", "")]
 
     async def history(self, since_token=None):
         return [], "42"
@@ -95,8 +92,6 @@ class TestEverythingElseIsUnchanged:
 
     async def test_reading_mail_is_not_intercepted(self, redirected):
         _, provider = redirected
-        inbound = await provider.fetch_thread("thr_1")
-        assert inbound[0].from_address == SUPPLIER
         assert await provider.history(None) == ([], "42")
 
     def test_attributes_of_the_wrapped_provider_remain_reachable(self, redirected):

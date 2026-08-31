@@ -198,8 +198,5 @@ class MockMailProvider:
         )
         return SentMail(provider_message_id=message_id, provider_thread_id=provider_thread)
 
-    async def fetch_thread(self, provider_thread_id: str) -> list[InboundMail]:
-        return list(self._threads.get(provider_thread_id, []))
-
     async def history(self, since_token: str | None = None) -> tuple[list[InboundMail], str]:
         return [], since_token or "0"

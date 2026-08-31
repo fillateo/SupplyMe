@@ -109,8 +109,15 @@ class MailProvider(Protocol):
         ignore it: an inbound message is matched by its mail headers instead.
         """
         ...
-    async def fetch_thread(self, provider_thread_id: str) -> list[InboundMail]: ...
-    async def history(self, since_token: str | None = None) -> tuple[list[InboundMail], str]: ...
+
+    async def history(self, since_token: str | None = None) -> tuple[list[InboundMail], str]:
+        """New mail since `since_token`, and the cursor to store for next time.
+
+        The only way an inbound message enters the workflow. There is no
+        fetch-one-thread method: replies are matched by mail header in
+        app/api/routes_webhooks.py, never by asking for a thread by id.
+        """
+        ...
 
 
 # --------------------------------------------------------------------------

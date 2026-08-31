@@ -64,9 +64,6 @@ class SmtpImapMailProvider(SmtpMailProvider):
         """
         return await asyncio.to_thread(self._read_since, since_token)
 
-    async def fetch_thread(self, provider_thread_id: str) -> list[InboundMail]:
-        return await asyncio.to_thread(self._read_thread, provider_thread_id)
-
     # -- IMAP, which is synchronous and therefore off the event loop --------
 
     def _connect(self) -> imaplib.IMAP4_SSL:
@@ -119,23 +116,6 @@ class SmtpImapMailProvider(SmtpMailProvider):
         if typ != "OK" or not data or not data[0]:
             return 0
         return max(int(raw) for raw in data[0].split())
-
-    def _read_thread(self, provider_thread_id: str) -> list[InboundMail]:
-        if not provider_thread_id:
-            return []
-        client = self._connect()
-        try:
-            typ, data = client.uid("SEARCH", None, "HEADER", "References", provider_thread_id)
-            if typ != "OK" or not data or not data[0]:
-                return []
-            found = []
-            for raw in data[0].split()[:MAX_PER_POLL]:
-                parsed = self._fetch_one(client, int(raw))
-                if parsed is not None:
-                    found.append(parsed)
-            return found
-        finally:
-            _close(client)
 
     def _fetch_one(self, client: imaplib.IMAP4_SSL, uid: int) -> InboundMail | None:
         typ, data = client.uid("FETCH", str(uid), "(RFC822)")
