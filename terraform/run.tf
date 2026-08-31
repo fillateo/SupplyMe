@@ -126,6 +126,10 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "SUPPLYME_MAX_MODEL_CALLS_PER_MISSION"
         value = tostring(var.max_model_calls_per_mission)
       }
+      env {
+        name  = "SUPPLYME_MAX_VENDORS_PER_CATEGORY"
+        value = tostring(var.max_vendors_per_category)
+      }
 
       # Only when it is the credential actually in use. Mounting a key the
       # service will not read is a secret handed out for nothing.

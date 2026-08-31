@@ -168,6 +168,19 @@ variable "max_model_calls_per_mission" {
   EOT
 }
 
+variable "max_vendors_per_category" {
+  type    = number
+  default = 2
+
+  description = <<-EOT
+    How many suppliers one supply-chain node may take from the mission-wide
+    shortlist. The mission cap is global, so without this a node whose search
+    returns quickly eats the whole budget: a live run against a perfume brief
+    spent 7 of its 12 slots on folding cartons and left the glass flacon, the
+    pump and the cap with one candidate each, which is not enough to rank.
+  EOT
+}
+
 variable "billing_account" {
   type        = string
   default     = ""
