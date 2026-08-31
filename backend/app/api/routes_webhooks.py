@@ -60,10 +60,10 @@ async def mail_poll(
 ) -> dict[str, int]:
     """Ask the mailbox whether anything arrived.
 
-    IMAP has no push, so something has to ask; Cloud Scheduler does, once a
-    minute — see terraform/scheduler.tf. Cloud Run scales to zero between
-    missions, so this is also what wakes the service up to notice a reply at
-    all.
+    IMAP has no push, so something has to ask; Cloud Scheduler does, every
+    fifteen minutes — see terraform/scheduler.tf, which explains why that
+    number and not a shorter one. Cloud Run scales to zero between missions, so
+    this is also what wakes the service up to notice a reply at all.
 
     Returns counts rather than 204 because this endpoint is the one a human
     curls when a reply seems to have gone missing, and "read 3, resumed 1" is

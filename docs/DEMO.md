@@ -57,9 +57,9 @@ it on camera.
 | 3:20–3:45 | Back in the console: the reply is in, the quote extracted, and the disagreement is flagged | Activity feed, then the conflict panel |
 | 3:45–4:00 | It puts both numbers back to them in one targeted follow-up, and the recommendation names what it could not establish | **Communications**, then **Recommendation** |
 
-The reply takes up to a minute to appear — Cloud Scheduler polls the mailbox
-every 15 minutes. `./run.sh mail` reads it immediately, which is what you want
-on camera rather than waiting for the schedule.
+Cloud Scheduler polls the mailbox every 15 minutes, so left alone the reply can
+take that long to appear. `./run.sh mail` reads it immediately, which is what
+you want on camera rather than waiting for the schedule.
 
 Closing line: *"I gave it one product idea. It worked out what the product is
 made of, found real manufacturers for every part, checked their claims against
