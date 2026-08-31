@@ -394,6 +394,10 @@ class Quote(Base):
     #: Verbatim supplier text this was extracted from. Never paraphrased.
     raw_text: str = ""
     evidence_id: str | None = None
+    #: Nothing sets this today. A later reply becomes its own Quote rather than
+    #: replacing an earlier one, and which rung applies is decided by
+    #: `quotes.comparable_set` against the order quantity instead. Kept because
+    #: excluding a withdrawn price is the right behaviour if one ever is.
     superseded_by: str | None = None
 
     @property

@@ -63,7 +63,8 @@ A budget alert emails you; it does not stop anything. These do:
 | `SUPPLYME_MAX_CONCURRENT_MODEL_CALLS` | `4` | Gemini requests in flight, process-wide |
 | `SUPPLYME_MIN_MODEL_CALL_INTERVAL_SECONDS` | `0` | how fast the queue drains |
 | `SUPPLYME_MAX_OUTREACH_PER_MISSION` | `12` | emails |
-| `SUPPLYME_MAX_VENDORS_PER_CATEGORY` | `8` | how many suppliers get researched |
+| `SUPPLYME_MAX_VENDORS_PER_MISSION` | `12` | how many suppliers get researched — the binding cap, and the biggest lever on cost |
+| `SUPPLYME_MAX_VENDORS_PER_CATEGORY` | `8` | per supply-chain node, so rarely the one that bites |
 | `SUPPLYME_MAX_EVENT_RETRIES` | `5` | retrying a failing handler forever |
 
 Reaching a spend cap raises `BudgetExceeded`, which the orchestrator treats as
@@ -154,8 +155,8 @@ with the redirect unset.
 ## If you are close to the limit
 
 1. `SUPPLYME_FAST_MODEL=gemini-2.5-flash-lite` — roughly a third of flash.
-2. Lower `SUPPLYME_MAX_VENDORS_PER_CATEGORY` to 3 and
-   `SUPPLYME_MAX_MODEL_CALLS_PER_MISSION` to 40.
+2. Lower `SUPPLYME_MAX_VENDORS_PER_MISSION` to 5 — this is the one that decides
+   how many research loops run — and `SUPPLYME_MAX_MODEL_CALLS_PER_MISSION` to 120.
 3. Check `curl -s localhost:8080/api/health | jq .spend.since_startup` after any
    live run.
 

@@ -34,6 +34,7 @@ USER appuser
 
 EXPOSE 8080
 
-# Rewrites in next.config.mjs are resolved when this server boots, so
-# API_BASE_URL is read at runtime and Cloud Run can set it per environment.
+# API_BASE_URL is read per request by the proxy route handler, so one image
+# works in every environment. It is deliberately not a next.config rewrite:
+# those are resolved at build time, when the variable does not exist yet.
 CMD ["node", "server.js"]

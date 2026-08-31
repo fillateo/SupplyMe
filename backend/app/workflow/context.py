@@ -64,16 +64,29 @@ class Repo:
         Use this instead of load/save whenever the same document may be written
         by another handler running concurrently — which, for vendors, is almost
         always.
-        """
 
-        def _apply(raw: dict[str, Any]) -> dict[str, Any]:
-            obj = model.model_validate(raw)
+        Returns None both for a document that is not there and for one this build
+        cannot parse, because a handler can do nothing useful with either. That
+        is the same answer `load` gives, and callers already treat None as "no
+        document": `updated = await repo.mutate(...) or existing`.
+        """
+        unreadable = False
+
+        def _apply(raw: dict[str, Any]) -> dict[str, Any] | None:
+            nonlocal unreadable
+            obj = _readable(model, raw, doc_id)
+            if obj is None:
+                # Returning None leaves the stored document exactly as it is.
+                unreadable = True
+                return None
             change(obj)
             obj.touch()
             return obj.model_dump(mode="json")
 
         updated = await self._store.mutate(COLLECTIONS[model], doc_id, _apply)
-        return model.model_validate(updated) if updated else None
+        if unreadable or updated is None:
+            return None
+        return _readable(model, updated, doc_id)
 
     async def load(self, model: type[T], doc_id: str) -> T | None:
         raw = await self._store.get(COLLECTIONS[model], doc_id)

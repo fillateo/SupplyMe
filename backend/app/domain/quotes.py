@@ -191,13 +191,41 @@ def comparable_set(
     components: tuple[str, ...],
     *,
     vocabulary: ComponentVocabulary | None = None,
+    order_quantity: int | None = None,
 ) -> tuple[list[PackageQuote], list[PackageQuote]]:
-    """Split quotes into (comparable, not-comparable) for the requested components."""
-    normalized = [
-        normalize(q, components, vocabulary=vocabulary)
-        for q in quotes
-        if q.superseded_by is None
-    ]
+    """Split quotes into (comparable, not-comparable) for the requested components.
+
+    `order_quantity` is what is actually being bought, and it has to be here.
+    Suppliers quote a ladder — "Rp 11.000 at 500, Rp 8.500 at 1.000" — and each
+    reply becomes its own Quote, so a vendor accumulates rungs. Without this the
+    cheapest rung wins whether or not the buyer can reach it: the supplier whose
+    published minimum was 500 and whose sales desk said 1,000 would be scored,
+    after confirming 500 as a pilot, on the 1,000-unit price. The mission would
+    do the entire job of settling that disagreement and then rank the answer it
+    had just been told it could not have.
+
+    A quote naming no quantity stays comparable. An unstated rung is not grounds
+    to throw a price away.
+    """
+    normalized: list[PackageQuote] = []
+    unreachable: list[PackageQuote] = []
+    for quote in quotes:
+        if quote.superseded_by is not None:
+            continue
+        package = normalize(quote, components, vocabulary=vocabulary)
+        if (
+            order_quantity is not None
+            and quote.quantity is not None
+            and quote.quantity > order_quantity
+        ):
+            package.notes.append(
+                f"quoted at {quote.quantity:,} units; this order is "
+                f"{order_quantity:,}, so this price is not available"
+            )
+            package.unit_price = None
+            unreachable.append(package)
+            continue
+        normalized.append(package)
     by_currency: dict[str, int] = {}
     for pq in normalized:
         by_currency[pq.currency] = by_currency.get(pq.currency, 0) + 1
@@ -210,6 +238,8 @@ def comparable_set(
             if pq.missing:
                 pq.notes.append("missing price for: " + ", ".join(pq.missing))
             incomparable.append(pq)
+
+    incomparable.extend(unreachable)
 
     if len(by_currency) > 1:
         # Never invent an FX rate. Compare only within the dominant currency.

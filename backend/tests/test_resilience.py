@@ -340,6 +340,39 @@ class TestDocumentsOlderThanTheSchema:
         assert await runtime.repo.load(Evidence, "ev_legacy") is None
         assert await runtime.repo.load(Evidence, current.id) is not None
 
+    async def test_mutating_a_record_it_cannot_parse_returns_none_and_changes_nothing(self):
+        """`load` and `list` were guarded first; `mutate` is the hot path.
+
+        Handlers reach for `mutate` on every status change, budget take and
+        delivery mark. Leaving it strict meant a legacy document did not 500 a
+        read — it raised inside a handler, burned five retries and abandoned the
+        branch, which is quieter and no better.
+        """
+        from app.domain.models import Vendor, VendorStatus
+
+        runtime = build()
+        legacy = {"id": "ven_legacy", "mission_id": "m"}  # no name
+        await runtime.providers.store.put("vendors", "ven_legacy", legacy)
+
+        def _touch(vendor: Vendor) -> None:
+            vendor.status = VendorStatus.QUALIFIED
+
+        assert await runtime.repo.mutate(Vendor, "ven_legacy", _touch) is None
+        assert await runtime.providers.store.get("vendors", "ven_legacy") == legacy, (
+            "an unparseable document must be left exactly as it was found"
+        )
+
+    async def test_mutate_still_returns_the_updated_record_when_it_parses(self):
+        from app.domain.models import Vendor, VendorStatus
+
+        runtime = build()
+        vendor = Vendor(mission_id="m", name="PT Readable")
+        await runtime.repo.save(vendor)
+        updated = await runtime.repo.mutate(
+            Vendor, vendor.id, lambda v: setattr(v, "status", VendorStatus.QUALIFIED)
+        )
+        assert updated is not None and updated.status is VendorStatus.QUALIFIED
+
     async def test_an_unparseable_vendor_is_absent_rather_than_an_outage(self):
         from app.domain.models import Vendor
         from app.workflow.context import VendorNotFound
@@ -737,10 +770,25 @@ class TestResearchCeiling:
                 self.untrusted = kwargs.get("untrusted", "")
                 return VendorResearch(legal_name="PT Example", capabilities=["bottles"])
 
+        class _Store:
+            def __init__(self):
+                self.runs = []
+
+            async def put(self, collection, doc_id, data):
+                self.runs.append((collection, data))
+
+        class _Model:
+            model = "gemini-3.5-flash"
+
+        class _Agent:
+            model = _Model()
+
         agent._sessions = _Sessions()
         agent._runner = _Runner()
         agent._run_config = None
         agent._llm = _LLM()
+        agent._agent = _Agent()
+        agent._store = _Store()
         return agent
 
     def _note(self, text):
@@ -788,6 +836,52 @@ class TestResearchCeiling:
         # calls at a time.
         assert result.missing_fields == ["moq", "unit_price"]
         assert agent._llm.calls == 0
+
+    async def test_the_tool_sequence_it_chose_is_recorded(self):
+        """The one agent that decides anything left no trace of deciding it.
+
+        `Agent.call` writes an AgentRun for the other six; this agent owns its own
+        loop and bypassed that, so `AgentRun.tool_calls` was a field nothing ever
+        populated. The sequence is the interesting part: it is the evidence the
+        agent chose its own path rather than following a script.
+        """
+        note = self._note("moq: 500 pcs, from https://example.com, 'Minimum order 500 pcs.'")
+        note_with_tools = note
+        note_with_tools.get_function_calls = lambda: [
+            type("Call", (), {"name": "search_web"})(),
+            type("Call", (), {"name": "read_page"})(),
+            type("Call", (), {"name": "not_a_real_tool"})(),
+        ]
+        agent = self._agent([note_with_tools])
+        await agent.investigate(
+            vendor_name="PT Example", node_names=["bottle"], wanted_fields=["moq"],
+            mission_id="msn_probe", vendor_id="ven_probe",
+        )
+
+        runs = [data for collection, data in agent._store.runs if collection == "agent_runs"]
+        assert len(runs) == 1, "the research stage wrote no AgentRun"
+        run = runs[0]
+        assert run["agent"] == "research"
+        assert run["mission_id"] == "msn_probe"
+        assert run["status"] == "ok"
+        assert run["model"] == "gemini-3.5-flash"
+        assert run["latency_ms"] is not None
+        # Only tools it actually holds; a name outside the allowlist is not a
+        # tool call this agent made.
+        assert run["tool_calls"] == ["search_web", "read_page"]
+
+    async def test_hitting_the_ceiling_is_recorded_as_truncated_not_lost(self):
+        from google.adk.agents.invocation_context import LlmCallsLimitExceededError
+
+        agent = self._agent(
+            [], raises=LlmCallsLimitExceededError("Max number of llm calls limit of `12` exceeded")
+        )
+        await agent.investigate(
+            vendor_name="PT Example", node_names=["bottle"], wanted_fields=["moq"],
+            mission_id="msn_probe",
+        )
+        runs = [d for c, d in agent._store.runs if c == "agent_runs"]
+        assert [r["status"] for r in runs] == ["truncated"]
 
     async def test_a_run_that_ends_with_no_findings_and_no_ceiling_still_raises(self):
         agent = self._agent([])

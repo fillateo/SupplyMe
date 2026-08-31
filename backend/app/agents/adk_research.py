@@ -27,6 +27,7 @@ Two things make that safe rather than alarming:
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncGenerator
 from contextvars import ContextVar
 from typing import Any
@@ -41,6 +42,7 @@ from google.adk.tools import FunctionTool
 from google.genai import types
 
 from ..domain.ids import new_id
+from ..domain.models import AgentRun
 from ..domain.policy import PermissionError_, Tool, check
 from ..security import sanitize
 from .research import RESEARCH_INSTRUCTION
@@ -315,6 +317,12 @@ class AdkResearchAgent:
             app_name=APP_NAME, user_id=user_id, session_id=new_id("adk")
         )
 
+        run = AgentRun(
+            mission_id=mission_id, agent=self.name, vendor_id=vendor_id,
+            event_type="vendor.research.started", model=self._agent.model.model,
+            input_summary=prompt[:300],
+        )
+        started = time.perf_counter()
         tool_calls: list[str] = []
         notes: list[str] = []
         truncated = False
@@ -350,7 +358,10 @@ class AdkResearchAgent:
                 # Nothing was read before the ceiling. Say so as an empty record
                 # rather than raising: the vendor is then routed on what is known
                 # about it, which is nothing, and closed out with a reason.
+                await self._record(run, started, tool_calls, status="truncated")
                 return VendorResearch(missing_fields=list(wanted_fields))
+            await self._record(run, started, tool_calls, status="error",
+                               error="no findings")
             raise RuntimeError(f"research agent produced no findings for {vendor_name}")
 
         # Second call: notes in, schema out. The notes are the agent's own
@@ -374,4 +385,36 @@ class AdkResearchAgent:
                 "status": "truncated" if truncated else "complete",
             },
         )
+        await self._record(
+            run, started, tool_calls, status="truncated" if truncated else "ok",
+            output=_summarize_research(result),
+        )
         return result
+
+    async def _record(
+        self, run: AgentRun, started: float, tool_calls: list[str], *,
+        status: str, output: str = "", error: str | None = None,
+    ) -> None:
+        """Persist what this agent did, including which tools it chose.
+
+        The other six agents get this from `Agent.call`. This one bypasses that
+        entirely — it owns its own loop — so for a while the one agent that
+        actually decides anything was the only one leaving no trace, and
+        `AgentRun.tool_calls` was a field nothing ever wrote. The tool sequence is
+        the interesting part of the record: it is the evidence that the agent
+        chose its own path rather than following a script.
+        """
+        run.status = status
+        run.error = error
+        run.output_summary = output
+        run.tool_calls = tool_calls
+        run.latency_ms = int((time.perf_counter() - started) * 1000)
+        if self._store is not None:
+            await self._store.put("agent_runs", run.id, run.model_dump(mode="json"))
+
+
+def _summarize_research(result: VendorResearch) -> str:
+    return (
+        f"claims={len(result.claims)}, brands={len(result.brand_claims)}, "
+        f"missing={len(result.missing_fields)}, email={'yes' if result.email else 'no'}"
+    )

@@ -1461,7 +1461,8 @@ async def rank_vendors(
         for vendor in candidates:
             vendor_quotes = await orc.repo.vendor_quotes(vendor.id)
             comparable, _ = quote_engine.comparable_set(
-                vendor_quotes, components, vocabulary=vocabulary
+                vendor_quotes, components, vocabulary=vocabulary,
+                order_quantity=mission.quantity,
             )
             packaged[vendor.id] = comparable[0] if comparable else None
 

@@ -44,7 +44,7 @@ flowchart TD
     A --> O["Orchestrator<br/>claim dedup key → handler → emit next"]
     O --> AG["7 agents<br/>Gemini / Vertex AI"]
     O --> DE["Deterministic engines<br/>evidence · quotes · conflicts · scoring"]
-    AG --> P["Ports<br/>Search · Maps · Mail · Store · Bus · Tasks"]
+    AG --> P["Ports<br/>Search · Maps · Mail · Store · Bus · Scheduler"]
     DE --> P
     P --> X["Adapters — every one the real service<br/>Programmable Search · Places · SMTP + IMAP · Gmail API"]
     X --> S[("Firestore · Pub/Sub · Cloud Tasks · Cloud Logging")]
@@ -157,6 +157,7 @@ industry.
 - **A sentence per component** — `MOQ 500 fits an order of 500`, not a bar
 - **Logistics scoped to your question** — city, country or global; the same factory scores differently under each, and the choice shapes the search queries too
 - **Comparable quotes only** — `bottle + pump + cap = Rp 12,000` normalises against `8,000 / 2,500 / 1,500`, and `kit = $41` against `cell / PCBA / shell`; a partial quote, or a bundle whose contents the supplier never stated, is reported as not-comparable rather than as cheapest
+- **A price you cannot reach is not a price** — suppliers quote a ladder, and every reply leaves its own quote behind. A rung quoted at 1,000 units is excluded when the order is 500, so settling a MOQ down to a pilot cannot then rank the supplier on the volume price it just said no to
 
 ### Production Behaviour
 - **Event-sourced and idempotent** — every message may be delivered twice; no supplier is ever emailed twice
@@ -290,7 +291,7 @@ cd backend && .venv/bin/python scripts/check_models.py --project YOUR_PROJECT --
 ./run.sh            # API on :8080, console on :3000
 ./run.sh mission    # one whole mission in the terminal, start to finish
 ./run.sh mail       # read the mailbox now instead of waiting for the poll
-./run.sh test       # 362 tests, ~55s, no network
+./run.sh test       # 376 tests, ~55s, no network
 ./run.sh status     # what is running, and what it has spent
 ./run.sh stop
 ./run.sh clean      # build caches only — never source or .env
@@ -438,7 +439,7 @@ vendor's full dossier (`GET .../vendors/{vendor_id}`), the live ranking
 ```bash
 ./run.sh test
 # or
-cd backend && .venv/bin/python -m pytest -q     # 362 tests, ~55 seconds, no network
+cd backend && .venv/bin/python -m pytest -q     # 376 tests, ~55 seconds, no network
 ```
 
 - **Unit** — evidence classification, identity resolution, quote normalisation, conflict detection, scoring, number parsing, policy, injection defence, and the ADK tool guard

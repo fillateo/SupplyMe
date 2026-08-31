@@ -150,3 +150,179 @@ class TestSearchResultsCarryRealUrls:
         )
         assert len(hits) == 2, "a failed resolution dropped a search result"
         assert hits[0].url == redirect
+
+class TestGroundedSearchIsBilledAndGated:
+    """Search is a Gemini call, and on the default configuration it is most of them.
+
+    With no Programmable Search engine — which is what the deployment runs — every
+    web search goes through Gemini with search grounding. That call sat outside the
+    throttle, so a mission's fan-out opened a dozen at once and Vertex answered 429
+    to most of it; and outside the meter, so the spend a mission reported excluded
+    the majority of what it spent.
+    """
+
+    def _provider(self, monkeypatch, meter, *, gate: int = 1):
+        from app.adapters.gemini_llm import configure_throttle
+        from app.adapters.google_providers import GoogleSearchProvider
+        from app.config import Settings
+
+        settings = Settings(project_id="p", max_concurrent_model_calls=gate)
+        configure_throttle(settings)
+
+        class _Usage:
+            prompt_token_count = 4000
+            candidates_token_count = 120
+            thoughts_token_count = 30
+
+        class _Web:
+            title, uri = "Papaso", "https://papaso.co.id/"
+
+        class _Chunk:
+            web = _Web()
+
+        class _Meta:
+            grounding_chunks = [_Chunk()]
+
+        class _Candidate:
+            grounding_metadata = _Meta()
+
+        class _Response:
+            usage_metadata = _Usage()
+            candidates = [_Candidate()]
+            text = "found one supplier"
+
+        class _Models:
+            async def generate_content(self, **kwargs):
+                return _Response()
+
+        class _Client:
+            class aio:
+                models = _Models()
+
+        async def _resolve(_settings, prefer_fast=False):
+            return "gemini-3.5-flash"
+
+        # `_grounded` imports these from gemini_llm at call time.
+        monkeypatch.setattr("app.adapters.gemini_llm._client", lambda _s: _Client())
+        monkeypatch.setattr("app.adapters.gemini_llm.resolve_model", _resolve)
+        return GoogleSearchProvider(settings, meter=meter)
+
+    async def test_a_grounded_search_is_recorded_against_the_mission(self, monkeypatch):
+        from app.adapters.gemini_llm import current_mission
+        from app.domain.cost import CostMeter
+
+        meter = CostMeter()
+        provider = self._provider(monkeypatch, meter)
+        token = current_mission.set("msn_probe")
+        try:
+            hits = await provider.search("pabrik botol parfum", limit=5)
+        finally:
+            current_mission.reset(token)
+
+        assert [h.url for h in hits] == ["https://papaso.co.id/"]
+        usage = meter.usage("msn_probe")
+        assert usage.calls == 1, "a grounded search was not counted as a model call"
+        assert usage.input_tokens == 4000
+        # Thinking bills as output and must not be dropped.
+        assert usage.output_tokens == 150
+        assert usage.usd > 0
+
+    async def test_the_mission_comes_from_the_context_not_the_caller(self, monkeypatch):
+        """The Search port has no mission to pass down; the orchestrator sets one."""
+        from app.domain.cost import CostMeter
+
+        meter = CostMeter()
+        provider = self._provider(monkeypatch, meter)
+        await provider.search("no mission set")
+        # No mission on the context: booked to "unattributed" so it can never fail
+        # somebody else's mission, but still counted in the process total.
+        assert meter.usage("unattributed").calls == 1
+        assert meter.total.calls == 1
+
+    async def test_grounded_searches_cannot_outrun_the_process_wide_gate(self, monkeypatch):
+        import asyncio
+
+        from app.domain.cost import CostMeter
+
+        peak = {"now": 0, "max": 0}
+        provider = self._provider(monkeypatch, CostMeter(), gate=2)
+
+        async def counted(**kwargs):
+            peak["now"] += 1
+            peak["max"] = max(peak["max"], peak["now"])
+            try:
+                await asyncio.sleep(0.01)
+                return _Empty()
+            finally:
+                peak["now"] -= 1
+
+        class _Empty:
+            usage_metadata = None
+            candidates = []
+            text = ""
+
+        monkeypatch.setattr(
+            "app.adapters.gemini_llm._client",
+            lambda _s: type("C", (), {"aio": type("A", (), {"models": type("M", (), {"generate_content": staticmethod(counted)})()})()})(),
+        )
+        await asyncio.gather(*[provider.search(f"q{i}") for i in range(8)])
+        assert peak["max"] <= 2, f"{peak['max']} grounded searches ran at once through a gate of 2"
+        assert peak["max"] > 1, "the gate serialized everything instead of bounding it"
+
+
+class TestARedirectCannotWalkPastTheAddressCheck:
+    """`read_page` opens whatever URL the tool loop chose, steered by a page an
+    attacker may control. The host is checked before the request — but redirects
+    are followed, so the host that answers need not be the host that was checked.
+    """
+
+    def _provider(self, monkeypatch):
+        from app.adapters import google_providers as gp
+        from app.config import Settings
+
+        provider = gp.GoogleSearchProvider(Settings())
+        provider._robots["https://redirector.example.com"] = None   # no robots.txt
+
+        # Only the metadata address is internal. Without this the outbound host
+        # fails to resolve and is refused for that reason instead, which would
+        # let the redirect assertion pass without the redirect being checked.
+        monkeypatch.setattr(
+            gp, "_resolves_to_internal_address", lambda host: host.startswith("169.254.")
+        )
+        return provider
+
+    def _answer(self, monkeypatch, provider, final_url: str, body: str):
+        class _Response:
+            status_code = 200
+            url = final_url
+            content = body.encode()
+            text = body
+
+        async def get(url, **kwargs):
+            return _Response()
+
+        monkeypatch.setattr(provider._client, "get", get)
+
+    async def test_a_redirect_to_an_internal_address_is_blocked(self, monkeypatch):
+        provider = self._provider(monkeypatch)
+        self._answer(
+            monkeypatch, provider,
+            "http://169.254.169.254/computeMetadata/v1/", "token=secret",
+        )
+        page = await provider.fetch("https://redirector.example.com/look-here")
+        assert page.fetched is False
+        assert "internal" in (page.blocked_reason or "")
+        assert "secret" not in page.text
+
+    async def test_an_ordinary_redirect_is_still_followed_and_cited(self, monkeypatch):
+        provider = self._provider(monkeypatch)
+        self._answer(
+            monkeypatch, provider, "https://papaso.co.id/kontak",
+            "<html><body>Email: sales@papaso.co.id</body></html>",
+        )
+        page = await provider.fetch("https://redirector.example.com/look-here")
+        assert page.fetched is True
+        assert page.url == "https://papaso.co.id/kontak", (
+            "the URL that answered is what the evidence should cite"
+        )
+        assert "sales@papaso.co.id" in page.text

@@ -7,6 +7,42 @@ from app.config import ApprovalPolicy, Settings
 from .fixtures import build_runtime
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _ignore_the_developers_env():
+    """Read no `.env`, so the suite tests the shipped defaults.
+
+    `Settings` declares `env_file=".env"` and pytest runs from `backend/`, so
+    every `Settings()` in this suite was picking up whoever's machine it ran on.
+    That is wrong in both directions: `TestDefaults` asserted that the shipped
+    ceilings are safe while actually reading local overrides of them, and a test
+    that set `max_concurrent_model_calls` explicitly still inherited a
+    `min_model_call_interval_seconds` of 1.0 and quietly serialized.
+
+    Anything a test needs, it passes in. Anything it does not pass in is the
+    default the repository ships.
+    """
+    original = Settings.model_config.get("env_file")
+    Settings.model_config["env_file"] = None
+    try:
+        yield
+    finally:
+        Settings.model_config["env_file"] = original
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_settings(monkeypatch):
+    """Nor any SUPPLYME_* variable that happens to be exported."""
+    import os
+
+    from app.config import reset_settings_cache
+
+    for name in [k for k in os.environ if k.startswith("SUPPLYME_")]:
+        monkeypatch.delenv(name, raising=False)
+    reset_settings_cache()
+    yield
+    reset_settings_cache()
+
+
 @pytest.fixture
 def settings() -> Settings:
     return Settings(

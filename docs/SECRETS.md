@@ -34,6 +34,24 @@ sets it (`random_password.push_token`), but running with
 `SUPPLYME_USE_CLOUD_INFRA=true` outside of that Terraform module would silently
 drop the shared-secret check and leave Cloud Run IAM as the only lock.
 
+## Known dependency advisories
+
+`npm audit --omit=dev` reports two issues in the console, both from the same
+root: the `postcss@8.4.31` that `next@15.5.24` bundles internally. The only fix
+npm offers is `next@16`, a major upgrade, and it is not being taken days before a
+submission.
+
+All four advisories require postcss to process CSS an attacker influences —
+through a hostile stylesheet or an attacker-controlled `sourceMappingURL`. This
+console compiles one authored stylesheet (`app/globals.css`) at build time and
+never processes CSS at request time, so none of them is reachable here. Recorded
+so the audit output is not a surprise, and so the reasoning can be re-checked if
+the console ever accepts CSS from anywhere.
+
+`next` itself was moved from 15.1.6 to 15.5.24, which cleared a critical and two
+highs — including SSRF in middleware redirects and several cache-poisoning
+issues — that did apply to a publicly reachable deployment.
+
 ## Rotating the push token
 
 ```bash

@@ -170,6 +170,63 @@ class TestQuotes:
         assert result.unit_price is None and result.missing == ("label",)
 
 
+class TestAPriceRungTheBuyerCannotReach:
+    """Suppliers quote a ladder, and each reply becomes its own Quote.
+
+    The demo turns on settling a MOQ disagreement: published 500, sales desk
+    1,000, follow-up confirms 500 as a pilot at a higher unit price. Both replies
+    leave a quote behind, and the scorer takes the cheapest — so the mission did
+    the whole job of establishing what the buyer could have, then ranked the
+    vendor on the price it had just been told it could not.
+    """
+
+    def _ladder(self):
+        volume = Quote(id="qte_volume", mission_id="m", vendor_id="v",
+                       quantity=1000, moq=1000, line_items={"botol": 8500.0})
+        pilot = Quote(id="qte_pilot", mission_id="m", vendor_id="v",
+                      quantity=500, moq=500, line_items={"botol": 11000.0})
+        return volume, pilot
+
+    def test_a_rung_above_the_order_quantity_is_not_comparable(self):
+        volume, pilot = self._ladder()
+        comparable, incomparable = comparable_set(
+            [volume, pilot], ("bottle",), vocabulary=PERFUME, order_quantity=500
+        )
+        assert [q.quote_id for q in comparable] == ["qte_pilot"]
+        assert [q.quote_id for q in incomparable] == ["qte_volume"]
+        assert "not available" in " ".join(incomparable[0].notes)
+
+    def test_the_reachable_rung_is_what_gets_priced(self):
+        volume, pilot = self._ladder()
+        comparable, _ = comparable_set(
+            [volume, pilot], ("bottle",), vocabulary=PERFUME, order_quantity=500
+        )
+        assert comparable[0].unit_price == 11000.0, (
+            "the vendor was scored on a price it only offers at a larger order"
+        )
+
+    def test_buying_the_larger_quantity_makes_the_cheaper_rung_available(self):
+        volume, pilot = self._ladder()
+        comparable, _ = comparable_set(
+            [volume, pilot], ("bottle",), vocabulary=PERFUME, order_quantity=1000
+        )
+        assert comparable[0].quote_id == "qte_volume"
+        assert comparable[0].unit_price == 8500.0
+
+    def test_a_quote_that_names_no_quantity_is_still_comparable(self):
+        """An unstated rung is not grounds to throw a price away."""
+        unstated = Quote(mission_id="m", vendor_id="v", line_items={"botol": 9000.0})
+        comparable, _ = comparable_set(
+            [unstated], ("bottle",), vocabulary=PERFUME, order_quantity=500
+        )
+        assert comparable and comparable[0].unit_price == 9000.0
+
+    def test_without_an_order_quantity_nothing_is_held_back(self):
+        volume, pilot = self._ladder()
+        comparable, _ = comparable_set([volume, pilot], ("bottle",), vocabulary=PERFUME)
+        assert len(comparable) == 2
+
+
 class TestQuotesAreVerticalAgnostic:
     """The engine holds no industry's vocabulary. The mission supplies it."""
 

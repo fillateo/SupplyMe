@@ -141,6 +141,13 @@ calls `policy.check("research", ...)` — so the allowlist is enforced at runtim
 and the agent that reads attacker-controlled pages provably holds nothing that
 can email or spend.
 
+**Also not:** deciding which price rung applies. A supplier quotes a ladder and
+each reply becomes its own `Quote`, so a vendor accumulates rungs;
+`quotes.comparable_set` excludes any whose stated quantity exceeds what is being
+bought. Without that, the mission settles a minimum down to a 500-unit pilot and
+then scores the supplier on the 1,000-unit price — doing the whole job of finding
+out what the buyer can have, and ranking the answer it was refused.
+
 **Is not:** deciding what a claim is worth, deciding whether sources conflict,
 deciding what to do about a conflict, computing confidence, computing scores,
 ranking vendors, deciding whether to write to a supplier, deciding when a
