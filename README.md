@@ -345,9 +345,25 @@ quietly invent a supplier when the recording runs out. The replayed mission
 records which recording it came from in `replay_of`, and `/api/health` says the
 mode is on.
 
-What it cannot do is answer a new brief: a replay of a fragrance mission is a
-fragrance mission whatever you type. And it is **refused outright** when
-`SUPPLYME_USE_CLOUD_INFRA` is on, so it cannot run in the deployment.
+**The objective you type picks the brief.** Three of them sit over the one
+recorded supply chain — the recorded 50ml eau de parfum, a 30ml vitamin C serum,
+an 8oz soy candle, all Los Angeles and all 1,000 units — and the closest one to
+what you typed is the one that plays; type the fragrance brief and you get the
+fragrance mission. An objective matching none of them rotates through the other
+two, so the console still fills with distinguishable missions rather than one
+mission five times. **All of them are the same real suppliers** — a carton
+printer, a glass distributor and a contract filler in LA serve skincare and
+candles as readily as fragrance — and each brief brings real LA specialists of
+its own (O.Berk West, APackaging Group, Lumient LA, INTI Candles, Velocity Pro
+Pack, Olivia Care) carrying sentences quoted from their own websites.
+
+What a brief changes is the question and the component vocabulary. What it never
+touches is primary source material: an evidence excerpt, a source URL, an email
+body and a quoted price stay exactly as recorded, because those are real
+companies' actual words. So what it cannot do is answer a *new* brief — it
+replays the supply chain it has under the nearest question it holds. And it is
+**refused outright** when `SUPPLYME_USE_CLOUD_INFRA` is on, so it cannot run in
+the deployment.
 
 **Natively, with `run.sh`:**
 
@@ -356,7 +372,7 @@ fragrance mission whatever you type. And it is **refused outright** when
 ./run.sh emulator   # start the Firestore emulator and seed it from a backup
 ./run.sh mission    # one whole mission in the terminal, start to finish
 ./run.sh mail       # read the mailbox now instead of waiting for the poll
-./run.sh test       # 484 tests, ~60s, no network
+./run.sh test       # 492 tests, ~60s, no network
 ./run.sh status     # what is running, and what it has spent
 ./run.sh stop
 ./run.sh clean      # build caches only, never source or .env
@@ -583,7 +599,7 @@ rather than long-horizon reasoning. Pin `SUPPLYME_REASONING_MODEL` and
 ```bash
 ./run.sh test
 # or
-cd backend && .venv/bin/python -m pytest -q     # 484 tests, ~60 seconds, no network
+cd backend && .venv/bin/python -m pytest -q     # 492 tests, ~60 seconds, no network
 ```
 
 - **Unit** - evidence classification, identity resolution, quote normalisation, conflict detection, scoring, number parsing, policy, injection defence, and the ADK tool guard

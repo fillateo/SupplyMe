@@ -35,6 +35,11 @@ class Runtime:
         self.repo = Repo(providers.store)
         self.replay = _replay(providers)
         self._replays: set[Any] = set()
+        #: Which scenario a replay falls back to when the typed objective names
+        #: none of the briefs. Consecutive presses then give different missions,
+        #: because a console showing the same one five times reads as broken
+        #: rather than as a demonstration.
+        self._scenario_turn = 0
         if hasattr(providers.bus, "subscribe"):
             providers.bus.subscribe(self.handle)
 
@@ -216,7 +221,7 @@ class Runtime:
         scope: SearchScope = SearchScope.COUNTRY,
     ) -> Mission:
         if self.replay is not None:
-            return await self._replay_mission(user_id=user_id)
+            return await self._replay_mission(objective, user_id=user_id)
 
         mission = Mission(
             objective=objective.strip(), user_id=user_id,
@@ -229,22 +234,32 @@ class Runtime:
         )
         return mission
 
-    async def _replay_mission(self, *, user_id: str) -> Mission:
-        """Play a recorded mission back under a new id.
+    async def _replay_mission(self, objective: str, *, user_id: str) -> Mission:
+        """Play a recorded mission back under a new id, under the closest brief.
 
-        The objective returned is the recorded one, not the one that was typed.
-        A replay can only show the mission it has, and saying so through the
-        mission itself is better than accepting a brief it will not work on.
+        A replay can only show the supply chain it has — one Los Angeles run
+        over real suppliers — but it holds three briefs over that supply chain,
+        and the objective decides which. Typing the fragrance brief plays the
+        recorded mission under the objective it really ran on; asking for a serum
+        or a candle plays it re-skinned as one. Only an objective naming none of
+        them rotates, so that two unrecognised presses still fill the console
+        with two missions.
         """
         import asyncio
 
+        from .adapters.scenarios import for_objective
         from .domain.ids import new_id
 
+        replay = self.replay.for_scenario(
+            for_objective(objective, turn=self._scenario_turn)
+        )
+        self._scenario_turn += 1
+
         mission_id = new_id("msn")
-        opening = self.replay.opening_mission(mission_id, user_id=user_id)
+        opening = replay.opening_mission(mission_id, user_id=user_id)
         await self.providers.store.put("missions", mission_id, opening)
 
-        task = asyncio.create_task(self.replay.play(mission_id, user_id=user_id))
+        task = asyncio.create_task(replay.play(mission_id, user_id=user_id))
         # Held so the loop cannot garbage-collect a running replay mid-mission.
         self._replays.add(task)
         task.add_done_callback(self._replays.discard)
