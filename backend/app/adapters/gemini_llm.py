@@ -115,6 +115,16 @@ async def acquire_model_slot() -> asyncio.Semaphore:
     return await _THROTTLE.acquire(int(_GATE_CONFIG["limit"]), _GATE_CONFIG["interval"])
 
 
+def resolved_models() -> dict[str, str]:
+    """Which model each tier actually resolved to, for the tiers called so far.
+
+    Read by `/api/health` and by app/runtime.py. The adapter's class name does
+    not answer "which model is this running on", and that is the one question
+    a reviewer has to be able to answer without reading code.
+    """
+    return dict(_RESOLVED)
+
+
 def _client(settings: Settings) -> genai.Client:
     if settings.use_vertex and settings.project_id:
         return genai.Client(

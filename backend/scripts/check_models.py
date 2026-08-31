@@ -5,8 +5,11 @@ silently 404s to an older one is worse than one that says so. Run this before
 demoing, and paste the output into the submission if the answer is not what you
 expected.
 
-    python scripts/check_models.py                       # Vertex AI, from gcloud ADC
-    python scripts/check_models.py --api-key $GEMINI_KEY # Gemini Developer API
+    python scripts/check_models.py --project ID           # Vertex AI, from gcloud ADC
+    python scripts/check_models.py --api-key $GEMINI_KEY  # Gemini Developer API
+
+Reachability is a property of the project *and* the location together, so
+`--location` defaults to `global` — the endpoint Settings.vertex_location uses.
 """
 
 from __future__ import annotations
@@ -30,7 +33,10 @@ EXTRA = ("gemini-3.5-pro", "gemini-3.5-flash", "gemini-3-pro", "gemini-3-flash",
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", default="", help="Google Cloud project (Vertex AI)")
-    parser.add_argument("--location", default="us-central1")
+    # `global`, not a region, because that is what Settings.vertex_location
+    # defaults to and where Gemini 3.x is served. Defaulting to a region made
+    # this script report the model the app actually uses as unreachable.
+    parser.add_argument("--location", default="global")
     parser.add_argument("--api-key", default="", help="use the Gemini Developer API instead")
     args = parser.parse_args()
 

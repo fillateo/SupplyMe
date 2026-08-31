@@ -54,6 +54,36 @@ class Weights(BaseModel):
     priorities: list[str] = Field(default_factory=list)
 
 
+def _model_report(settings: Any) -> dict[str, Any]:
+    """Which Gemini model this process is actually calling, and through what.
+
+    `providers.describe()` names the adapter class, which does not answer the
+    question anyone actually asks of a deployment: which model generation is
+    this running on. A pinned setting is reported as pinned; otherwise this is
+    whatever `resolve_model` found on the ladder, and a tier nothing has called
+    yet says so rather than guessing.
+    """
+    from ..adapters.gemini_llm import resolved_models
+    from ..config import MODEL_LADDER
+
+    resolved = resolved_models()
+
+    def tier(name: str, pinned: str) -> str:
+        return pinned or resolved.get(name) or "not resolved yet (no call made)"
+
+    return {
+        "reasoning": tier("reasoning", settings.reasoning_model),
+        "fast": tier("fast", settings.fast_model),
+        "pinned": bool(settings.reasoning_model or settings.fast_model),
+        "backend": (
+            f"Vertex AI ({settings.vertex_location})"
+            if settings.use_vertex and settings.project_id
+            else "Gemini Developer API"
+        ),
+        "ladder": list(MODEL_LADDER),
+    }
+
+
 @router.get("/health")
 async def health(rt: Runtime = Depends(runtime)) -> dict[str, Any]:
     meter = getattr(rt.providers, "meter", None)
@@ -61,6 +91,7 @@ async def health(rt: Runtime = Depends(runtime)) -> dict[str, Any]:
         "status": "ok",
         "approval_policy": rt.settings.approval_policy.value,
         "providers": rt.providers.describe(),
+        "model": _model_report(rt.settings),
         "notes": rt.providers.notes,
         "spend": {
             # Since this process started. The authoritative figure is Cloud
@@ -113,7 +144,12 @@ async def get_mission(mission_id: str, rt: Runtime = Depends(runtime)) -> dict[s
             ),
             "evidence": len(await rt.repo.list(Evidence, mission_id=mission_id)),
             "open_conflicts": sum(1 for c in conflicts if c.status.value != "resolved"),
+            # Two different questions. `emails_sent` is what the outreach cap
+            # has spent, including an attempt whose SMTP call raised; a mission
+            # that reported one sent while nothing left the machine is how these
+            # came to be separate. `emails_delivered` is the thread record.
             "emails_sent": mission.emails_sent,
+            "emails_delivered": sum(1 for t in threads if t.status.value != "draft"),
             "emails_responded": sum(1 for t in threads if t.status.value == "responded"),
             "emails_awaiting": sum(1 for t in threads if t.status.value == "sent"),
             "pending_approvals": sum(1 for a in approvals if a.status.value == "pending"),

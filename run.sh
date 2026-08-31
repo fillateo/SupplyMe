@@ -264,7 +264,14 @@ start_services() {
 print_banner() {
   local health model policy
   health="$(curl -fsS "http://127.0.0.1:$API_PORT/api/health" 2>/dev/null || echo '{}')"
-  model="$("$PY" -c "import json,sys;print(json.loads(sys.argv[1]).get('providers',{}).get('llm','?'))" "$health" 2>/dev/null || echo '?')"
+  model="$("$PY" -c "
+import json, sys
+d = json.loads(sys.argv[1])
+m = d.get('model') or {}
+adapter = d.get('providers', {}).get('llm', '?')
+tiers = ' / '.join(dict.fromkeys(x for x in (m.get('reasoning'), m.get('fast')) if x))
+print(f\"{tiers} via {m.get('backend')}\" if tiers else adapter)
+" "$health" 2>/dev/null || echo '?')"
   policy="$("$PY" -c "import json,sys;print(json.loads(sys.argv[1]).get('approval_policy','?'))" "$health" 2>/dev/null || echo '?')"
 
   echo
@@ -300,9 +307,10 @@ print(', '.join(f'{k}={p[k]}' for k in ('search','maps','mail') if k in p))
   [ -n "$bound" ] && printf '%s\n' "  tools     $bound"
   printf '%s\n' "  spend     ${YELLOW}live${OFF} ${DIM}— see docs/COST.md; ./run.sh status for this process${OFF}"
   echo
-  printf '%s\n' "  ${DIM}Press ${OFF}Start sourcing${DIM}, then look for:${OFF}"
-  printf '%s\n' "  ${DIM}  · the supplier with the red 'disagreement' badge — website said MOQ 500,${OFF}"
-  printf '%s\n' "  ${DIM}    their email said 1,000, so it put both numbers back to them${OFF}"
+  printf '%s\n' "  ${DIM}Press ${OFF}Start sourcing${DIM}. What a run finds is up to the live web,${OFF}"
+  printf '%s\n' "  ${DIM}so look for the shapes rather than for particular numbers:${OFF}"
+  printf '%s\n' "  ${DIM}  · a red 'disagreement' badge — a supplier whose site and whose email${OFF}"
+  printf '%s\n' "  ${DIM}    gave different answers, and the one follow-up that asks about it${OFF}"
   printf '%s\n' "  ${DIM}  · two suppliers claiming the same brand, judged differently${OFF}"
   printf '%s\n' "  ${DIM}  · click any number — it opens the source behind it${OFF}"
   echo
@@ -385,13 +393,23 @@ spend = d.get("spend") or {}
 total = spend.get("since_startup") or {}
 caps = spend.get("caps_per_mission") or {}
 
-print("  model    " + d["providers"]["llm"])
+m = d.get("model") or {}
+tiers = " / ".join(dict.fromkeys(t for t in (m.get("reasoning"), m.get("fast")) if t))
+# The adapter is called GeminiLLM whichever generation answered, so name the
+# model. This is the line to read out loud when someone asks what it runs on.
+# No single quotes below: this whole snippet lives inside a single-quoted
+# shell string, and one apostrophe here silently truncates the program.
+backend = m.get("backend") or "backend unknown"
+print("  model    " + (tiers + "  (" + backend + ")" if tiers else d["providers"]["llm"]))
 print("  policy   " + d["approval_policy"])
 
 if total:
-    usd = total.get("usd", 0.0)
-    print("  spent    {} model calls, ${:.4f} (about Rp {:,.0f}) since startup".format(
-        total.get("calls", 0), usd, usd * 16400))
+    # Dollars only. app/domain/quotes.py refuses to convert a currency without a
+    # dated rate, and printing a rupiah figure here from a constant in a shell
+    # script would be the same invention this system declines to make about a
+    # supplier quote. docs/COST.md gives a rupiah range with its rate stated.
+    print("  spent    {} model calls, ${:.4f} since startup".format(
+        total.get("calls", 0), total.get("usd", 0.0)))
 if caps:
     print("  caps     ${}/mission, {} model calls, {} emails".format(
         caps.get("usd"), caps.get("model_calls"), caps.get("outreach_emails")))

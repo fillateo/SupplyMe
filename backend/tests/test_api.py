@@ -66,12 +66,45 @@ def test_health_reports_which_providers_are_bound(client):
     assert providers["mail"] == "MockMailProvider"
 
 
+def test_health_names_the_model_and_not_just_the_adapter(client):
+    """Which Gemini model is in use has to be answerable without reading code.
+
+    The adapter class name is `GeminiLLM` whichever generation it resolved, and
+    the model generation is the one hard technical gate this project is measured
+    against. Reporting it here is what lets that be checked from outside.
+    """
+    model = client.get("/api/health").json()["model"]
+    assert set(model) >= {"reasoning", "fast", "backend", "pinned", "ladder"}
+    # The ladder is reported so a resolved model can be read against the
+    # preference order that produced it.
+    assert model["ladder"][0].startswith("gemini-")
+    # Nothing is claimed for a tier this process has never called.
+    assert model["reasoning"] == "not resolved yet (no call made)"
+
+
 def test_a_mission_runs_to_completion_over_http(client, mission_id):
     body = client.get(f"/api/missions/{mission_id}").json()
     assert body["mission"]["status"] == "completed"
     assert body["counts"]["vendors"] >= 4
     assert body["counts"]["in_progress"] == 0
     assert len(body["supply_chain"]) >= 5
+
+
+def test_attempted_outreach_is_not_reported_as_delivered(client, mission_id):
+    """`emails_sent` is budget spent; `emails_delivered` is what left the system.
+
+    A live run consumed an outreach slot and then had its SMTP call raise, and
+    the mission reported one email sent while none had been delivered. The slot
+    is deliberately not given back — a failed send may still have reached the
+    supplier — so the two numbers answer different questions and the API says so.
+    """
+    counts = client.get(f"/api/missions/{mission_id}").json()["counts"]
+    assert "emails_sent" in counts and "emails_delivered" in counts
+    # Nothing can be delivered that was never attempted.
+    assert counts["emails_delivered"] <= counts["emails_sent"]
+    # And a reply or a wait presupposes a delivery.
+    assert counts["emails_responded"] <= counts["emails_delivered"]
+    assert counts["emails_awaiting"] <= counts["emails_delivered"]
 
 
 def test_vendors_carry_their_trust_breakdown(client, mission_id):

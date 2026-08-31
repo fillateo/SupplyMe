@@ -179,6 +179,18 @@ class Runtime:
             await self.providers.scheduler.cancel_all()
         if hasattr(self.providers.bus, "stop"):
             await self.providers.bus.stop()
+        # The search, Places and Firestore adapters each hold a long-lived
+        # client. They had a `close` nothing called, so every shutdown leaked
+        # an httpx connection pool and an asyncio warning with it. Guarded
+        # because a test double has no client to close.
+        for provider in (self.providers.search, self.providers.maps, self.providers.store):
+            closer = getattr(provider, "close", None)
+            if closer is None:
+                continue
+            try:
+                await closer()
+            except Exception:  # a failed close must not fail a shutdown
+                log.warning("provider_close_failed", extra={"status": type(provider).__name__})
 
     async def handle(self, event: Event) -> None:
         await self.orchestrator.handle(event)
@@ -222,13 +234,17 @@ def _research_agent(providers: Any) -> Any:
     if type(providers.llm).__name__ != "GeminiLLM":
         return None
     try:
-        from .adapters.gemini_llm import _RESOLVED
+        from .adapters.gemini_llm import resolved_models
         from .config import MODEL_LADDER
 
         # Last resort is the head of the ladder, not a hardcoded older model:
         # the ladder's first entry is the newest model this project prefers,
         # and a literal here had quietly drifted a generation behind it.
-        model = settings.reasoning_model or _RESOLVED.get("reasoning") or MODEL_LADDER[0]
+        model = (
+            settings.reasoning_model
+            or resolved_models().get("reasoning")
+            or MODEL_LADDER[0]
+        )
         from .agents.adk_research import AdkResearchAgent
 
         return AdkResearchAgent(providers, model, providers.store, llm=providers.llm)
