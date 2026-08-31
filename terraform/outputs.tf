@@ -28,6 +28,7 @@ output "next_steps" {
     "     (/healthz is the container's own probe; the public health endpoint is /api/health.)",
     var.gmail_push ?
     "2. Start Gmail push: python scripts/gmail_auth.py --watch ${google_pubsub_topic.gmail[0].id}" :
-    "2. Replies are read over IMAP on a one-minute Cloud Scheduler poll.",
+    "2. Replies are read over IMAP on a 15-minute Cloud Scheduler poll.",
+    "   POST /webhooks/mail/poll reads the mailbox now instead of waiting.",
   ])
 }

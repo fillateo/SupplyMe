@@ -291,7 +291,7 @@ cd backend && .venv/bin/python scripts/check_models.py --project YOUR_PROJECT --
 ./run.sh            # API on :8080, console on :3000
 ./run.sh mission    # one whole mission in the terminal, start to finish
 ./run.sh mail       # read the mailbox now instead of waiting for the poll
-./run.sh test       # 393 tests, ~59s, no network
+./run.sh test       # 396 tests, ~59s, no network
 ./run.sh status     # what is running, and what it has spent
 ./run.sh stop
 ./run.sh clean      # build caches only — never source or .env
@@ -361,7 +361,7 @@ Two paths satisfy the same port, and `/api/health` says which is bound:
 
 | Path | How it works | Trade |
 | --- | --- | --- |
-| **IMAP poll** *(what runs today)* | Cloud Scheduler posts to `/webhooks/mail/poll` once a minute; the same app password that sends also reads | A supplier answering at 2am is picked up on the next poll, not the same second |
+| **IMAP poll** *(what runs today)* | Cloud Scheduler posts to `/webhooks/mail/poll` every 15 minutes; the same app password that sends also reads | A supplier answering at 2am is picked up within fifteen minutes, not the same second. `POST /webhooks/mail/poll` reads it immediately |
 | **Gmail push** | `users.watch` points Gmail at a Pub/Sub topic; `/webhooks/gmail` pulls the new message and the mission resumes | Needs an OAuth client, a consent screen, and a browser sign-in from the mailbox owner |
 
 Set `gmail_push = true` in Terraform and run `backend/scripts/gmail_auth.py` to
@@ -447,7 +447,7 @@ control for the `PUT` means adding that method to
 ```bash
 ./run.sh test
 # or
-cd backend && .venv/bin/python -m pytest -q     # 393 tests, ~59 seconds, no network
+cd backend && .venv/bin/python -m pytest -q     # 396 tests, ~59 seconds, no network
 ```
 
 - **Unit** — evidence classification, identity resolution, quote normalisation, conflict detection, scoring, number parsing, policy, injection defence, and the ADK tool guard

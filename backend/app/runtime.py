@@ -118,12 +118,22 @@ class Runtime:
         left to fire, so a supplier who never replies keeps a vendor waiting
         forever and the mission never reaches a recommendation.
 
-        Cloud Tasks persists its own queue, so this is a no-op there. It matters
-        exactly where the README says state does not survive a restart, which is
-        every local run.
+        Cloud Tasks persists its own queue, so this returns immediately there —
+        which is what the comment claimed for a while without the code checking.
+        It did not: every cold start on Cloud Run read the whole email-threads
+        collection out of Firestore and wrote a Cloud Tasks entry per sent
+        thread, and a service that scales to zero between a scheduled mailbox
+        poll has a great many cold starts. The dedup key spared it from creating
+        duplicates; it did not spare it the reads.
+
+        So this now matters exactly where it always claimed to: a run whose
+        timers live in the process that just died.
         """
         from .domain.models import EmailThread, ThreadStatus
         from .workflow.handlers import MAX_FOLLOW_UPS
+
+        if getattr(self.providers.scheduler, "persistent", False):
+            return 0
 
         try:
             threads = await self.repo.list(EmailThread)

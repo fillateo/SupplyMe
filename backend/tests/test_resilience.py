@@ -1176,3 +1176,60 @@ class TestContactRouteDiscovery:
         from app.domain.contacts import own_site_from
 
         assert own_site_from("https://indotrading.example/company/sinar", "PT Sinar Pump") is None
+
+
+class TestStartupDoesNotRearmAQueueThatSurvived:
+    """A persistent queue must not be re-armed on every cold start.
+
+    `resume_pending_follow_ups` exists because an in-process scheduler loses its
+    timers when the process dies. Its docstring claimed Cloud Tasks made it a
+    no-op, and for a while nothing checked: every cold start on Cloud Run read
+    the whole email-threads collection and wrote a task per sent thread. A
+    service that scales to zero between scheduled mailbox polls does that a lot.
+    """
+
+    def test_the_two_schedulers_declare_whether_they_persist(self):
+        from app.adapters.scheduler import CloudTasksScheduler, LocalScheduler
+
+        assert LocalScheduler.persistent is False
+        assert CloudTasksScheduler.persistent is True
+
+    async def test_a_persistent_scheduler_is_left_alone(self, settings):
+        """Nothing is scheduled and nothing is read when the queue outlives us."""
+        from .fixtures import build_providers
+
+        providers = build_providers(settings)
+
+        reads: list[str] = []
+        original_query = providers.store.query
+
+        async def counting_query(collection, **kw):
+            reads.append(collection)
+            return await original_query(collection, **kw)
+
+        providers.store.query = counting_query
+        providers.scheduler.persistent = True
+
+        runtime = Runtime(providers)
+        assert await runtime.resume_pending_follow_ups() == 0
+        assert "email_threads" not in reads, "it read the collection it was told to skip"
+
+    async def test_an_in_process_scheduler_still_gets_its_timers_back(self, settings):
+        """The behaviour this exists for is unchanged where it is needed."""
+        from app.domain.models import EmailThread, ThreadStatus
+
+        from .fixtures import build_providers
+
+        providers = build_providers(settings)
+        assert providers.scheduler.persistent is False
+
+        runtime = Runtime(providers)
+        await runtime.repo.save(
+            EmailThread(
+                mission_id="msn_x", vendor_id="ven_x", to_address="a@b.test",
+                status=ThreadStatus.SENT, follow_up_count=0,
+            )
+        )
+        assert await runtime.resume_pending_follow_ups() == 1
+        assert providers.scheduler.pending == 1
+        await runtime.stop()

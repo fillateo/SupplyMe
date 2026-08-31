@@ -143,7 +143,7 @@ choosing its own sources.
 
 | Service | On this workload |
 | --- | --- |
-| Cloud Run | Scale-to-zero, `cpu_idle = true`. A mission waiting two days for a supplier holds no instance. The one-minute mailbox poll wakes it briefly and does no work when nothing is new. |
+| Cloud Run | Scale-to-zero, `cpu_idle = true`. A mission waiting two days for a supplier holds no instance. The mailbox poll wakes it briefly every 15 minutes and does no work when nothing is new — it used to run every minute, which is 1,440 cold starts a day whether or not a mission exists, and that is not a floor near zero. |
 | Firestore | Thousands of small documents. Well inside the free tier. |
 | Pub/Sub | Tens of messages per mission. Free tier. |
 | Cloud Tasks | One task per follow-up. Free tier. |

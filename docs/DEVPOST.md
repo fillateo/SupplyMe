@@ -228,7 +228,7 @@ computation: `MOQ 500 fits an order of 500`, not a progress bar.
   gone through Gemini's own search grounding — which is also a Gemini call, and
   metered as one) and the **Gmail API push path** (implemented, its workflow half
   exercised on every test run, but the OAuth consent screen was never set up, so
-  replies arrive on a one-minute Cloud Scheduler poll rather than being pushed)
+  replies arrive on a 15-minute Cloud Scheduler poll rather than being pushed)
 * **Console** — Next.js 15, React 19, TypeScript, Tailwind; proxies every API
   call server-side so no credential ever reaches client JavaScript
 * **Infrastructure** — Cloud Run (scale to zero), Secret Manager, Cloud
@@ -289,7 +289,7 @@ wall-clock time is a human not replying yet. Our suite drives whole missions
 against test doubles that live in `tests/` and are **reachable from nowhere in
 `app/`** — so we can provoke a supplier who never answers, or one whose site
 contradicts their quote, while the product itself has nothing to fall back to.
-393 tests, ~59 seconds, no network.
+396 tests, ~59 seconds, no network.
 
 ## Accomplishments that we're proud of
 

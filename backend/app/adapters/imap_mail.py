@@ -59,7 +59,7 @@ class SmtpImapMailProvider(SmtpMailProvider):
         The cursor is an IMAP UID, which is monotonic within a mailbox, so this
         never re-reads a message it has already turned into an event. The
         orchestrator would deduplicate a repeat anyway — the event key is a hash
-        of the payload — but re-fetching a hundred messages every minute to have
+        of the payload — but re-fetching a hundred messages on every poll to have
         them all discarded is a poor use of a mailbox.
         """
         return await asyncio.to_thread(self._read_since, since_token)

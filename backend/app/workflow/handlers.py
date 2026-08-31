@@ -1100,7 +1100,7 @@ async def handle_email_received(orc: Orchestrator, event: Event) -> list[Event]:
     """Where the mission wakes up.
 
     Nothing about this path assumes a browser is open or that a user pressed
-    anything. Gmail pushed a notification, or the one-minute IMAP poll found
+    anything. Gmail pushed a notification, or the scheduled IMAP poll found
     something; either way the workflow resumes from stored state.
     """
     mission = await orc.repo.mission(event.mission_id)

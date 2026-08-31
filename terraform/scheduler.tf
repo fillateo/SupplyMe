@@ -5,11 +5,17 @@
 # while nothing is running would otherwise sit unread until the next time a
 # human happened to open the console.
 #
-# One minute is chosen against what it costs rather than against how fast mail
-# needs to be read. A poll is one Cloud Run request and one IMAP round trip, no
-# model call and no Firestore write when nothing is new, so the floor is close
-# to free — and a supplier who answers at 2am is picked up at 2am rather than
-# whenever someone next looks.
+# Fifteen minutes, chosen against what it costs. A poll is one Cloud Run
+# request and one IMAP round trip, and does no model call and no Firestore write
+# when nothing is new — but each one is also a cold start on a service that
+# scales to zero, and at one minute that is 1,440 wake-ups a day whether or not
+# a mission is running. On a fixed prepaid balance that is the difference
+# between a floor near zero and a floor that is not.
+#
+# What it costs a demonstration: a reply is picked up within fifteen minutes
+# rather than one. `POST /webhooks/mail/poll` reads the mailbox immediately when
+# you do not want to wait for it — `./run.sh mail` locally — so the ceiling on
+# the demo is unchanged and only the unattended cadence moved.
 
 # Cloud Scheduler mints the OIDC token as the push identity, which requires
 # permission to impersonate it. Granted explicitly rather than relied on: the
@@ -25,11 +31,11 @@ resource "google_service_account_iam_member" "scheduler_can_mint_push_tokens" {
 resource "google_cloud_scheduler_job" "mail_poll" {
   name        = "${var.service_name}-mail-poll"
   description = "Read supplier replies out of the mailbox and resume their missions."
-  schedule    = "* * * * *"
+  schedule    = "*/15 * * * *"
   time_zone   = "Etc/UTC"
   region      = var.region
 
-  # A poll that overruns is not worth retrying: another one is a minute away,
+  # A poll that overruns is not worth retrying: another one is along shortly,
   # and the cursor was not advanced, so nothing was skipped.
   attempt_deadline = "60s"
 
@@ -48,7 +54,7 @@ resource "google_cloud_scheduler_job" "mail_poll" {
       "Content-Type" = "application/json"
       # The same shared secret the Pub/Sub push and Cloud Tasks endpoints carry.
       # OIDC alone would not get past verify_push_token, and finding that out
-      # from a silent 403 once a minute is a poor way to spend an afternoon.
+      # from a silent 403 on every poll is a poor way to spend an afternoon.
       "X-VDS-Token" = random_password.push_token.result
     }
 

@@ -58,8 +58,8 @@ it on camera.
 | 3:45–4:00 | It puts both numbers back to them in one targeted follow-up, and the recommendation names what it could not establish | **Communications**, then **Recommendation** |
 
 The reply takes up to a minute to appear — Cloud Scheduler polls the mailbox
-once a minute. `./run.sh mail` reads it immediately if you would rather not wait
-on camera.
+every 15 minutes. `./run.sh mail` reads it immediately, which is what you want
+on camera rather than waiting for the schedule.
 
 Closing line: *"I gave it one product idea. It worked out what the product is
 made of, found real manufacturers for every part, checked their claims against

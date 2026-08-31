@@ -22,6 +22,10 @@ from ..domain.ids import new_id
 class LocalScheduler:
     """asyncio-backed. `speedup` compresses wall-clock delays; 1.0 in production."""
 
+    #: Timers live in this process and die with it, so whatever was pending has
+    #: to be re-armed at startup. See Runtime.resume_pending_follow_ups.
+    persistent = False
+
     def __init__(self, bus: Any, *, speedup: float = 1.0) -> None:
         self._bus = bus
         self._speedup = max(speedup, 1e-6)
@@ -59,6 +63,11 @@ class LocalScheduler:
 
 class CloudTasksScheduler:
     """Cloud Tasks -> HTTP POST back to this service's /events/task endpoint."""
+
+    #: The queue is Google's, not this process's. A scheduled follow-up outlives
+    #: any number of restarts, so re-arming at startup would be re-arming what
+    #: is already armed — on a service that scales to zero, once per cold start.
+    persistent = True
 
     def __init__(
         self, project: str, location: str, queue: str, target_url: str, token: str = "",
