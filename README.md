@@ -38,6 +38,10 @@ That is a bad fit for search, and a good fit for an agent.
 
 ## 🏗️ Architecture
 
+![SupplyMe architecture — browser to console to API, the event plane over Pub/Sub, Cloud Tasks and Cloud Scheduler, seven Gemini agents beside the deterministic engines, and every managed service reached through a Port](./docs/architecture.png)
+
+<sub>Vector original: [docs/architecture.svg](./docs/architecture.svg). Both are generated from `terraform/` and `backend/app/` as they actually are — regenerate with `python3 scripts/architecture_diagram.py`.</sub>
+
 ```mermaid
 flowchart TD
     B[Browser] --> C["Next.js console<br/>Cloud Run · proxies /api/* server-side"]

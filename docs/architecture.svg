@@ -1,0 +1,236 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="1000" viewBox="0 0 1680 1000" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif">
+<defs>
+<filter id="sh" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="1" stdDeviation="1.1" flood-color="#3C4043" flood-opacity="0.18"/></filter>
+<marker id="aInk" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0.6 L 9 5 L 0 9.4 z" fill="#3C4043"/></marker>
+<marker id="aInks" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0.6 L 9 5 L 0 9.4 z" fill="#3C4043"/></marker>
+<marker id="aEvt" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0.6 L 9 5 L 0 9.4 z" fill="#1A73E8"/></marker>
+<marker id="aEvts" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0.6 L 9 5 L 0 9.4 z" fill="#1A73E8"/></marker>
+<marker id="aPrv" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0.6 L 9 5 L 0 9.4 z" fill="#80868B"/></marker>
+<marker id="aPrvs" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M 0 0.6 L 9 5 L 0 9.4 z" fill="#80868B"/></marker>
+</defs>
+<rect width="1680" height="1000" fill="#FFFFFF"/>
+<text x="24" y="30" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="17" font-weight="700" fill="#202124" text-anchor="start">SupplyMe — supplier sourcing as a long-running agent</text>
+<text x="24" y="50" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="10.5" font-weight="400" fill="#5F6368" text-anchor="start">Every box is deployed by terraform/ and reachable in the running system. No provider is simulated: a missing credential is a startup failure.</text>
+<g transform="translate(0,44)">
+<rect x="264" y="56" width="960" height="860" rx="8" fill="#DCE9FD" stroke="#A8C7FA" stroke-width="1"/>
+<g transform="translate(284,68)"><rect width="20" height="20" rx="4" fill="#1A73E8"/><path d="M6.6 14.5 a3.2 3.2 0 0 1 -0.2 -6.4 a4.3 4.3 0 0 1 8.2 -0.6 a3.5 3.5 0 0 1 -0.3 7 z" fill="#fff"/></g>
+<text x="312" y="83" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="13" font-weight="700" fill="#174EA6" text-anchor="start">Google Cloud project  ·  us-central1</text>
+<rect x="344" y="104" width="860" height="196" rx="6" fill="#F1F3F4" stroke="#DADCE0" stroke-width="1"/>
+<text x="360" y="126" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="10.5" font-weight="600" fill="#3C4043" text-anchor="start">Cloud Run  —  two services, scale to zero, one service account each; images from Artifact Registry, the API's secrets from Secret Manager</text>
+<rect x="364" y="140" width="380" height="140" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(377,153)"><rect width="20" height="20" rx="4" fill="#4285F4"/><path d="M6 5.5 L15 10 L6 14.5 Z" fill="#fff"/></g>
+<text x="405" y="167.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">API  ·  supply-me</text>
+<text x="378" y="190.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">FastAPI + the whole workflow in one container</text>
+<text x="378" y="203.6" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">540s request timeout  &lt;  600s ack deadline  &lt;  600s lease</text>
+<text x="378" y="217.2" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">/api/*  ·  console reads and approval decisions</text>
+<text x="378" y="230.8" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">/events/pubsub  ·  /events/task  ·  push ingress</text>
+<text x="378" y="244.4" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">/webhooks/gmail  ·  /webhooks/mail/poll</text>
+<rect x="824" y="140" width="360" height="140" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(837,153)"><rect width="20" height="20" rx="4" fill="#4285F4"/><rect x="4" y="5" width="12" height="8" rx="1" fill="#fff"/><rect x="7.5" y="14" width="5" height="1.6" fill="#fff"/></g>
+<text x="865" y="167.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">Console  ·  supply-me-console</text>
+<text x="838" y="190.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">Next.js 15; the only thing the browser talks to</text>
+<text x="838" y="203.6" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">app/api/[...path] proxies /api/* server-side, so</text>
+<text x="838" y="217.2" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">no API origin, token or credential is ever in</text>
+<text x="838" y="230.8" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">client JavaScript and there is no CORS preflight</text>
+<text x="838" y="244.4" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">Holds run.invoker on the API. Nothing else.</text>
+<rect x="344" y="322" width="268" height="360" rx="6" fill="#F1F3F4" stroke="#DADCE0" stroke-width="1"/>
+<text x="358" y="344" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="10.5" font-weight="600" fill="#3C4043" text-anchor="start">Event plane  —  at-least-once</text>
+<rect x="364" y="358" width="228" height="68" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(377,371)"><rect width="20" height="20" rx="4" fill="#4285F4"/><path d="M4 7 h8 M4 7 l2.5 -2.5 M4 7 l2.5 2.5" stroke="#fff" stroke-width="1.4" fill="none" stroke-linecap="round"/><path d="M16 13 h-8 M16 13 l-2.5 -2.5 M16 13 l-2.5 2.5" stroke="#fff" stroke-width="1.4" fill="none" stroke-linecap="round"/></g>
+<text x="405" y="385.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">Pub/Sub</text>
+<text x="378" y="404.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">supply-me-workflow  + push sub</text>
+<text x="378" y="416.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">ack 600s · OIDC + shared token</text>
+<rect x="364" y="440" width="228" height="68" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(377,453)"><rect width="20" height="20" rx="4" fill="#9AA0A6"/><rect x="3.5" y="5.5" width="13" height="9" rx="1.2" fill="#fff"/><path d="M3.5 6.5 L10 11 L16.5 6.5" stroke="#9AA0A6" stroke-width="1.2" fill="none"/></g>
+<text x="405" y="467.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">Dead letter</text>
+<text x="378" y="486.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">topic + pull subscription</text>
+<text x="378" y="498.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">7 days to look at it, no TTL</text>
+<rect x="364" y="522" width="228" height="68" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(377,535)"><rect width="20" height="20" rx="4" fill="#4285F4"/><path d="M5 6.5 h10 M5 10 h10 M5 13.5 h6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></g>
+<text x="405" y="549.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">Cloud Tasks</text>
+<text x="378" y="568.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">supply-me-followups</text>
+<text x="378" y="580.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">delayed follow-ups, backoff</text>
+<rect x="364" y="604" width="228" height="68" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(377,617)"><rect width="20" height="20" rx="4" fill="#4285F4"/><circle cx="10" cy="10" r="6" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M10 6.5 V10 l3 1.8" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round"/></g>
+<text x="405" y="631.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">Cloud Scheduler</text>
+<text x="378" y="650.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">*/15 — IMAP has no push</text>
+<text x="378" y="662.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">wakes a service at zero</text>
+<rect x="652" y="322" width="552" height="360" rx="6" fill="#FEF7E0" stroke="#FDE293" stroke-width="1"/>
+<text x="742" y="344" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="10.5" font-weight="600" fill="#7B5800" text-anchor="start">Inside the API container  —  one process; every dependency is a Port</text>
+<rect x="672" y="358" width="512" height="64" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(685,371)"><rect width="20" height="20" rx="4" fill="#5F6368"/><circle cx="10" cy="10" r="2.4" fill="#fff"/><path d="M10 10 L10 4.2 M10 10 L15 13 M10 10 L5 13" stroke="#fff" stroke-width="1.4"/><circle cx="10" cy="4.2" r="1.7" fill="#fff"/><circle cx="15" cy="13" r="1.7" fill="#fff"/><circle cx="5" cy="13" r="1.7" fill="#fff"/></g>
+<text x="713" y="385.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">Orchestrator  ·  app/workflow/</text>
+<text x="686" y="402" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">claim dedup key → run handler → emit the next events</text>
+<text x="686" y="415" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">lease · bounded retry · drop the unprocessable · never the same work twice</text>
+<rect x="672" y="448" width="248" height="96" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(685,461)"><rect width="20" height="20" rx="4" fill="#9334E6"/><circle cx="6" cy="6.5" r="2.2" fill="#fff"/><circle cx="14" cy="6.5" r="2.2" fill="#fff"/><circle cx="10" cy="14" r="2.2" fill="#fff"/><path d="M6 6.5 H14 M6 6.5 L10 14 M14 6.5 L10 14" stroke="#fff" stroke-width="1"/></g>
+<text x="713" y="475.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">7 agents  ·  Gemini</text>
+<text x="686" y="494" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">mission · supply chain · discovery</text>
+<text x="686" y="507" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">research (Google ADK tool loop)</text>
+<text x="686" y="520" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">brand evidence · communication</text>
+<text x="686" y="533" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">recommendation</text>
+<rect x="936" y="448" width="248" height="96" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(949,461)"><rect width="20" height="20" rx="4" fill="#34A853"/><rect x="4.5" y="4.5" width="4.5" height="4.5" rx="0.8" fill="#fff"/><rect x="11" y="4.5" width="4.5" height="4.5" rx="0.8" fill="#fff"/><rect x="4.5" y="11" width="4.5" height="4.5" rx="0.8" fill="#fff"/><rect x="11" y="11" width="4.5" height="4.5" rx="0.8" fill="#fff"/></g>
+<text x="977" y="475.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">Deterministic engines</text>
+<text x="950" y="494" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">evidence · identity · quotes</text>
+<text x="950" y="507" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">conflicts · trust · scoring</text>
+<text x="950" y="520" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">contacts · numbers · cost meter</text>
+<text x="950" y="533" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">no model decides a rank</text>
+<rect x="672" y="570" width="512" height="102" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(685,583)"><rect width="20" height="20" rx="4" fill="#5F6368"/><rect x="3.5" y="6.5" width="9" height="7" rx="1.2" fill="#fff"/><path d="M12.5 8.6 h4 M12.5 11.4 h4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></g>
+<text x="713" y="597.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">Ports and adapters  ·  app/ports, app/adapters</text>
+<text x="686" y="618.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">Search · Maps · Mail · Store · Bus · Scheduler · LLM</text>
+<text x="686" y="631.4" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">Every adapter is the real service; the test doubles live in tests/ and are</text>
+<text x="686" y="644.8" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">reachable from nowhere in app/. Research tool calls pass policy.check() first,</text>
+<text x="686" y="658.2" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">so the agent that reads attacker-controlled pages cannot email or spend.</text>
+<rect x="344" y="720" width="860" height="168" rx="6" fill="#F1F3F4" stroke="#DADCE0" stroke-width="1"/>
+<text x="360" y="742" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="10.5" font-weight="600" fill="#3C4043" text-anchor="start">Managed services</text>
+<rect x="364" y="756" width="152" height="116" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(377,769)"><ellipse cx="10" cy="5.5" rx="6.5" ry="2.6" fill="#F9AB00"/><path d="M3.5 5.5 v9 a6.5 2.6 0 0 0 13 0 v-9 a6.5 2.6 0 0 1 -13 0 z" fill="#F9AB00"/><ellipse cx="10" cy="10" rx="6.5" ry="2.6" fill="none" stroke="#fff" stroke-width="1"/></g>
+<text x="405" y="783.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11" font-weight="600" fill="#202124" text-anchor="start">Firestore</text>
+<text x="378" y="802.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">missions · vendors</text>
+<text x="378" y="814.4" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">evidence · quotes</text>
+<text x="378" y="826.8" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">conflicts · approvals</text>
+<text x="378" y="839.2" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">workflow_events —</text>
+<text x="378" y="851.6" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">the timeline the</text>
+<text x="378" y="864.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">console renders</text>
+<rect x="531" y="756" width="152" height="116" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(544,769)"><rect width="20" height="20" rx="4" fill="#9334E6"/><path d="M10 3.5 C10.7 7.6 12.4 9.3 16.5 10 C12.4 10.7 10.7 12.4 10 16.5 C9.3 12.4 7.6 10.7 3.5 10 C7.6 9.3 9.3 7.6 10 3.5 Z" fill="#fff"/></g>
+<text x="572" y="783.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11" font-weight="600" fill="#202124" text-anchor="start">Vertex AI</text>
+<text x="545" y="802.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">Gemini 3.5 Flash</text>
+<text x="545" y="814.4" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">global endpoint</text>
+<text x="545" y="826.8" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">reasoning + fast tier</text>
+<text x="545" y="839.2" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">resolved once per</text>
+<text x="545" y="851.6" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">process; reported by</text>
+<text x="545" y="864.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">/api/health</text>
+<rect x="698" y="756" width="152" height="116" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(711,769)"><rect width="20" height="20" rx="4" fill="#34A853"/><circle cx="7.5" cy="10" r="3" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M10.5 10 H16 M14 10 v3 M16 10 v2.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></g>
+<text x="739" y="783.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11" font-weight="600" fill="#202124" text-anchor="start">Secret Manager</text>
+<text x="712" y="802.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">Gemini key · Places key</text>
+<text x="712" y="814.4" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">SMTP password</text>
+<text x="712" y="826.8" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">push token</text>
+<text x="712" y="839.2" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">mounted into the</text>
+<text x="712" y="851.6" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">revision, never a</text>
+<text x="712" y="864.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">plain env value</text>
+<rect x="865" y="756" width="152" height="116" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(878,769)"><rect width="20" height="20" rx="4" fill="#4285F4"/><path d="M10 4 L16 7.2 v5.6 L10 16 L4 12.8 V7.2 Z" fill="none" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/><path d="M4 7.2 L10 10.4 L16 7.2 M10 10.4 V16" stroke="#fff" stroke-width="1.1"/></g>
+<text x="906" y="783.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11" font-weight="600" fill="#202124" text-anchor="start">Artifact Registry</text>
+<text x="879" y="802.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">the two images</text>
+<text x="879" y="814.4" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">built by</text>
+<text x="879" y="826.8" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">scripts/deploy.sh</text>
+<rect x="1032" y="756" width="152" height="116" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(1045,769)"><rect width="20" height="20" rx="4" fill="#4285F4"/><path d="M5 15 V10 M9 15 V6 M13 15 V12 M17 15 V8" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></g>
+<text x="1073" y="783.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11" font-weight="600" fill="#202124" text-anchor="start">Observability</text>
+<text x="1046" y="802.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">Cloud Logging · Monitoring</text>
+<text x="1046" y="814.4" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">budget at 25/50/90/100%</text>
+<text x="1046" y="826.8" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">an alert the moment</text>
+<text x="1046" y="839.2" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">anything is dead-lettered</text>
+<text x="1046" y="851.6" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">a log metric counting</text>
+<text x="1046" y="864.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">injection attempts</text>
+<rect x="24" y="140" width="190" height="88" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(37,153)"><circle cx="10" cy="6.5" r="3.4" fill="#5F6368"/><path d="M3 17.5 a7 6.2 0 0 1 14 0 z" fill="#5F6368"/></g>
+<text x="65" y="167.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">Buyer</text>
+<text x="38" y="186" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">"I want to make a 50ml</text>
+<text x="38" y="199" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">perfume, 500 units."</text>
+<rect x="24" y="322" width="190" height="132" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(37,335)"><rect width="20" height="20" rx="4" fill="#FFC107"/><path d="M7.5 6 L4 10 L7.5 14 M12.5 6 L16 10 L12.5 14" stroke="#202124" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="65" y="349.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">terraform/</text>
+<text x="38" y="370" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">OpenTofu. Cloud Run, Firestore,</text>
+<text x="38" y="383" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">Pub/Sub, Tasks, Scheduler, IAM,</text>
+<text x="38" y="396" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">keys, budgets — nothing here is</text>
+<text x="38" y="409" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">created by hand, so tofu plan is</text>
+<text x="38" y="422" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">the review surface for a deploy.</text>
+<rect x="24" y="500" width="190" height="124" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(37,513)"><rect width="20" height="20" rx="4" fill="#188038"/><path d="M10 15 V6 M10 5 l-3.5 3.5 M10 5 l3.5 3.5" stroke="#fff" stroke-width="1.7" fill="none" stroke-linecap="round"/></g>
+<text x="65" y="527.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">scripts/deploy.sh</text>
+<text x="38" y="548" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">Runs the tests, builds both</text>
+<text x="38" y="561" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">images with Cloud Build, and</text>
+<text x="38" y="574" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">stops at tofu plan. A human</text>
+<text x="38" y="587" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">reads the diff and applies it.</text>
+<text x="38" y="600" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">Nothing here deploys itself.</text>
+<rect x="24" y="760" width="190" height="122" rx="6" fill="#F8F9FA" stroke="#DADCE0" stroke-width="1"/>
+<text x="38" y="782" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="10.5" font-weight="600" fill="#3C4043" text-anchor="start">Legend</text>
+<path d="M 38 800 L 78 800" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="86" y="803.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">synchronous call</text>
+<path d="M 38 824 L 78 824" fill="none" stroke="#1A73E8" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#aEvt)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="86" y="827.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">event delivery —</text>
+<text x="86" y="840" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">OIDC + shared token</text>
+<path d="M 38 858 L 78 858" fill="none" stroke="#80868B" stroke-width="1.4" stroke-dasharray="2 3" marker-end="url(#aPrv)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="86" y="861.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">provisioning / deploy</text>
+<rect x="1290" y="104" width="366" height="204" rx="6" fill="#F8F9FA" stroke="#BDC1C6" stroke-width="1" stroke-dasharray="5 4"/>
+<text x="1304" y="126" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="10.5" font-weight="600" fill="#3C4043" text-anchor="start">Google product APIs  —  one key each, API-restricted</text>
+<rect x="1306" y="140" width="334" height="72" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(1319,153)"><rect width="20" height="20" rx="4" fill="#4285F4"/><circle cx="9" cy="9" r="4" fill="none" stroke="#fff" stroke-width="1.6"/><path d="M12.2 12.2 L16 16" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></g>
+<text x="1347" y="167.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">Programmable Search</text>
+<text x="1320" y="186.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">or Gemini search grounding when no engine id is</text>
+<text x="1320" y="198.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">set. Both read the live web; neither is optional.</text>
+<rect x="1306" y="224" width="334" height="72" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(1319,237)"><rect width="20" height="20" rx="4" fill="#EA4335"/><path d="M10 4 a4 4 0 0 1 4 4 c0 3-4 8-4 8 s-4-5-4-8 a4 4 0 0 1 4-4 z" fill="#fff"/><circle cx="10" cy="8" r="1.5" fill="#EA4335"/></g>
+<text x="1347" y="251.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">Places API</text>
+<text x="1320" y="270.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">does this factory exist where it says it does —</text>
+<text x="1320" y="282.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">queried by discovery and by the research loop</text>
+<rect x="1290" y="332" width="366" height="430" rx="6" fill="#F8F9FA" stroke="#BDC1C6" stroke-width="1" stroke-dasharray="5 4"/>
+<text x="1304" y="354" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="10.5" font-weight="600" fill="#3C4043" text-anchor="start">The open web, and the people in it</text>
+<rect x="1306" y="372" width="334" height="88" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(1319,385)"><rect width="20" height="20" rx="4" fill="#34A853"/><circle cx="10" cy="10" r="6" fill="none" stroke="#fff" stroke-width="1.3"/><path d="M4 10 h12 M10 4 c3 3 3 9 0 12 M10 4 c-3 3 -3 9 0 12" stroke="#fff" stroke-width="1.1" fill="none"/></g>
+<text x="1347" y="399.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">Supplier and trade sites</text>
+<text x="1320" y="418.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">read_page — the agent opens the pages it found,</text>
+<text x="1320" y="430.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">including the /contact page nothing links to,</text>
+<text x="1320" y="443.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">and every fact keeps the excerpt it came from</text>
+<rect x="1306" y="480" width="334" height="100" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(1319,493)"><rect width="20" height="20" rx="4" fill="#EA4335"/><rect x="3.5" y="5.5" width="13" height="9" rx="1.2" fill="#fff"/><path d="M3.5 6.5 L10 11 L16.5 6.5" stroke="#EA4335" stroke-width="1.3" fill="none"/></g>
+<text x="1347" y="507.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">Mailbox  ·  Gmail</text>
+<text x="1320" y="526.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">SMTP out, IMAP in — one app password does both.</text>
+<text x="1320" y="538.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">Replies re-enter the workflow by In-Reply-To.</text>
+<text x="1320" y="551.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">Gmail push is wired (/webhooks/gmail) but off.</text>
+<text x="1320" y="563.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">SUPPLYME_MAIL_REDIRECT_TO is the demo valve.</text>
+<rect x="1306" y="630" width="334" height="88" rx="4" fill="#FFFFFF" stroke="#DADCE0" stroke-width="1" filter="url(#sh)"/>
+<g transform="translate(1319,643)"><circle cx="6.5" cy="7" r="3" fill="#5F6368"/><path d="M1 17 a5.5 5 0 0 1 11 0 z" fill="#5F6368"/><circle cx="14.5" cy="7.5" r="2.6" fill="#9AA0A6"/><path d="M9.6 17 a5 4.6 0 0 1 9.8 0 z" fill="#9AA0A6"/></g>
+<text x="1347" y="657.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="11.5" font-weight="600" fill="#202124" text-anchor="start">Suppliers</text>
+<text x="1320" y="676.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">Answer in hours or days, in their own words,</text>
+<text x="1320" y="688.5" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">in their own language, with a price ladder and</text>
+<text x="1320" y="701.0" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">a minimum that contradicts their own website.</text>
+<path d="M 119 140 L 119 36 L 1004 36 L 1004 140" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="536" y="30" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9.3" font-weight="400" fill="#5F6368" text-anchor="start">HTTPS  —  the browser reaches the console and nothing else</text>
+<path d="M 824 210 L 744 210" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="784" y="203" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.6" font-weight="400" fill="#5F6368" text-anchor="middle">run.invoker</text>
+<path d="M 710 280 L 710 358" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" stroke-linejoin="round" stroke-linecap="butt"/>
+<path d="M 796 422 L 796 448" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" marker-start="url(#aInks)" stroke-linejoin="round" stroke-linecap="butt"/>
+<path d="M 1060 422 L 1060 448" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" marker-start="url(#aInks)" stroke-linejoin="round" stroke-linecap="butt"/>
+<path d="M 796 544 L 796 570" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" stroke-linejoin="round" stroke-linecap="butt"/>
+<path d="M 672 596 L 640 596 L 640 392 L 592 392" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="631" y="500" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="9" font-weight="400" fill="#5F6368" text-anchor="middle" transform="rotate(-90 631 500)">publish the next event</text>
+<path d="M 672 640 L 622 640 L 622 556 L 592 556" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" stroke-linejoin="round" stroke-linecap="butt"/>
+<path d="M 478 426 L 478 440" fill="none" stroke="#1A73E8" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#aEvt)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="492" y="437" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.6" font-weight="400" fill="#5F6368" text-anchor="start">after 5 attempts</text>
+<path d="M 364 392 L 332 392 L 332 235 L 364 235" fill="none" stroke="#1A73E8" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#aEvt)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="326" y="330" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.8" font-weight="400" fill="#1A73E8" text-anchor="middle" transform="rotate(-90 326 330)">/events/pubsub</text>
+<path d="M 364 556 L 316 556 L 316 205 L 364 205" fill="none" stroke="#1A73E8" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#aEvt)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="310" y="490" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.8" font-weight="400" fill="#1A73E8" text-anchor="middle" transform="rotate(-90 310 490)">/events/task</text>
+<path d="M 364 638 L 300 638 L 300 175 L 364 175" fill="none" stroke="#1A73E8" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#aEvt)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="294" y="600" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.8" font-weight="400" fill="#1A73E8" text-anchor="middle" transform="rotate(-90 294 600)">/webhooks/mail/poll</text>
+<path d="M 740 672 L 740 700 L 470 700 L 470 756" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="494" y="690" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.8" font-weight="400" fill="#5F6368" text-anchor="start">every mission fact, and the timeline</text>
+<path d="M 900 672 L 900 712 L 607 712 L 607 756" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="762" y="702" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.8" font-weight="400" fill="#5F6368" text-anchor="start">model calls, metered</text>
+<path d="M 1184 620 L 1254 620 L 1254 176 L 1306 176" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" stroke-linejoin="round" stroke-linecap="butt"/>
+<path d="M 1254 260 L 1306 260" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" stroke-linejoin="round" stroke-linecap="butt"/>
+<path d="M 1254 416 L 1306 416" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" stroke-linejoin="round" stroke-linecap="butt"/>
+<path d="M 1254 530 L 1306 530" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" marker-start="url(#aInks)" stroke-linejoin="round" stroke-linecap="butt"/>
+<circle cx="1254" cy="260" r="2.6" fill="#3C4043"/>
+<circle cx="1254" cy="416" r="2.6" fill="#3C4043"/>
+<circle cx="1254" cy="530" r="2.6" fill="#3C4043"/>
+<text x="1258" y="171" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.6" font-weight="400" fill="#5F6368" text-anchor="start">search</text>
+<text x="1258" y="255" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.6" font-weight="400" fill="#5F6368" text-anchor="start">maps</text>
+<text x="1258" y="411" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.6" font-weight="400" fill="#5F6368" text-anchor="start">pages</text>
+<text x="1258" y="525" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.6" font-weight="400" fill="#5F6368" text-anchor="start">mail</text>
+<path d="M 1400 580 L 1400 630" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="1408" y="604" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.8" font-weight="400" fill="#5F6368" text-anchor="start">the ask</text>
+<path d="M 1560 630 L 1560 580" fill="none" stroke="#3C4043" stroke-width="1.4" marker-end="url(#aInk)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="1490" y="604" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.8" font-weight="400" fill="#5F6368" text-anchor="end">the reply</text>
+<path d="M 214 388 L 264 388" fill="none" stroke="#80868B" stroke-width="1.4" stroke-dasharray="2 3" marker-end="url(#aPrv)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="240" y="377" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.6" font-weight="400" fill="#80868B" text-anchor="middle">plan → apply</text>
+<path d="M 214 562 L 264 562" fill="none" stroke="#80868B" stroke-width="1.4" stroke-dasharray="2 3" marker-end="url(#aPrv)" stroke-linejoin="round" stroke-linecap="butt"/>
+<text x="240" y="551" font-family="'Noto Sans','Liberation Sans',Arial,Helvetica,sans-serif" font-size="8.6" font-weight="400" fill="#80868B" text-anchor="middle">builds</text>
+</g>
+</svg>
