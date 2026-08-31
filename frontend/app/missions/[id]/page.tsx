@@ -48,7 +48,6 @@ const STAGE_RANK: Record<string, number> = {
   qualified: 6,
   responded: 5,
   contacted: 4,
-  shortlisted: 3,
   researching: 2,
   discovered: 1,
   rejected: 0,

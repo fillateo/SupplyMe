@@ -201,7 +201,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-export function formatTimestamp(value: string | number): string {
+function formatTimestamp(value: string | number): string {
   const date = typeof value === "number" ? new Date(value * 1000) : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   return date.toISOString().replace("T", " ").slice(0, 19) + " UTC";

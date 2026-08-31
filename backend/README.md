@@ -13,7 +13,7 @@ feature that no longer exists.
 ```bash
 uv venv --python 3.12 .venv && VIRTUAL_ENV=.venv uv pip install -e ".[dev]"
 
-.venv/bin/python -m pytest -q                  # 446 tests, ~60s, no network
+.venv/bin/python -m pytest -q                  # 445 tests, ~60s, no network
 .venv/bin/python scripts/run_mission.py --project YOUR_PROJECT   # a whole mission
 .venv/bin/uvicorn app.api.main:app --port 8080
 ```

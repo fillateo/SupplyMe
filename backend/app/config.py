@@ -115,7 +115,6 @@ class Settings(BaseSettings):
     search_api_key: str = ""
     search_engine_id: str = ""
     gmail_sender: str = ""
-    gmail_topic: str = ""                  # Gmail watch -> Pub/Sub topic
 
     #: SMTP, as the short path to real delivery. Gmail accepts an app password
     #: here, which needs no OAuth client and no consent screen. Outbound only:

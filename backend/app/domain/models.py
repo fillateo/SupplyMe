@@ -108,7 +108,6 @@ class RelationshipType(StrEnum):
     SUPPLIER_CLAIMED = "supplier_claimed"
     BRAND_CONFIRMED = "brand_confirmed"
     INDEPENDENT_REPORT = "independent_report"
-    PUBLIC_CASE_STUDY = "public_case_study"
     INDIRECT = "indirect"
     UNVERIFIED = "unverified"
 
@@ -144,8 +143,6 @@ class MissionStatus(StrEnum):
     CREATED = "created"
     PLANNING = "planning"
     DISCOVERING = "discovering"
-    RESEARCHING = "researching"
-    OUTREACH = "outreach"
     AWAITING_RESPONSE = "awaiting_response"
     AWAITING_APPROVAL = "awaiting_approval"
     RECOMMENDING = "recommending"
@@ -272,7 +269,6 @@ class SupplyChainNode(Base):
 class VendorStatus(StrEnum):
     DISCOVERED = "discovered"
     RESEARCHING = "researching"
-    SHORTLISTED = "shortlisted"
     CONTACTED = "contacted"
     RESPONDED = "responded"
     QUALIFIED = "qualified"
@@ -349,7 +345,6 @@ class ThreadStatus(StrEnum):
     SENT = "sent"
     RESPONDED = "responded"
     CLOSED = "closed"
-    BOUNCED = "bounced"
 
 
 class Message(BaseModel):

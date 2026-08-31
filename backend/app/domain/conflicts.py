@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .evidence import DIRECT_SOURCES, SOURCE_WEIGHT
-from .models import Conflict, ConflictStatus, Evidence
+from .models import Evidence
 from .numbers import as_number
 
 #: Relative tolerance below which two numbers are the same claim, not a conflict.
@@ -159,25 +159,3 @@ def _question_for(field: str, groups: list[list[Evidence]]) -> str:
         question = f"Our sources disagree on {field.replace('_', ' ')}. Could you confirm?"
 
     return question
-
-
-def detect_all(mission_id: str, vendor_id: str, items: Sequence[Evidence]) -> list[Conflict]:
-    conflicts: list[Conflict] = []
-    fields = {e.field for e in items if e.field}
-    for field in sorted(f for f in fields if f in MATERIAL_FIELDS):
-        found = detect(field, items)
-        if found is None:
-            continue
-        conflicts.append(
-            Conflict(
-                mission_id=mission_id,
-                vendor_id=vendor_id,
-                field=found.field,
-                values=found.values,
-                preferred_value=found.preferred_value,
-                preferred_reason=found.preferred_reason,
-                resolution_action=found.action,
-                status=ConflictStatus.OPEN,
-            )
-        )
-    return conflicts

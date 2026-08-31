@@ -52,7 +52,7 @@ const PROVENANCE: Record<Provenance, MarkStyle> = {
   },
 };
 
-export function ProvenanceMark({ provenance }: { provenance: Provenance }) {
+function ProvenanceMark({ provenance }: { provenance: Provenance }) {
   const style = PROVENANCE[provenance] ?? PROVENANCE.unknown;
   return (
     <span
@@ -215,11 +215,6 @@ const STATUS_STYLES: Record<string, { label: string; tone: string; dotColor: str
     tone: "bg-blue-50 text-blue-700 border-blue-200",
     dotColor: "bg-blue-500",
   },
-  shortlisted: {
-    label: "Shortlisted",
-    tone: "bg-indigo-50 text-indigo-700 border-indigo-200",
-    dotColor: "bg-indigo-500",
-  },
   contacted: {
     label: "Outreach Sent",
     tone: "bg-amber-50 text-amber-700 border-amber-200",
@@ -257,11 +252,6 @@ const STATUS_STYLES: Record<string, { label: string; tone: string; dotColor: str
     tone: "bg-blue-50 text-blue-700 border-blue-200",
     dotColor: "bg-blue-500",
   },
-  outreach: {
-    label: "Outreach in Progress",
-    tone: "bg-amber-50 text-amber-700 border-amber-200",
-    dotColor: "bg-amber-500",
-  },
   awaiting_response: {
     label: "Awaiting Replies",
     tone: "bg-amber-50 text-amber-700 border-amber-200",
@@ -298,11 +288,6 @@ const STATUS_STYLES: Record<string, { label: string; tone: string; dotColor: str
     label: "Drafted",
     tone: "bg-slate-100 text-slate-700 border-slate-200",
     dotColor: "bg-slate-400",
-  },
-  awaiting: {
-    label: "Awaiting Reply",
-    tone: "bg-amber-50 text-amber-700 border-amber-200",
-    dotColor: "bg-amber-500",
   },
 };
 

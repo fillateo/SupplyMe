@@ -18,11 +18,6 @@ const STAGE_META: Record<string, { fill: string; label: string; order: number }>
     label: "Researching",
     order: 1,
   },
-  shortlisted: {
-    fill: "bg-indigo-500",
-    label: "Shortlisted",
-    order: 2,
-  },
   contacted: {
     fill: "bg-amber-500",
     label: "Outreach Sent",
@@ -48,7 +43,6 @@ const STAGE_META: Record<string, { fill: string; label: string; order: number }>
 const LEGEND_ITEMS = [
   "discovered",
   "researching",
-  "shortlisted",
   "contacted",
   "responded",
   "qualified",

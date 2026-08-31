@@ -316,8 +316,3 @@ def vendor_by_name(name: str) -> DemoVendor | None:
 
 def vendor_by_email(address: str) -> DemoVendor | None:
     return next((v for v in VENDORS if v.email and v.email.lower() == address.lower()), None)
-
-
-def vendor_by_domain(domain: str) -> DemoVendor | None:
-    host = (domain or "").lower().split("://")[-1].split("/")[0]
-    return next((v for v in VENDORS if v.domain in host or host in v.domain), None)

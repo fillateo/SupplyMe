@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.domain import identity
-from app.domain.conflicts import detect, detect_all
+from app.domain.conflicts import detect
 from app.domain.models import (
     Conflict,
     Evidence,
@@ -358,15 +358,6 @@ class TestConflicts:
         ])
         assert found is not None
         assert "disagree on payment terms" in found.question
-
-    def test_detect_all_only_reports_material_fields(self):
-        items = [
-            evidence("moq", 500, SourceType.OFFICIAL_WEBSITE),
-            evidence("moq", 1000, SourceType.SUPPLIER_EMAIL),
-            evidence("capabilities", "x", SourceType.OFFICIAL_WEBSITE),
-            evidence("capabilities", "y", SourceType.DIRECTORY),
-        ]
-        assert [c.field for c in detect_all("m", "v", items)] == ["moq"]
 
 
 # --------------------------------------------------------------------------
