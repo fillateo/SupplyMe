@@ -484,7 +484,7 @@ async def _run_research(
 
 
 #: How many of a supplier's own pages to open looking for a contact route.
-#: The homepage footer or `/kontak` answers almost every time; opening eight
+#: The homepage footer or `/contact` answers almost every time; opening eight
 #: pages to find an address that was on the first two is a slower mission for no
 #: extra suppliers.
 MAX_CONTACT_PAGES = 4
@@ -1952,19 +1952,42 @@ def _city_from(address: str | None) -> str | None:
     return parts[-2] if len(parts) >= 2 else None
 
 
+#: Market -> Places region code. Biases a Places search towards one country,
+#: which is the point at city and country scope. An unlisted market gets no
+#: region rather than a guessed one.
+_REGION_CODES = {
+    "united states": "US", "usa": "US", "us": "US", "america": "US",
+    "canada": "CA", "mexico": "MX",
+    "united kingdom": "GB", "uk": "GB", "germany": "DE", "france": "FR",
+    "italy": "IT", "spain": "ES", "portugal": "PT", "poland": "PL",
+    "indonesia": "ID", "malaysia": "MY", "singapore": "SG",
+    "vietnam": "VN", "thailand": "TH", "china": "CN", "india": "IN",
+    "japan": "JP", "south korea": "KR", "taiwan": "TW", "turkey": "TR",
+}
+
+
 def _region_code(market: str | None) -> str:
     if not market:
         return ""
-    return {"indonesia": "ID", "malaysia": "MY", "singapore": "SG",
-            "vietnam": "VN", "thailand": "TH", "china": "CN", "india": "IN"}.get(
-        market.strip().lower(), ""
-    )
+    return _REGION_CODES.get(market.strip().lower(), "")
+
+
+#: Market -> the currency a supplier there is most likely to quote in. Only a
+#: hint to the extraction prompt: whatever the supplier actually wrote wins, and
+#: `quotes.comparable_set` refuses to compare across currencies either way.
+_MARKET_CURRENCIES = {
+    "canada": "CAD", "mexico": "MXN",
+    "united kingdom": "GBP", "uk": "GBP",
+    "germany": "EUR", "france": "EUR", "italy": "EUR", "spain": "EUR",
+    "portugal": "EUR", "netherlands": "EUR", "poland": "PLN",
+    "indonesia": "IDR", "malaysia": "MYR", "singapore": "SGD",
+    "vietnam": "VND", "thailand": "THB", "china": "CNY", "india": "INR",
+    "japan": "JPY", "south korea": "KRW", "taiwan": "TWD", "turkey": "TRY",
+}
 
 
 def _currency_for(market: str | None) -> str:
+    """USD unless the market says otherwise — including when no market is set."""
     if not market:
         return "USD"
-    return {"indonesia": "IDR", "malaysia": "MYR", "singapore": "SGD",
-            "vietnam": "VND", "thailand": "THB", "china": "CNY", "india": "INR"}.get(
-        market.strip().lower(), "USD"
-    )
+    return _MARKET_CURRENCIES.get(market.strip().lower(), "USD")

@@ -166,7 +166,7 @@ That last one earns its place there by experience. A supplier the system cannot
 write to drops out of the mission whatever else is known about it, and a live
 run rejected every manufacturer it found for "no email or phone found" —
 contact details are rarely in a search snippet and usually on a page called
-`/kontak` that nothing links to. `app/domain/contacts.py` opens the supplier's
+`/contact` that nothing links to. `app/domain/contacts.py` opens the supplier's
 own pages and reads the address off them. Pattern matching is cheaper and more
 reliable here than a model call, and it cannot invent an address that almost
 looks right.

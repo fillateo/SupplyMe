@@ -291,7 +291,7 @@ cd backend && .venv/bin/python scripts/check_models.py --project YOUR_PROJECT --
 ./run.sh            # API on :8080, console on :3000
 ./run.sh mission    # one whole mission in the terminal, start to finish
 ./run.sh mail       # read the mailbox now instead of waiting for the poll
-./run.sh test       # 396 tests, ~59s, no network
+./run.sh test       # 400 tests, ~59s, no network
 ./run.sh status     # what is running, and what it has spent
 ./run.sh stop
 ./run.sh clean      # build caches only — never source or .env
@@ -447,7 +447,7 @@ control for the `PUT` means adding that method to
 ```bash
 ./run.sh test
 # or
-cd backend && .venv/bin/python -m pytest -q     # 396 tests, ~59 seconds, no network
+cd backend && .venv/bin/python -m pytest -q     # 400 tests, ~59 seconds, no network
 ```
 
 - **Unit** — evidence classification, identity resolution, quote normalisation, conflict detection, scoring, number parsing, policy, injection defence, and the ADK tool guard
@@ -467,7 +467,7 @@ to.
 
 - **Model reachability is per project and per location.** `gemini-3.5-flash` answers from Vertex's `global` endpoint and 404s from `us-central1`, with nothing in the error to suggest it exists elsewhere. Hence the ladder in `app/config.py`, `scripts/check_models.py`, and two separate location settings — Cloud Tasks rejects `global`
 - **The ladder will fall back past `gemini-3.5-*` rather than refuse to start.** Its lower rungs are `gemini-3-flash-preview` and `gemini-2.5-*`, so a project that cannot reach a 3.5 model gets an older one instead of a startup failure. That is the right default for someone trying the thing out and the wrong one for a deployment that has to be on a stated generation, so pin `SUPPLYME_REASONING_MODEL` and `SUPPLYME_FAST_MODEL` where the generation matters — the live deployment does — and read `/api/health` → `.model` to see which one answered
-- **The market defaults lean Indonesian.** The *industry* is derived per mission and nothing in `app/` knows what a bottle is, but the locale is not: `domain/contacts.py` looks for `/kontak` and `/hubungi-kami` alongside `/contact` and normalises bare phone numbers to `+62`, and `_region_code` / `_currency_for` in the workflow only know seven Asian markets before falling back to no region and USD. Sourcing from Europe works and is exercised by the console's Portugal example; it just gets less local help
+- **The market defaults are American, and a default is a guess.** The *industry* is derived per mission and nothing in `app/` knows what a bottle is, but the locale has to default to something: `domain/contacts.py` looks for `/contact`, `/contact-us` and `/request-a-quote`, reads phone numbers in the shapes US sites publish them, and treats a bare ten-digit number as North American. `_region_code` and `_currency_for` cover about twenty markets and fall back to no region and USD. Two consequences worth knowing: a supplier who writes `021-5566778` is read as a US number rather than an Indonesian one, because nothing in the string says otherwise; and identity resolution only merges a foreign number across formats when the country code is written out. Sourcing outside the US works — the multilingual quote vocabulary is unchanged, and a live run against Indonesian suppliers is what found most of the bugs in this repo — it just gets less local help
 - **The Gmail inbound path has not been run against a live mailbox.** It is implemented and its workflow half is exercised on every run; the OAuth half needs a consent screen this project has not set up. IMAP is what runs today
 - **Live research is only as good as what suppliers publish** — which in this industry is often a phone number and a WhatsApp link
 - **The spend cap is a stop, not a to-the-cent limit.** A live mission whose $1.00 ceiling fired after 222 model calls finished its accounting at $1.52 over 319, because the ADK tool loop and grounded search billed without re-checking the cap. Both check it now, but requests already in flight still land, so the real ceiling is the cap plus a few calls

@@ -3,8 +3,8 @@
 A supplier the system cannot contact is worth nothing to a buyer, however well
 researched: the whole second half of a mission — the quotation, the disagreement,
 the confirmed MOQ — begins with an email address. In practice that address is
-almost never in a search snippet and almost always in a page footer or on a page
-called `/kontak`, which no search result links to.
+almost never in a search snippet and almost always in a page footer or on a
+`/contact` page, which no search result links to.
 
 So this module does not ask a model. Reading an address off a page is pattern
 matching, and pattern matching is cheaper, faster and more reliable here than a
@@ -19,17 +19,17 @@ from dataclasses import dataclass
 
 from .identity import name_tokens
 
-#: Where a contact route lives, in the two languages this market publishes in.
-#: Ordered by how often they pay off, because the caller stops at the first hit.
+#: Where a contact route lives on a US manufacturer's site. Ordered by how often
+#: they pay off, because the caller stops at the first hit.
 CONTACT_PATHS: tuple[str, ...] = (
     "",                       # the homepage footer answers more often than not
     "/contact",
-    "/kontak",
-    "/hubungi-kami",
     "/contact-us",
-    "/kontak-kami",
+    "/contactus",
     "/about",
-    "/tentang-kami",
+    "/about-us",
+    "/quote",                 # US industrial sites often route enquiries here
+    "/request-a-quote",
 )
 
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,24}")
@@ -44,10 +44,13 @@ _EMAIL_NOISE = (
 
 #: Which address to prefer when a page lists several. `sales` before `info`
 #: because a sourcing enquiry sent to the sales desk gets a quotation, and one
-#: sent to the switchboard gets forwarded, eventually.
+#: sent to the switchboard gets forwarded, eventually. `rfq` and `quotes` are
+#: ahead of both: a US manufacturer that publishes one is telling you where a
+#: request for quotation is actually read.
 _ROLE_PRIORITY = (
-    "sales", "penjualan", "order", "marketing", "inquiry", "enquiry",
-    "info", "contact", "kontak", "cs", "customerservice", "hello", "halo",
+    "rfq", "quote", "quotes", "sales", "order", "orders", "purchasing",
+    "inquiry", "inquiries", "enquiry", "estimating", "marketing",
+    "info", "contact", "customerservice", "cs", "hello", "support",
 )
 
 #: Addresses that exist in order not to be replied to.
@@ -57,20 +60,27 @@ _UNREACHABLE_LOCAL_PARTS = ("noreply", "no-reply", "donotreply", "postmaster", "
 #: Kept as a last resort rather than discarded — a privacy desk is still a way
 #: in when a supplier publishes nothing else — but never preferred over sales.
 _LOW_VALUE_LOCAL_PARTS = (
-    "privacy", "legal", "dpo", "gdpr", "career", "careers", "karir", "rekrutmen",
-    "recruitment", "hrd", "webmaster", "press", "media", "investor",
+    "privacy", "legal", "dpo", "gdpr", "ccpa", "career", "careers", "jobs",
+    "recruiting", "recruitment", "hr", "webmaster", "press", "media",
+    "investor", "investors", "unsubscribe",
 )
 
-#: Indonesian landlines and mobiles, and anything already in E.164.
+#: North American numbers in the shapes US sites actually publish them —
+#: `(310) 555-1234`, `310.555.1234`, `+1 310 555 1234`, `1-800-555-0199` — and
+#: anything already in E.164, so a supplier outside the US is still readable.
+#: Separators are optional because plenty of sites run the digits together; what
+#: keeps a 10-digit minimum order from being read as a phone number is the hint
+#: window in `phones_in`, not this pattern.
 _PHONE_RE = re.compile(
-    r"(?:\+?62|0)(?:[\s.\-()]{0,2}\d){8,13}"
+    r"(?:\+?1[\s.\-]?)?\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4}"
     r"|\+\d{1,3}(?:[\s.\-()]{0,2}\d){7,14}"
 )
 
 #: Text near a number that says it really is a phone number.
 _PHONE_HINTS = (
-    "telp", "telepon", "tlp", "phone", "hp", "wa", "whatsapp", "fax",
-    "hubungi", "call", "mobile", "kontak", "contact", "tel",
+    "phone", "tel", "telephone", "call", "mobile", "cell", "fax",
+    "toll", "toll-free", "office", "direct", "contact", "sales",
+    "whatsapp",          # global, and still how many exporters prefer to talk
 )
 
 
@@ -224,19 +234,21 @@ def _display_phone(raw: str) -> str:
     """E.164 for storage.
 
     Deliberately not `identity.normalize_phone`, which keeps only the last
-    eleven digits so that `021-...` and `+62 21 ...` compare equal. That is the
-    right key for matching two records and the wrong string to dial: it drops
-    the country code it just added.
+    eleven digits so that `(310) 555-1234` and `+1 310 555 1234` compare equal.
+    That is the right key for matching two records and the wrong string to dial:
+    it drops the country code it just added.
+
+    A bare ten-digit number is assumed to be North American, because that is the
+    market this defaults to. Anything already carrying a `+` or an international
+    prefix is left as the site wrote it.
     """
     digits = re.sub(r"\D", "", raw)
     if raw.strip().startswith("+"):
         return f"+{digits}"
     if digits.startswith("00"):
         return f"+{digits[2:]}"
-    if digits.startswith("0"):
-        return f"+62{digits[1:]}"
-    if digits.startswith("62"):
-        return f"+{digits}"
+    if len(digits) == 10:                      # NANP, country code omitted
+        return f"+1{digits}"
     return f"+{digits}"
 
 

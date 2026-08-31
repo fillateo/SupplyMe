@@ -1032,11 +1032,11 @@ class TestContactRouteDiscovery:
 
     In a live run every discovered manufacturer was rejected for "no email or
     phone found", because a contact route is almost never in a search snippet and
-    almost always on a page called `/kontak` that nothing links to. Research must
+    almost always on a page called `/contact` that nothing links to. Research must
     go and open it.
     """
 
-    def _runtime_with_contact_page(self, page_text: str, *, contact_path: str = "/kontak"):
+    def _runtime_with_contact_page(self, page_text: str, *, contact_path: str = "/contact"):
         runtime = build()
         original_fetch = runtime.providers.search.fetch
         opened: list[str] = []
@@ -1054,7 +1054,7 @@ class TestContactRouteDiscovery:
 
     async def test_an_address_only_on_the_contact_page_is_found_and_used(self):
         runtime, opened = self._runtime_with_contact_page(
-            "PT Sinar Pump Indonesia\nTelp: 021 2233 4455\n"
+            "Sinar Pump Corp\nPhone: 310 555 4455\n"
             "Email: sales@sinarpump.example.com\n"
         )
         await runtime.start(concurrency=8)
@@ -1066,9 +1066,9 @@ class TestContactRouteDiscovery:
             target = next((v for v in vendors if "Sinar Pump" in v.name), None)
             assert target is not None, "the fixture vendor was never discovered"
             assert target.email == "sales@sinarpump.example.com", (
-                "the address on /kontak was never picked up"
+                "the address on /contact was never picked up"
             )
-            assert any(url.endswith("/kontak") for url in opened), (
+            assert any(url.endswith("/contact") for url in opened), (
                 "the contact page was never opened"
             )
         finally:
@@ -1076,7 +1076,7 @@ class TestContactRouteDiscovery:
 
     async def test_the_address_is_evidence_like_any_other_fact(self):
         runtime, _ = self._runtime_with_contact_page(
-            "Email: sales@sinarpump.example.com\nTelp: 021 2233 4455\n"
+            "Email: sales@sinarpump.example.com\nPhone: 310 555 4455\n"
         )
         await runtime.start(concurrency=8)
         try:
@@ -1087,7 +1087,7 @@ class TestContactRouteDiscovery:
             evidence = await runtime.repo.vendor_evidence(target.id)
             contact = [e for e in evidence if e.field == "email"]
             assert contact, "the address was set without a source"
-            assert contact[0].source_url.endswith("/kontak")
+            assert contact[0].source_url.endswith("/contact")
             assert "sales@sinarpump.example.com" in contact[0].evidence_excerpt
         finally:
             await runtime.stop()
@@ -1144,9 +1144,9 @@ class TestContactRouteDiscovery:
             return await original_search(query, limit=limit)
 
         async def fetch(url):
-            if "sinarpump.example.com" in url and url.endswith("/kontak"):
+            if "sinarpump.example.com" in url and url.endswith("/contact"):
                 return PageContent(url=url, title="Kontak",
-                                   text="Email: sales@sinarpump.example.com\nTelp: 021 2233 4455")
+                                   text="Email: sales@sinarpump.example.com\nPhone: 310 555 4455")
             return await original_fetch(url)
 
         runtime.providers.search.search = search

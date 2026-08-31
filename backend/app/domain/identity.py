@@ -15,12 +15,20 @@ from dataclasses import dataclass
 
 from .models import Vendor
 
-#: Legal-form and filler tokens that carry no identifying information in
-#: Indonesian and common international company names.
+#: Legal-form and filler tokens that carry no identifying information. US forms
+#: lead, because that is the market this defaults to, but the non-US ones stay:
+#: this list exists so two records of one company match, and a supplier found
+#: under `PT Kemasan Wangi` and `Kemasan Wangi` is the same factory whichever
+#: market the mission is in. Breadth here costs nothing and removing it would
+#: quietly split records apart.
 _NOISE = {
-    "pt", "cv", "ud", "tbk", "persero", "inc", "llc", "ltd", "co", "corp",
-    "company", "limited", "gmbh", "sa", "bv", "sdn", "bhd", "group", "indonesia",
-    "international", "global", "the", "and",
+    # US and anglophone
+    "inc", "inc.", "incorporated", "llc", "llp", "lp", "ltd", "limited",
+    "co", "corp", "corporation", "company", "plc", "holdings", "group",
+    "usa", "us", "america", "american", "international", "global", "the", "and",
+    # elsewhere, kept so identity resolution still works outside the US
+    "gmbh", "sa", "bv", "ag", "nv", "srl", "spa", "pty",
+    "pt", "cv", "ud", "tbk", "persero", "sdn", "bhd",
 }
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
@@ -46,11 +54,12 @@ def normalize_domain(value: str | None) -> str | None:
     return host or None
 
 
-def normalize_phone(value: str | None, default_country: str = "62") -> str | None:
+def normalize_phone(value: str | None, default_country: str = "1") -> str | None:
     """Reduce a phone number to comparable digits.
 
-    Indonesian numbers appear as `021-...`, `+62 21 ...` and `62...` in the same
-    dataset; without this they never match.
+    US numbers appear as `(310) 555-1234`, `+1 310 555 1234` and `310.555.1234`
+    in the same dataset; without this they never match. `default_country` is what
+    a number written with a national trunk prefix is assumed to belong to.
     """
     if not value:
         return None
@@ -60,7 +69,14 @@ def normalize_phone(value: str | None, default_country: str = "62") -> str | Non
     if digits.startswith("00"):
         digits = digits[2:]
     if digits.startswith("0"):
+        # A national trunk prefix stands in for the country code.
         digits = default_country + digits[1:]
+    elif len(digits) == 10:
+        # Ten digits, no country code and no trunk prefix to replace. This is
+        # how the NANP is normally published — `(310) 555-7788` — and without
+        # this it never compared equal to the same number written `+1 310 ...`,
+        # so one supplier listed both ways stayed two vendors.
+        digits = default_country + digits
     return digits[-11:] if len(digits) > 11 else digits
 
 

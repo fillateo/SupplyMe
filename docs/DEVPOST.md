@@ -289,7 +289,7 @@ wall-clock time is a human not replying yet. Our suite drives whole missions
 against test doubles that live in `tests/` and are **reachable from nowhere in
 `app/`** — so we can provoke a supplier who never answers, or one whose site
 contradicts their quote, while the product itself has nothing to fall back to.
-396 tests, ~59 seconds, no network.
+400 tests, ~59 seconds, no network.
 
 ## Accomplishments that we're proud of
 

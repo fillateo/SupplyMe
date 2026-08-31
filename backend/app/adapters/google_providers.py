@@ -52,11 +52,14 @@ USER_AGENT = (
 )
 
 #: Sent with every page fetch. A request with no Accept header looks like a
-#: scraper to a WAF, and this market's sites serve Indonesian when asked.
+#: scraper to a WAF. `Accept-Language` asks for US English and accepts anything
+#: else rather than insisting: a supplier who only publishes in their own
+#: language is still worth reading, and the agents are prompted to quote what a
+#: source actually says rather than to translate it.
 FETCH_HEADERS = {
     "User-Agent": USER_AGENT,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Language": "en-US,en;q=0.9,*;q=0.5",
 }
 FETCH_TIMEOUT = 15.0
 MAX_PAGE_BYTES = 800_000

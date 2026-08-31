@@ -165,7 +165,7 @@ class CommunicationAgent(Agent):
         )
 
     async def extract_quote(
-        self, *, body: str, questions_asked: list[str], currency_hint: str = "IDR",
+        self, *, body: str, questions_asked: list[str], currency_hint: str = "USD",
         order_quantity: int | None = None, components: list[str] | None = None,
         mission_id: str = "", vendor_id: str | None = None,
     ) -> QuoteExtraction:

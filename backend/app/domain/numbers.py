@@ -27,9 +27,10 @@ _MONTHS = re.compile(r"\b(month|bulan)", re.I)
 def parse_decimal(text: str) -> float | None:
     """Read one number written in either thousands convention.
 
-    `8.500` is eight and a half thousand in Indonesian and eight-point-five in
-    English. The disambiguation is positional: a lone separator followed by
-    exactly three digits is a thousands separator.
+    `8.500` is eight and a half thousand under the European convention and
+    eight-point-five under the US one, and suppliers quote in both. The
+    disambiguation is positional: a lone separator followed by exactly three
+    digits is a thousands separator.
     """
     cleaned = text.strip().rstrip(".,")
     if not cleaned:

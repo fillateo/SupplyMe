@@ -129,9 +129,9 @@ You have tools. Use them deliberately, not exhaustively:
   first; it is where MOQ, lead time and customization are usually stated.
 - `read_page` on the supplier's contact page when you have not found an email
   address. Search results rarely link to it, but it is nearly always one hop
-  from the homepage — `/contact`, `/kontak`, `/hubungi-kami` — or in the footer
-  of the page you already read. A supplier with no contact route cannot be
-  asked anything, so this is worth one page on its own.
+  from the homepage — `/contact`, `/contact-us`, `/request-a-quote` — or in the
+  footer of the page you already read. A supplier with no contact route cannot
+  be asked anything, so this is worth one page on its own.
 - `query_maps` to confirm the business exists at an address and to pick up a
   published phone number.
 

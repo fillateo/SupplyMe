@@ -47,8 +47,14 @@ class TestIdentity:
         assert identity.compare(a, b).is_same
 
     def test_same_phone_merges_across_formats(self):
-        a = vendor(name="Alpha", phone="021-5566778")
-        b = vendor(name="Beta", phone="+62 21 5566 778")
+        a = vendor(name="Alpha", phone="(310) 555-7788")
+        b = vendor(name="Beta", phone="+1 310 555 7788")
+        assert identity.compare(a, b).is_same
+
+    def test_a_non_us_number_still_merges_across_its_own_formats(self):
+        """The default market is the US; the matcher is not limited to it."""
+        a = vendor(name="Alpha", phone="+62 21 5566 778")
+        b = vendor(name="Beta", phone="62 21 5566 778")
         assert identity.compare(a, b).is_same
 
     def test_same_name_different_city_is_not_the_same_business(self):

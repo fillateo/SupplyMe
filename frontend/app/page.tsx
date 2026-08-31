@@ -38,27 +38,27 @@ type Example = { label: string; scope: SearchScope; location: string; objective:
 // tool for whichever industry that brief happened to be in.
 const EXAMPLES: Example[] = [
   {
-    label: "Fragrance",
+    label: "Beverage",
     scope: "country",
-    location: "Indonesia",
+    location: "United States",
     objective:
-      "Launch a 50ml eau de parfum in Indonesia. Initial production: 500 units. " +
-      "Premium packaging with a gold atomizer pump, and minimal risk on the first batch.",
+      "Launch a 12oz canned cold-brew coffee in the United States. 5,000 units to start. " +
+      "Aluminium cans, shrink sleeves, co-packing, and low minimums on the first run.",
   },
   {
     label: "Furniture",
     scope: "country",
-    location: "Vietnam",
+    location: "United States",
     objective:
-      "Produce a 1.5m solid oak dining table for export from Vietnam. 300 units to start. " +
-      "FSC-certified timber, flat-pack packaging, and a finish that survives shipping.",
+      "Produce a 6ft solid walnut conference table, 200 units, made in the United States. " +
+      "FSC-certified hardwood, steel base, flat-pack packaging that survives freight.",
   },
   {
     label: "Apparel",
-    scope: "country",
-    location: "Portugal",
+    scope: "city",
+    location: "Los Angeles",
     objective:
-      "Manufacture 1,000 heavyweight organic-cotton hoodies in Portugal. " +
+      "Manufacture 1,000 heavyweight organic-cotton hoodies in Los Angeles. " +
       "Embroidered logo, woven labels, GOTS certification, low minimums on the first run.",
   },
   {
@@ -67,7 +67,7 @@ const EXAMPLES: Example[] = [
     location: "",
     objective:
       "Build a 10,000mAh USB-C power bank, 5,000 units. " +
-      "Cells, PCBA, injection-moulded enclosure, retail box, and CE/FCC-ready assembly.",
+      "Cells, PCBA, injection-moulded enclosure, retail box, and FCC-ready assembly.",
   },
 ];
 
@@ -219,7 +219,7 @@ export default function MissionsPage() {
                     onChange={(event) => setLocation(event.target.value)}
                     disabled={scope === "global"}
                     aria-label={scope === "city" ? "City" : "Country"}
-                    placeholder={scope === "city" ? "Surabaya" : scope === "global" ? "Worldwide" : "Indonesia"}
+                    placeholder={scope === "city" ? "Los Angeles" : scope === "global" ? "Worldwide" : "United States"}
                     className="field flex-1 text-sm sm:max-w-[16rem]"
                   />
                 </div>
