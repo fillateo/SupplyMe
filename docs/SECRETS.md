@@ -36,10 +36,12 @@ drop the shared-secret check and leave Cloud Run IAM as the only lock.
 
 ## Known dependency advisories
 
-`npm audit --omit=dev` reports two issues in the console, both from the same
-root: the `postcss@8.4.31` that `next@15.5.24` bundles internally. The only fix
-npm offers is `next@16`, a major upgrade, and it is not being taken days before a
-submission.
+`npm audit --omit=dev` reports two findings in the console — one high, one
+moderate — covering four postcss advisories, all from the same root: the
+`postcss@8.4.31` that `next@15.5.24` bundles internally at
+`node_modules/next/node_modules/postcss`. The console's own direct dependency is
+`postcss@8.5.26`, which is not affected. The only fix npm offers is `next@16`, a
+major upgrade, and it is not being taken hours before a submission.
 
 All four advisories require postcss to process CSS an attacker influences —
 through a hostile stylesheet or an attacker-controlled `sourceMappingURL`. This

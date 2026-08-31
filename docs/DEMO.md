@@ -34,6 +34,9 @@ Check two things before you press record:
 - `/api/health` shows `GoogleSearchProvider`, `PlacesProvider` and
   `RedirectingMailProvider`. If any of them says something else, the
   environment is wrong.
+- `/api/health` → `.model` names the model each tier resolved to. This is the
+  one number worth reading out loud on camera, because the adapter is called
+  `GeminiLLM` whichever generation answered.
 - The health notes say mail is going to **your** address. If that line is
   missing, outreach will go to real businesses.
 
@@ -75,6 +78,9 @@ a factory in Tangerang.
 Nothing in the console is animated. If a judge asks whether it is real:
 
 ```bash
+# Which model, through which backend, and which adapters are bound
+curl -s localhost:8080/api/health | jq '.model, .providers'
+
 # The stored event log the timeline renders from
 curl -s localhost:8080/api/missions/$MID/activity | jq '.[-12:] | .[] | {type, status, emitted}'
 

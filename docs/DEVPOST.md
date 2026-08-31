@@ -220,12 +220,15 @@ computation: `MOQ 500 fits an order of 500`, not a progress bar.
   depends on no vendor SDK
 * **State & messaging** — Firestore, Pub/Sub push with dead-lettering, Cloud
   Tasks for follow-ups and retries
-* **The outside world** — Google Programmable Search, Google Places, and the
-  mailbox: SMTP out and IMAP in on a single app password, which is what runs.
-  The Gmail API push path is implemented behind the same port and its workflow
-  half is exercised on every run, but the OAuth half has never been pointed at a
-  live mailbox — so replies arrive on a one-minute Cloud Scheduler poll rather
-  than being pushed
+* **The outside world** — Google Places, and the mailbox: SMTP out and IMAP in
+  on a single app password, which is what runs. Two integrations sit behind the
+  same ports as implemented alternatives that this deployment has never turned
+  on, and we would rather name them than let the stack list imply otherwise:
+  **Google Programmable Search** (unconfigured, so every search in every run has
+  gone through Gemini's own search grounding — which is also a Gemini call, and
+  metered as one) and the **Gmail API push path** (implemented, its workflow half
+  exercised on every test run, but the OAuth consent screen was never set up, so
+  replies arrive on a one-minute Cloud Scheduler poll rather than being pushed)
 * **Console** — Next.js 15, React 19, TypeScript, Tailwind; proxies every API
   call server-side so no credential ever reaches client JavaScript
 * **Infrastructure** — Cloud Run (scale to zero), Secret Manager, Cloud
@@ -286,7 +289,7 @@ wall-clock time is a human not replying yet. Our suite drives whole missions
 against test doubles that live in `tests/` and are **reachable from nowhere in
 `app/`** — so we can provoke a supplier who never answers, or one whose site
 contradicts their quote, while the product itself has nothing to fall back to.
-388 tests, ~59 seconds, no network.
+393 tests, ~59 seconds, no network.
 
 ## Accomplishments that we're proud of
 
@@ -359,6 +362,11 @@ checked on them:
 * **The Gmail push path has never run against a live mailbox.** It is
   implemented, and the workflow half of it is exercised on every test run, but
   the OAuth consent screen was never set up. IMAP polling is what actually runs.
+* **Google Programmable Search has never been configured.** The JSON API client
+  is implemented and is the preferred path when an engine id is set, but neither
+  the local environment nor the deployment sets one, so every search in every
+  run has gone through Gemini search grounding. `/api/health` says which is
+  bound.
 * **Currencies are never converted.** Quotes in different currencies are shown
   side by side and excluded from the price comparison rather than guessed at.
 * **Cost scales with the shortlist, not the ambition.** Eight suppliers is $0.29;
@@ -368,6 +376,13 @@ checked on them:
 * **The API has no authentication.** Cloud Run is deliberately public so a judge
   can open the link. What bounds it is the per-mission spend caps, the outreach
   cap, and the mail redirect — not the door.
+* **The spend cap is a stop, not a to-the-cent limit.** We found this by reading
+  our own live missions rather than our own tests: one whose $1.00 ceiling fired
+  after 222 model calls finished at **$1.52 over 319**, because the ADK tool loop
+  and grounded search billed against the meter without ever asking it whether
+  they were allowed to. Both consult it now. What is left is the handful of
+  requests already in flight when the ceiling trips, and we would rather state
+  the residue than round it away.
 
 ## What's next for SupplyMe
 
@@ -403,10 +418,10 @@ of problem — and all of them are currently done by someone with 41 tabs open.
 
 ## Built With
 
-Python, FastAPI, Google ADK, Google Gemini, Vertex AI, Pydantic, Firestore, Google Cloud Pub/Sub, Google Cloud Tasks, Cloud Run, Secret Manager, Google Places API, Google Programmable Search, Gmail API, SMTP, IMAP, Next.js, React, TypeScript, Tailwind CSS, OpenTofu, Terraform, Docker, Pytest, HTTPX
+Python, FastAPI, Google ADK, Google Gemini, Vertex AI, Pydantic, Firestore, Google Cloud Pub/Sub, Google Cloud Tasks, Cloud Run, Cloud Scheduler, Secret Manager, Google Places API, SMTP, IMAP, Next.js, React, TypeScript, Tailwind CSS, OpenTofu (Terraform), Docker, Pytest, HTTPX
 
 <details>
-<summary>Plain list for the Devpost tag field (25 tags)</summary>
+<summary>Plain list for the Devpost tag field (24 tags)</summary>
 
 ```
 python
@@ -419,10 +434,9 @@ firestore
 google-cloud-pubsub
 google-cloud-tasks
 cloud-run
+cloud-scheduler
 secret-manager
 google-places-api
-google-programmable-search
-gmail-api
 smtp
 imap
 next.js

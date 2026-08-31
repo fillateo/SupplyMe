@@ -71,6 +71,30 @@ Reaching a spend cap raises `BudgetExceeded`, which the orchestrator treats as
 **terminal, not retryable** — retrying is precisely what the cap exists to
 prevent. The mission's `failure_reason` says which cap and what it had spent.
 
+### The cap stops the mission; it does not stop it to the cent
+
+Measured, on a live mission sourcing stainless steel water bottles:
+
+```
+failure_reason : stopped on cost: mission reached its $1.00 cap after 222 model calls
+final spend    : 319 model calls, $1.52
+```
+
+The ceiling fired where it should. The mission then spent another 97 calls and
+$0.52 finishing what was already in flight, because the check lived only at
+`GeminiLLM.structured` — the seam every agent *except* the ADK tool loop goes
+through — while the loop and grounded search recorded their spend without ever
+asking whether they were allowed to make it. Both now check the same meter
+before each request (`ThrottledGemini.generate_content_async`,
+`GoogleSearchProvider._grounded`), which removes the large part of that gap.
+
+What remains is bounded and real: up to `SUPPLYME_MAX_CONCURRENT_MODEL_CALLS`
+requests can pass the check before any of them records, so the true ceiling is
+the cap plus a handful of in-flight calls rather than the cap exactly. Set the
+cap where an overshoot of a few calls is still affordable, and read the mission's
+own `spend` for what it actually cost. A guard that stops a runaway is not the
+same thing as a billing meter, and the authoritative number is Cloud Billing.
+
 ### The one that mattered most
 
 Google ADK defaults `max_llm_calls` to **500 per agent run**. A research agent

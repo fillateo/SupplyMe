@@ -66,6 +66,7 @@ one level up, so no handler can forget it:
 | Nothing found at all | Discovery coming back empty is an answer: `_maybe_finish` still emits a recommendation once every branch is in, so a mission cannot sit in `discovering` forever |
 | Irreversible action | A second reservation keyed on `mission+vendor+action+version` |
 | Concurrent writers | `store.mutate` — a Firestore transaction, an asyncio lock in memory |
+| Clients outliving the process | `Runtime.stop` closes the search, Places and Firestore clients it opened |
 
 ## The dedup key
 
@@ -134,6 +135,12 @@ deciding which results are real suppliers, extracting claims from pages,
 judging whether a source supports a brand relationship, drafting emails,
 extracting quotes from messy replies, deciding what a follow-up still needs to
 ask, writing the final narrative.
+
+**Which model:** resolved once per process from the ladder in `app/config.py`,
+or pinned by `SUPPLYME_REASONING_MODEL` / `SUPPLYME_FAST_MODEL` — the live
+deployment pins both. `GET /api/health` reports what each tier resolved to,
+which backend served it, and the ladder that produced it, because the adapter
+class is `GeminiLLM` whichever generation answered.
 
 **Chooses its own path in exactly one place:** vendor research, which runs as a
 Google ADK `LlmAgent` with `search_web`, `read_page` and `query_maps`.

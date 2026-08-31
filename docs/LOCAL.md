@@ -54,7 +54,7 @@ cd backend
 .venv/bin/python -m pytest -q
 ```
 
-388 tests, about 59 seconds. They cover the whole workflow end to end,
+393 tests, about 59 seconds. They cover the whole workflow end to end,
 including every message being delivered twice, a search outage, a model
 timeout, a mid-mission restart, and a supplier reply containing a
 prompt-injection payload.
@@ -258,7 +258,7 @@ and `/api/health` lists every adapter actually bound.
 | `SUPPLYME_FAST_MODEL` | resolved | cheap model for extraction and classification |
 | `SUPPLYME_MAPS_API_KEY` | — | Google Places. Required; unset is a startup failure |
 | `SUPPLYME_SEARCH_API_KEY` / `SUPPLYME_SEARCH_ENGINE_ID` | — | Programmable Search; unset falls back to Gemini grounding |
-| `SUPPLYME_SMTP_USER` / `SUPPLYME_SMTP_PASSWORD` | — | real outbound mail without OAuth. Outbound only |
+| `SUPPLYME_SMTP_USER` / `SUPPLYME_SMTP_PASSWORD` | — | the mailbox in both directions: SMTP out, IMAP in, one app password, no OAuth |
 | `SUPPLYME_MAIL_REDIRECT_TO` | — | send every message here instead of to the supplier. Use it |
 | `SUPPLYME_MAX_CONCURRENT_RESEARCH` | `3` | caps the widest fan-out so a mission cannot rate-limit itself |
 | `SUPPLYME_MAX_CONCURRENT_MODEL_CALLS` | `4` | Gemini requests in flight, process-wide, ADK's included |

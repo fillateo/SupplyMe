@@ -219,7 +219,7 @@ later causes the system to email and ask.
 - **AI Models**: Gemini 3.5 Flash on Vertex AI, resolved from a reachability ladder in `app/config.py`
 - **Data**: Firestore (missions, vendors, evidence, quotes, conflicts, approvals, event log)
 - **Messaging**: Pub/Sub push with dead-lettering · Cloud Tasks for follow-ups and retries
-- **External APIs**: Google Programmable Search (or Gemini grounding) · Google Places · Gmail API / SMTP + IMAP
+- **External APIs**: Google Places · SMTP + IMAP on one Gmail app password · Gemini search grounding (the Programmable Search client is implemented and preferred when `SUPPLYME_SEARCH_ENGINE_ID` is set; this deployment does not set one) · Gmail API push (implemented, never run against a live mailbox)
 - **Frontend**: Next.js 15 · React 19 · TypeScript · Tailwind
 - **Infrastructure**: Cloud Run (scale to zero) · Secret Manager · Cloud Logging · OpenTofu
 
@@ -291,7 +291,7 @@ cd backend && .venv/bin/python scripts/check_models.py --project YOUR_PROJECT --
 ./run.sh            # API on :8080, console on :3000
 ./run.sh mission    # one whole mission in the terminal, start to finish
 ./run.sh mail       # read the mailbox now instead of waiting for the poll
-./run.sh test       # 388 tests, ~59s, no network
+./run.sh test       # 393 tests, ~59s, no network
 ./run.sh status     # what is running, and what it has spent
 ./run.sh stop
 ./run.sh clean      # build caches only — never source or .env
@@ -303,7 +303,12 @@ Open **http://localhost:3000**, describe a product — *"500 × 50ml EDP,
 Indonesia, premium packaging, minimize first-batch risk"* — and watch the supply
 chain, suppliers, evidence and emails fill in live.
 
-`GET /api/health` names every adapter actually bound, and which model resolved.
+`GET /api/health` names every adapter actually bound and the model each tier
+resolved to — which is how you check the Gemini generation from outside the code:
+
+```bash
+curl -s localhost:8080/api/health | jq '.model, .providers'
+```
 
 ## 🔧 Environment Variables
 
@@ -379,7 +384,7 @@ shortlist of five researched properly costs a third of twelve researched badly.
 
 | Guard | Value | Effect |
 | --- | --- | --- |
-| Spend ceiling | `$1.00` / mission | Fails the mission with a reason, and is deliberately **not retried** |
+| Spend ceiling | `$1.00` / mission | Fails the mission with a reason, and is deliberately **not retried**. Checked before every request on every path that spends; a few concurrent calls can still land after it fires, so treat it as a stop rather than a to-the-cent limit — see [docs/COST.md](./docs/COST.md) |
 | Model calls | `300` / mission | Same |
 | ADK research loop | `12` calls | Against ADK's default of 500 — the largest unattended-spend risk in the system |
 | Fast-tier thinking | `0` tokens | Thinking is billed as output; this alone cut cost per call ~60% |
@@ -415,11 +420,14 @@ so the caps are what bounds it rather than a switch.
 - **Conflict view** — what the website said, what the email said, and how it was resolved
 - **Communications** — every thread, with asked / answered / unanswered questions
 
-The API also exposes `PUT /api/missions/{id}/weights` to re-rank a mission
-against new priorities without re-researching, and read endpoints for a single
-vendor's full dossier (`GET .../vendors/{vendor_id}`), the live ranking
-(`GET .../ranking`) and vendor map coordinates (`GET .../map`) — all covered by
-`tests/test_api.py`, none yet wired to a console control.
+Four API capabilities have no console control behind them, and are reachable
+only with `curl`: `PUT /api/missions/{id}/weights` re-ranks a mission against new
+priorities without re-researching, and `GET .../vendors/{vendor_id}`,
+`GET .../ranking` and `GET .../map` return a single vendor's full dossier, the
+live recomputed ranking, and vendor coordinates. All four are covered by
+`tests/test_api.py`. The console's proxy forwards only GET and POST, so a
+control for the `PUT` means adding that method to
+`frontend/app/api/[...path]/route.ts` as well.
 
 ### Key API endpoints
 
@@ -439,7 +447,7 @@ vendor's full dossier (`GET .../vendors/{vendor_id}`), the live ranking
 ```bash
 ./run.sh test
 # or
-cd backend && .venv/bin/python -m pytest -q     # 388 tests, ~59 seconds, no network
+cd backend && .venv/bin/python -m pytest -q     # 393 tests, ~59 seconds, no network
 ```
 
 - **Unit** — evidence classification, identity resolution, quote normalisation, conflict detection, scoring, number parsing, policy, injection defence, and the ADK tool guard
@@ -458,8 +466,11 @@ to.
 ## ⚠️ Limitations
 
 - **Model reachability is per project and per location.** `gemini-3.5-flash` answers from Vertex's `global` endpoint and 404s from `us-central1`, with nothing in the error to suggest it exists elsewhere. Hence the ladder in `app/config.py`, `scripts/check_models.py`, and two separate location settings — Cloud Tasks rejects `global`
+- **The ladder will fall back past `gemini-3.5-*` rather than refuse to start.** Its lower rungs are `gemini-3-flash-preview` and `gemini-2.5-*`, so a project that cannot reach a 3.5 model gets an older one instead of a startup failure. That is the right default for someone trying the thing out and the wrong one for a deployment that has to be on a stated generation, so pin `SUPPLYME_REASONING_MODEL` and `SUPPLYME_FAST_MODEL` where the generation matters — the live deployment does — and read `/api/health` → `.model` to see which one answered
+- **The market defaults lean Indonesian.** The *industry* is derived per mission and nothing in `app/` knows what a bottle is, but the locale is not: `domain/contacts.py` looks for `/kontak` and `/hubungi-kami` alongside `/contact` and normalises bare phone numbers to `+62`, and `_region_code` / `_currency_for` in the workflow only know seven Asian markets before falling back to no region and USD. Sourcing from Europe works and is exercised by the console's Portugal example; it just gets less local help
 - **The Gmail inbound path has not been run against a live mailbox.** It is implemented and its workflow half is exercised on every run; the OAuth half needs a consent screen this project has not set up. IMAP is what runs today
 - **Live research is only as good as what suppliers publish** — which in this industry is often a phone number and a WhatsApp link
+- **The spend cap is a stop, not a to-the-cent limit.** A live mission whose $1.00 ceiling fired after 222 model calls finished its accounting at $1.52 over 319, because the ADK tool loop and grounded search billed without re-checking the cap. Both check it now, but requests already in flight still land, so the real ceiling is the cap plus a few calls
 - **Currencies are never converted.** Quotes in different currencies are reported side by side and excluded from the price comparison rather than guessed at
 - **The console polls every two seconds** rather than streaming
 
