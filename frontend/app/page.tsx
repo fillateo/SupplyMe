@@ -31,46 +31,6 @@ const SCOPES: { value: SearchScope; label: string; hint: string; icon: string }[
   },
 ];
 
-type Example = { label: string; scope: SearchScope; location: string; objective: string };
-
-// Four industries, because the system derives its supply chain from the product
-// rather than from a built-in one. A single prefilled brief made it look like a
-// tool for whichever industry that brief happened to be in.
-const EXAMPLES: Example[] = [
-  {
-    label: "Beverage",
-    scope: "country",
-    location: "United States",
-    objective:
-      "Launch a 12oz canned cold-brew coffee in the United States. 5,000 units to start. " +
-      "Aluminium cans, shrink sleeves, co-packing, and low minimums on the first run.",
-  },
-  {
-    label: "Furniture",
-    scope: "country",
-    location: "United States",
-    objective:
-      "Produce a 6ft solid walnut conference table, 200 units, made in the United States. " +
-      "FSC-certified hardwood, steel base, flat-pack packaging that survives freight.",
-  },
-  {
-    label: "Apparel",
-    scope: "city",
-    location: "Los Angeles",
-    objective:
-      "Manufacture 1,000 heavyweight organic-cotton hoodies in Los Angeles. " +
-      "Embroidered logo, woven labels, GOTS certification, low minimums on the first run.",
-  },
-  {
-    label: "Electronics",
-    scope: "global",
-    location: "",
-    objective:
-      "Build a 10,000mAh USB-C power bank, 5,000 units. " +
-      "Cells, PCBA, injection-moulded enclosure, retail box, and FCC-ready assembly.",
-  },
-];
-
 export default function MissionsPage() {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,11 +93,6 @@ export default function MissionsPage() {
               <h1 className="font-display text-3xl font-bold leading-[1.12] tracking-tight text-slate-900 sm:text-[2.5rem]">
                 Say what you want to make.
               </h1>
-              <p className="mt-3 max-w-xl text-[0.9375rem] leading-relaxed text-slate-600">
-                The agent works out what the product is made of, finds manufacturers for every
-                part, writes the inquiries itself, and reports each number with the source it
-                was read from.
-              </p>
             </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-subtle sm:p-7">
@@ -151,33 +106,13 @@ export default function MissionsPage() {
                 </p>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Try
-                </span>
-                {EXAMPLES.map((example) => (
-                  <button
-                    key={example.label}
-                    type="button"
-                    onClick={() => {
-                      setObjective(example.objective);
-                      setScope(example.scope);
-                      setLocation(example.location);
-                    }}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
-                  >
-                    {example.label}
-                  </button>
-                ))}
-              </div>
-
               <textarea
                 id="objective"
                 value={objective}
                 onChange={(event) => setObjective(event.target.value)}
                 rows={4}
-                className="field mt-3.5 min-h-[7.5rem] resize-y bg-slate-50 leading-relaxed focus:bg-white"
-                placeholder="What you are making, how many, where, and what matters most. Pick an example above to see the shape of a good brief."
+                className="field mt-4 min-h-[7.5rem] resize-y bg-slate-50 leading-relaxed focus:bg-white"
+                placeholder="What you are making, how many, where, and what matters most."
               />
 
               <fieldset className="mt-6 border-t border-slate-100 pt-5">

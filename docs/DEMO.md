@@ -43,12 +43,46 @@ Check two things before you press record:
 Have the receiving mailbox open in a second window. You will be answering from
 it on camera.
 
+## The brief to paste
+
+**What are you producing?**
+
+```
+Launch a 50ml eau de parfum in Los Angeles. 1,000 units to start. Custom glass
+flacon, pump and collar, folding carton, and contract filling with low minimums
+on the first run.
+```
+
+**Where should we look?** → **City**, `Los Angeles`.
+
+Four things in that brief are load-bearing, and it is worth knowing which before
+you shorten it on camera:
+
+- **It names a product, not a supply chain.** "Eau de parfum" is the whole input
+  — the flacon, the pump, the carton and the filler are derived from it, and
+  nothing in `app/` knows what a perfume is made of. That derivation is the claim
+  the **Supply chain** tab exists to substantiate, so listing the parts yourself
+  gives the tab nothing to show.
+- **The unit count is what turns a minimum order into a verdict.** The planning
+  agent reads only what is stated and leaves the quantity unset otherwise, so
+  "1,000 units to start" is what lets a filler quoting an MOQ of 5,000 be
+  rejected as *"MOQ 5000 against a first batch of 1000"* — and it is the figure
+  every email it writes asks against. Drop the number and both go quiet.
+- **"Low minimums on the first run" is what the recommendation answers to.** It
+  gives the closing panel a constraint to report against rather than a summary.
+- **Los Angeles is the right size.** Dense enough in contract fillers and glass
+  suppliers that City scope returns real companies, narrow enough that discovery
+  does not spend minutes you would have to edit out.
+
+The console ships with no prefilled examples at all, which is the point. The
+brief you paste is one the tool was never tuned for.
+
 ## The four-minute path
 
 | Time | What to show | Where it comes from |
 | --- | --- | --- |
 | 0:00–0:25 | The friction, in one sentence: *"I want to start a perfume brand and I don't know who can actually make it."* | — |
-| 0:25–0:45 | Paste the objective, press **Start sourcing**, close the tab | `POST /api/missions` |
+| 0:25–0:45 | Paste the brief above, set scope to **City** → `Los Angeles`, press **Start sourcing**, close the tab | `POST /api/missions` |
 | 0:45–1:25 | Reopen. Components identified, discovery running in parallel across them | **Supply chain** tab |
 | 1:25–2:00 | Open a supplier. Real company, real address, real website — and the evidence drawer shows the page it was read from, with the retrieval time | **Suppliers** tab → expand → any figure |
 | 2:00–2:25 | A brand claim judged on its sources: the supplier's own word, versus something written by anyone else | **Suppliers** tab → *Brands they claim to work with* |
