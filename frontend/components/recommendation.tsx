@@ -1,7 +1,7 @@
 "use client";
 
 import type { Recommendation, Selection } from "@/lib/types";
-import { ConfidenceMeter } from "./primitives";
+import { ConfidenceMeter, humanLabel } from "./primitives";
 
 /*
  * The finished report: which supplier was chosen for each component line, why,
@@ -223,8 +223,8 @@ function SelectionCard({
                 key={component.name}
                 className="grid grid-cols-[7rem_auto_3rem_1fr] items-center gap-x-3 gap-y-1 max-sm:grid-cols-[1fr_auto] max-sm:gap-y-1"
               >
-                <span className="text-xs font-medium text-slate-700 truncate capitalize max-sm:col-span-2">
-                  {component.name.replace(/_/g, " ")}
+                <span className="text-xs font-medium text-slate-700 truncate max-sm:col-span-2">
+                  {humanLabel(component.name)}
                 </span>
                 <ConfidenceMeter value={component.raw} tone="blue" />
                 <span className="font-mono text-right text-xs font-bold text-slate-800">

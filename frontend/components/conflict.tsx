@@ -1,6 +1,7 @@
 "use client";
 
 import type { Conflict } from "@/lib/types";
+import { humanLabel } from "./primitives";
 
 //: Keyed by Conflict.resolution_action. Deliberately phrased as what will
 //: happen rather than what has: this line renders while a conflict is still
@@ -46,8 +47,8 @@ export function ConflictNotice({ conflict }: { conflict: Conflict }) {
           <span className={`rounded px-2 py-0.5 text-xs font-semibold border ${meta.badge}`}>
             {meta.label}
           </span>
-          <span className="text-xs font-semibold text-slate-800 capitalize">
-            {conflict.field.replace(/_/g, " ")}
+          <span className="text-xs font-semibold text-slate-800">
+            {humanLabel(conflict.field)}
           </span>
         </div>
       </header>
@@ -59,8 +60,8 @@ export function ConflictNotice({ conflict }: { conflict: Conflict }) {
             className="rounded-lg border border-slate-200 bg-white p-3 shadow-subtle"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-slate-500 capitalize">
-                Source: {entry.source_type.replace(/_/g, " ")}
+              <span className="text-xs font-medium text-slate-500">
+                Source: {humanLabel(entry.source_type)}
               </span>
               <span className="text-xs font-semibold text-slate-400">Variant #{index + 1}</span>
             </div>

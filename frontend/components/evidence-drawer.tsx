@@ -76,7 +76,7 @@ export function EvidenceDrawer({
     <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
       {/* Soft light backdrop */}
       <button
-        className="absolute inset-0 cursor-default bg-slate-900/30 backdrop-blur-xs transition-opacity"
+        className="absolute inset-0 cursor-default bg-slate-900/30 backdrop-blur-sm transition-opacity"
         onClick={onClose}
         aria-label="Close evidence inspector"
       />

@@ -3,26 +3,29 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { api } from "@/lib/api";
+import { api, TERMINAL_STATUSES } from "@/lib/api";
 import { StatusChip } from "@/components/primitives";
 import type { Mission, SearchScope } from "@/lib/types";
 
 const SCOPES: { value: SearchScope; label: string; hint: string; icon: string }[] = [
+  // Labelled with the same three words the API, the docs and `SearchScope` use.
+  // "Metro / Domestic / Cross-border" was a second vocabulary for the same
+  // choice, and the longest of them could not fit a phone without truncating.
   {
     value: "city",
-    label: "Metro",
+    label: "City",
     hint: "Only suppliers in or around the city you name.",
     icon: "📍",
   },
   {
     value: "country",
-    label: "Domestic",
+    label: "Country",
     hint: "Anywhere inside the country you name.",
     icon: "🏭",
   },
   {
     value: "global",
-    label: "Cross-border",
+    label: "Global",
     hint: "Anywhere in the world. Importing is assumed, so distance is not penalised.",
     icon: "🌐",
   },
@@ -125,7 +128,7 @@ export default function MissionsPage() {
       <main className="mx-auto w-full max-w-[1440px] flex-1 px-5 py-7 sm:px-8 sm:py-9 lg:min-h-0 lg:overflow-hidden">
         <div className="grid gap-8 lg:h-full lg:min-h-0 lg:grid-cols-12 lg:gap-10">
           {/* Composer */}
-          <div className="flex flex-col gap-6 lg:col-span-7 lg:min-h-0 lg:overflow-y-auto lg:pr-1 xl:col-span-8 scroll-thin">
+          <div className="flex min-w-0 flex-col gap-6 lg:col-span-7 lg:min-h-0 lg:overflow-y-auto lg:pr-1 xl:col-span-8 scroll-thin">
             <section className="max-w-2xl">
               <h1 className="font-display text-3xl font-bold leading-[1.12] tracking-tight text-slate-900 sm:text-[2.5rem]">
                 Say what you want to make.
@@ -137,7 +140,7 @@ export default function MissionsPage() {
               </p>
             </section>
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-subtle sm:p-7">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-subtle sm:p-7">
               <div>
                 <label htmlFor="objective" className="font-display text-base font-semibold text-slate-900">
                   What are you producing?
@@ -181,11 +184,13 @@ export default function MissionsPage() {
                 <legend className="sr-only">Where to search</legend>
                 <p className="text-sm font-semibold text-slate-800">Where should we look?</p>
 
-                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-stretch">
+                <div className="mt-3 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-stretch">
+                  {/* Three equal columns on a phone, so the segmented control
+                      fits the width instead of setting it. */}
                   <div
                     role="group"
                     aria-label="Search scope"
-                    className="inline-flex shrink-0 rounded-xl border border-slate-200 bg-slate-100 p-1"
+                    className="grid w-full grid-cols-3 rounded-xl border border-slate-200 bg-slate-100 p-1 sm:inline-flex sm:w-auto sm:shrink-0"
                   >
                     {SCOPES.map((option) => {
                       const active = scope === option.value;
@@ -195,14 +200,14 @@ export default function MissionsPage() {
                           type="button"
                           onClick={() => setScope(option.value)}
                           aria-pressed={active}
-                          className={`flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors sm:flex-none ${
+                          className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-semibold transition-colors sm:flex-none sm:px-3.5 ${
                             active
                               ? "bg-white text-slate-900 shadow-xs"
                               : "text-slate-600 hover:text-slate-900"
                           }`}
                         >
                           <span aria-hidden>{option.icon}</span>
-                          <span>{option.label}</span>
+                          <span className="truncate">{option.label}</span>
                         </button>
                       );
                     })}
@@ -259,7 +264,10 @@ export default function MissionsPage() {
           </div>
 
           {/* Mission rail */}
-          <aside className="flex min-h-0 flex-col lg:col-span-5 xl:col-span-4">
+          {/* min-w-0 because a grid item defaults to min-width:auto: without it
+              the rail's min-content width set the column's, and the page
+              scrolled sideways on a phone rather than the objective wrapping. */}
+          <aside className="flex min-h-0 min-w-0 flex-col lg:col-span-5 xl:col-span-4">
             <div className="flex shrink-0 items-baseline justify-between gap-3 border-b border-slate-200 pb-3">
               <h2 className="font-display text-base font-semibold text-slate-900">Missions</h2>
               <span className="font-mono text-xs font-semibold text-slate-500">
@@ -296,7 +304,7 @@ export default function MissionsPage() {
                             #{mission.id.slice(0, 8)}
                           </span>
                           {mission.product && (
-                            <span className="truncate rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700">
+                            <span className="min-w-0 truncate rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700">
                               {mission.product}
                             </span>
                           )}
@@ -308,7 +316,7 @@ export default function MissionsPage() {
                         </div>
                         <StatusChip
                           status={mission.status}
-                          live={!["completed", "failed"].includes(mission.status)}
+                          live={!TERMINAL_STATUSES.has(mission.status)}
                         />
                       </div>
 

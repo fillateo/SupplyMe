@@ -66,11 +66,9 @@ export async function POST(request: Request, { params }: Params) {
   return proxy(request, (await params).path);
 }
 
-// PUT is not decorative: `PUT /api/missions/{id}/weights` is how the ranking is
-// re-run against new priorities. Without this export Next answers 405 and the
-// call fails on this hop, while the API itself would have accepted it.
-export async function PUT(request: Request, { params }: Params) {
-  return proxy(request, (await params).path);
-}
+// GET and POST only, because those are the two methods the console issues.
+// `PUT /api/missions/{id}/weights` exists on the API and has no console control
+// behind it; adding one means adding a PUT export here too, or Next answers 405
+// on this hop while the API itself would have accepted the call.
 
 export const dynamic = "force-dynamic";

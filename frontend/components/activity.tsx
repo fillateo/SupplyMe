@@ -52,16 +52,13 @@ const HIGH_PRIORITY_EVENTS = new Set([
 export function ActivityFeed({
   entries,
   vendorNames,
-  limit,
 }: {
   entries: ActivityEntry[];
   vendorNames: Record<string, string>;
-  limit?: number;
 }) {
-  const rows = entries.filter(
+  const shown = entries.filter(
     (entry) => entry.status === "ok" || entry.status === "exhausted",
   );
-  const shown = limit ? rows.slice(-limit) : rows;
 
   if (shown.length === 0) {
     return (

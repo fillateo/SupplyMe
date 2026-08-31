@@ -37,7 +37,6 @@ async function send<T>(path: string, method: string, body?: unknown): Promise<T>
 }
 
 export const api = {
-  health: () => get<{ approval_policy: string; providers: Record<string, string>; notes: string[] }>("/api/health"),
   missions: () => get<Mission[]>("/api/missions"),
   createMission: (objective: string, where?: { location?: string; scope?: SearchScope }) =>
     send<Mission>("/api/missions", "POST", {
@@ -48,10 +47,6 @@ export const api = {
   mission: (id: string) =>
     get<{ mission: Mission; supply_chain: SupplyChainNode[]; counts: MissionCounts }>(`/api/missions/${id}`),
   vendors: (id: string) => get<Vendor[]>(`/api/missions/${id}/vendors`),
-  vendor: (id: string, vendorId: string) =>
-    get<{ vendor: Vendor; trust: Vendor["trust"]; evidence: Evidence[];
-      brand_relationships: Vendor["brand_relationships"]; conflicts: Vendor["conflicts"];
-      quotes: any[]; threads: Thread[] }>(`/api/missions/${id}/vendors/${vendorId}`),
   evidence: (id: string) => get<Evidence[]>(`/api/missions/${id}/evidence`),
   activity: (id: string) => get<ActivityEntry[]>(`/api/missions/${id}/activity`),
   communications: (id: string) =>
@@ -61,8 +56,7 @@ export const api = {
   approvals: (id: string) => get<Approval[]>(`/api/missions/${id}/approvals`),
   decide: (approvalId: string, approved: boolean) =>
     send<Approval>(`/api/approvals/${approvalId}`, "POST", { approved }),
-  setPriorities: (id: string, priorities: string[]) =>
-    send<{ weights: Record<string, number> }>(`/api/missions/${id}/weights`, "PUT", { priorities }),
 };
 
+/** Mission statuses after which nothing more will happen on its own. */
 export const TERMINAL_STATUSES = new Set(["completed", "failed"]);

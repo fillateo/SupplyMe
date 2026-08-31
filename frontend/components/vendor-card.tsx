@@ -10,6 +10,7 @@ import {
   formatDays,
   formatMoney,
   formatUnits,
+  humanLabel,
 } from "./primitives";
 
 /*
@@ -61,7 +62,7 @@ export function VendorCard({
   onToggle: () => void;
   onOpenEvidence: (evidenceIds: string[], label: string) => void;
 }) {
-  const currency = vendor.currency ?? "IDR";
+  const currency = vendor.currency ?? "USD";
   const ruledOut = vendor.status === "rejected";
   const isQualified = vendor.status === "qualified";
   const openConflicts = vendor.conflicts.filter((conflict) => conflict.status !== "resolved");
@@ -251,7 +252,7 @@ export function VendorCard({
           {vendor.missing_fields.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
               <span className="font-semibold text-amber-900">Pending Clarification: </span>
-              {vendor.missing_fields.map((field) => field.replace(/_/g, " ")).join(", ")}
+              {vendor.missing_fields.map(humanLabel).join(", ")}
             </div>
           )}
 

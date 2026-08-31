@@ -65,29 +65,26 @@ export function ProvenanceMark({ provenance }: { provenance: Provenance }) {
   );
 }
 
-/**
- * Clean linear progress meter designed for high readability.
- */
+/** A bar for a 0..1 confidence. The four tones are the four `toneFor` returns. */
+type MeterTone = "blue" | "green" | "amber" | "rose";
+
+const METER_FILL: Record<MeterTone, string> = {
+  blue: "bg-blue-600",
+  green: "bg-emerald-600",
+  amber: "bg-amber-500",
+  rose: "bg-rose-500",
+};
+
 export function ConfidenceMeter({
   value,
   tone = "green",
 }: {
   value: number;
-  tone?: "blue" | "green" | "amber" | "rose" | "purple" | "cyan";
+  tone?: MeterTone;
 }) {
   const clamped = Math.max(0, Math.min(1, value));
   const percent = Math.round(clamped * 100);
-
-  const fillColors: Record<string, string> = {
-    blue: "bg-blue-600",
-    cyan: "bg-sky-500",
-    green: "bg-emerald-600",
-    amber: "bg-amber-500",
-    rose: "bg-rose-500",
-    purple: "bg-purple-600",
-  };
-
-  const fillColor = fillColors[tone] ?? fillColors.green;
+  const fillColor = METER_FILL[tone];
 
   return (
     <div
@@ -134,8 +131,8 @@ export function TrustBreakdown({ trust }: { trust: Trust }) {
               key={dimension.name}
               className="grid grid-cols-[7.5rem_auto_3rem_1fr] items-center gap-x-3 gap-y-1 max-sm:grid-cols-[1fr_auto] max-sm:gap-y-1"
             >
-              <dt className="text-xs font-medium text-slate-700 truncate capitalize max-sm:col-span-2">
-                {dimension.name.replace(/_/g, " ")}
+              <dt className="text-xs font-medium text-slate-700 truncate max-sm:col-span-2">
+                {humanLabel(dimension.name)}
               </dt>
               <ConfidenceMeter value={dimension.score} tone={tone} />
               <span
@@ -307,11 +304,6 @@ const STATUS_STYLES: Record<string, { label: string; tone: string; dotColor: str
     tone: "bg-amber-50 text-amber-700 border-amber-200",
     dotColor: "bg-amber-500",
   },
-  not_attempted: {
-    label: "Not Contacted",
-    tone: "bg-slate-100 text-slate-500 border-slate-200",
-    dotColor: "bg-slate-400",
-  },
 };
 
 export function StatusChip({
@@ -337,7 +329,25 @@ export function StatusChip({
   );
 }
 
-export function formatMoney(value: number | string, currency = "IDR"): string {
+//: Words the API uses that are not words. CSS `capitalize` renders `moq` as
+//: "Moq", which reads as a typo in a product whose whole subject is minimum
+//: order quantity — so the humanising happens here instead of in a class.
+const ACRONYMS: Record<string, string> = { moq: "MOQ", fcl: "FCL", lcl: "LCL" };
+
+/** `lead_time_days` -> "Lead time days"; `moq_fit` -> "MOQ fit". */
+export function humanLabel(name: string): string {
+  const words = name.split(/[_\s]+/).filter(Boolean);
+  return words
+    .map((word, index) => {
+      const acronym = ACRONYMS[word.toLowerCase()];
+      if (acronym) return acronym;
+      if (index === 0) return word.charAt(0).toUpperCase() + word.slice(1);
+      return word;
+    })
+    .join(" ");
+}
+
+export function formatMoney(value: number | string, currency = "USD"): string {
   const amount = typeof value === "number" ? value : Number(value);
   if (Number.isNaN(amount)) return String(value);
   return `${currency} ${amount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
