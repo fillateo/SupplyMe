@@ -213,6 +213,12 @@ class Mission(Base):
     search_scope: SearchScope = SearchScope.COUNTRY
 
     #: Counters, kept on the mission so cost guards do not need a collection scan.
+    #:
+    #: Outreach *attempts* that consumed budget, not messages delivered. The
+    #: budget is taken before the send, and deliberately not given back if the
+    #: send raises — an SMTP failure may still have delivered, so releasing the
+    #: slot would let the mission write to the same supplier again. What was
+    #: actually delivered is the thread statuses; the API reports both.
     emails_sent: int = 0
     #: Admitted for research. Counted atomically so parallel discovery branches
     #: cannot collectively overshoot the mission's ceiling.
@@ -378,7 +384,11 @@ class Quote(Base):
     vendor_id: str
     node_key: str | None = None
     source: str = "email"                   # email | website
-    currency: str = "IDR"
+    #: Always set by the handler from the mission's market — see
+    #: handlers._currency_for, whose own fallback is USD. This default only
+    #: applies to a Quote built by hand, and it agrees with that fallback
+    #: rather than naming one market.
+    currency: str = "USD"
     quantity: int | None = None
     #: Component -> unit price. A vendor quoting a bundle uses the key "package".
     line_items: dict[str, float] = Field(default_factory=dict)
@@ -459,7 +469,7 @@ class Recommendation(Base):
     open_conflicts: list[str] = Field(default_factory=list)
     next_actions: list[str] = Field(default_factory=list)
     estimated_unit_cost: float | None = None
-    currency: str = "IDR"
+    currency: str = "USD"
     narrative: str = ""
 
 

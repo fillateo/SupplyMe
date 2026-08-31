@@ -8,7 +8,7 @@ import { ActivityFeed } from "@/components/activity";
 import { EvidenceDrawer } from "@/components/evidence-drawer";
 import { StatusChip, formatMoney } from "@/components/primitives";
 import { VendorCard } from "@/components/vendor-card";
-import { api } from "@/lib/api";
+import { api, TERMINAL_STATUSES } from "@/lib/api";
 import type {
   ActivityEntry, Approval, Evidence, Mission, MissionCounts,
   Recommendation, SupplyChainNode, Vendor,
@@ -26,7 +26,7 @@ const TABS = [
 
 type Tab = (typeof TABS)[number]["id"];
 
-const TERMINAL = new Set(["completed", "failed"]);
+const TERMINAL = TERMINAL_STATUSES;
 
 type VendorFilter = "in_play" | "qualified" | "ruled_out" | "all";
 
@@ -264,7 +264,7 @@ export default function MissionConsole() {
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2.5 border-t border-slate-100 pt-3.5 sm:grid-cols-4 lg:grid-cols-7">
+          <dl className="mt-4 grid grid-cols-2 gap-2.5 border-t border-slate-100 pt-3.5 sm:grid-cols-4 lg:grid-cols-7">
             <ReadoutCard
               label="Components"
               value={nodes.length}
@@ -292,8 +292,8 @@ export default function MissionConsole() {
             />
             <ReadoutCard
               label="Outreach Replies"
-              value={`${counts.emails_responded}/${counts.emails_sent}`}
-              hint="Responses received out of sent emails"
+              value={`${counts.emails_responded}/${counts.emails_delivered ?? counts.emails_sent}`}
+              hint="Replies received, out of the emails that were actually delivered"
               icon="✉"
             />
             <ReadoutCard
@@ -309,7 +309,7 @@ export default function MissionConsole() {
               icon="🛡"
               hint="Sources recorded, each with the excerpt it came from"
             />
-          </div>
+          </dl>
         </div>
       </header>
 
@@ -336,17 +336,6 @@ export default function MissionConsole() {
                     <p className="font-mono text-xs text-slate-600">
                       Subject: {approval.preview.subject as string}
                     </p>
-                  )}
-                  {approval.preview?.questions && (
-                    <ul className="space-y-1 rounded bg-slate-50 p-2.5 border border-slate-200">
-                      <span className="text-xs font-medium text-slate-500 block mb-1">Questions it asks:</span>
-                      {(approval.preview.questions as string[]).map((question, index) => (
-                        <li key={index} className="flex gap-2 text-xs text-slate-700">
-                          <span className="text-blue-600 font-bold">•</span>
-                          <span>{question}</span>
-                        </li>
-                      ))}
-                    </ul>
                   )}
                   {approval.preview?.body && (
                     <details className="mt-1">
@@ -493,7 +482,7 @@ export default function MissionConsole() {
             <RecommendationPanel
               recommendation={recommendation}
               live={live}
-              currencyFormat={(value) => formatMoney(value, recommendation?.currency ?? "IDR")}
+              currencyFormat={(value) => formatMoney(value, recommendation?.currency ?? "USD")}
             />
           )}
         </main>

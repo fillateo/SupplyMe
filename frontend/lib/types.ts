@@ -44,10 +44,11 @@ export type Vendor = {
   brand_relationships: BrandRelationship[]; conflicts: Conflict[];
 };
 
+//: Only the fields the console renders. The API returns more (description,
+//: depends_on, search_terms, status); adding one here means using it.
 export type SupplyChainNode = {
-  id: string; key: string; name: string; description: string; required: boolean;
-  status: string; depends_on: string[]; consolidates_with: string[];
-  search_terms: string[]; rationale: string;
+  id: string; key: string; name: string; required: boolean;
+  consolidates_with: string[]; rationale: string;
 };
 
 export type SearchScope = "city" | "country" | "global";
@@ -67,7 +68,13 @@ export type Mission = {
 
 export type MissionCounts = {
   vendors: number; qualified: number; rejected: number; in_progress: number;
-  evidence: number; open_conflicts: number; emails_sent: number;
+  evidence: number; open_conflicts: number;
+  //: `emails_sent` is outreach budget consumed, including an attempt whose send
+  //: failed. `emails_delivered` is what actually left the system. Show the
+  //: second one to a human; the first is a cost figure.
+  //: Optional because the console and the API are two Cloud Run services and
+  //: either can be a revision ahead of the other.
+  emails_sent: number; emails_delivered?: number;
   emails_responded: number; emails_awaiting: number;
   pending_approvals: number;
 };
