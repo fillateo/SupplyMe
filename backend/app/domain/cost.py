@@ -18,7 +18,8 @@ from threading import Lock
 
 #: USD per million tokens. Verify against current Vertex AI pricing before
 #: relying on the totals — these were entered on 2026-08-30 and Google changes
-#: them. Override with SUPPLYME_PRICE_* if yours differ (committed volume, region).
+#: them. Committed volume or a regional rate would make these wrong; edit the
+#: table rather than looking for a setting, because there is not one.
 PRICING: dict[str, tuple[float, float]] = {
     # model prefix     (input $/1M, output $/1M)
     "gemini-2.5-flash-lite": (0.10, 0.40),
@@ -79,8 +80,10 @@ class CostMeter:
     totals are also written onto the mission so they survive a restart.
     """
 
-    max_calls_per_mission: int = 120
-    max_usd_per_mission: float = 0.50
+    #: Overridden by Settings wherever this is built for real; these are here
+    #: only so a direct construction is bounded, and they track config.py.
+    max_calls_per_mission: int = 300
+    max_usd_per_mission: float = 1.00
     _by_mission: dict[str, Usage] = field(default_factory=dict)
     _total: Usage = field(default_factory=Usage)
     _lock: Lock = field(default_factory=Lock)

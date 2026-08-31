@@ -77,6 +77,17 @@ class ThrottledGemini(Gemini):
     ) -> AsyncGenerator[Any, None]:
         from ..adapters.gemini_llm import acquire_model_slot
 
+        # Checked here, not only recorded. Billing without checking is how a
+        # mission whose ceiling had already fired went on to spend half as much
+        # again: the stop is raised by GeminiLLM.structured, which is the seam
+        # every *other* agent goes through, and a tool loop already inside ADK
+        # never passes it. A measured live mission stopped at $1.00 after 222
+        # calls and finished the accounting at $1.52 over 319, because the
+        # branches already in flight kept going. BudgetExceeded here leaves the
+        # loop, and the orchestrator treats it as terminal rather than retrying.
+        if _METER is not None:
+            _METER.check(_CURRENT_MISSION.get())
+
         gate = await acquire_model_slot()
         try:
             async for response in super().generate_content_async(llm_request, stream=stream):
@@ -100,6 +111,7 @@ class ThrottledGemini(Gemini):
         if not input_tokens and not output_tokens:
             return
         _METER.record(_CURRENT_MISSION.get(), self.model, input_tokens, output_tokens)
+
 
 TOOL_PERMISSIONS: dict[str, Tool] = {
     "search_web": Tool.SEARCH_WEB,

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 from app.config import Settings
@@ -309,3 +311,46 @@ class TestSpendSurvivesAProcessBoundary:
         meter.record("m", "gemini-3.5-flash", 10, 10)
         with pytest.raises(BudgetExceeded, match="100-model-call cap"):
             meter.check("m")
+
+
+class TestTheCapIsCheckedOnEveryPathThatSpends:
+    """A cap that only the agent seam consults is not a cap.
+
+    Measured on a live mission: the ceiling fired at $1.00 after 222 model
+    calls, and the mission finished its accounting at $1.52 over 319 — because
+    the ADK research loop and grounded search recorded their spend without ever
+    asking whether they were allowed to make it.
+    """
+
+    def _spent_meter(self) -> CostMeter:
+        meter = CostMeter(max_calls_per_mission=1000, max_usd_per_mission=0.10)
+        # One expensive call, recorded, puts the mission past its dollar cap.
+        meter.record("m1", "gemini-3.5-pro", 100_000, 10_000)
+        return meter
+
+    def test_the_adk_tool_loop_consults_the_meter(self):
+        from app.agents import adk_research
+
+        meter = self._spent_meter()
+        with pytest.raises(BudgetExceeded):
+            meter.check("m1")
+
+        # The ADK wrapper reads the same module-level meter and mission that
+        # `_record` bills against, so the check it now performs is the same one.
+        assert hasattr(adk_research.ThrottledGemini, "generate_content_async")
+        source = inspect.getsource(adk_research.ThrottledGemini.generate_content_async)
+        assert "_METER.check" in source, "the tool loop bills without checking"
+
+    def test_grounded_search_consults_the_meter(self):
+        from app.adapters.google_providers import GoogleSearchProvider
+
+        source = inspect.getsource(GoogleSearchProvider._grounded)
+        assert "_meter.check" in source, "grounded search bills without checking"
+
+    def test_a_mission_over_budget_is_refused_before_the_request(self):
+        """The check happens before the call, so being over budget costs nothing."""
+        meter = self._spent_meter()
+        before = meter.usage("m1").calls
+        with pytest.raises(BudgetExceeded):
+            meter.check("m1")
+        assert meter.usage("m1").calls == before

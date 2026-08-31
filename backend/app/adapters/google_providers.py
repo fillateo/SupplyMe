@@ -236,6 +236,13 @@ class GoogleSearchProvider:
             resolve_model,
         )
 
+        # A grounded search bills like any other Gemini call, so it has to ask
+        # the same question before making one. It used to only record, which
+        # meant a mission over its ceiling kept searching — and on a deployment
+        # with no Programmable Search engine, searching is most of what it does.
+        if self._meter is not None:
+            self._meter.check(current_mission.get())
+
         client = _client(self._settings)
         model = await resolve_model(self._settings, prefer_fast=True)
         gate = await acquire_model_slot()
