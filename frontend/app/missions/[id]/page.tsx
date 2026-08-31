@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 
 import { ActivityFeed } from "@/components/activity";
 import { EvidenceDrawer } from "@/components/evidence-drawer";
-import { StatusChip, formatMoney } from "@/components/primitives";
+import { StatusChip } from "@/components/primitives";
 import { VendorCard } from "@/components/vendor-card";
 import { api, TERMINAL_STATUSES } from "@/lib/api";
 import type {
@@ -264,6 +264,20 @@ export default function MissionConsole() {
             </div>
           </div>
 
+          {/* The backend records why a mission stopped — a spend cap, a plan it
+              could not act on, a handler that exhausted its retries — and the
+              chip alone just says "Stopped". Showing the reason is the whole
+              difference between a status and an explanation. */}
+          {mission.status === "failed" && mission.failure_reason && (
+            <p
+              role="status"
+              className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs leading-relaxed text-rose-900"
+            >
+              <span className="font-semibold">Why it stopped: </span>
+              {mission.failure_reason}
+            </p>
+          )}
+
           <dl className="mt-4 grid grid-cols-2 gap-2.5 border-t border-slate-100 pt-3.5 sm:grid-cols-4 lg:grid-cols-7">
             <ReadoutCard
               label="Components"
@@ -479,11 +493,7 @@ export default function MissionConsole() {
           )}
 
           {tab === "Recommendation" && (
-            <RecommendationPanel
-              recommendation={recommendation}
-              live={live}
-              currencyFormat={(value) => formatMoney(value, recommendation?.currency ?? "USD")}
-            />
+            <RecommendationPanel recommendation={recommendation} live={live} />
           )}
         </main>
 

@@ -400,19 +400,28 @@ def _extract_quote(prompt: str, body: str) -> QuoteExtraction:
 
 
 def _recommendation(prompt: str, untrusted: str | None) -> RecommendationNarrative:
-    # Mirrors _render_row: "- [node_key] Node Name: Vendor — 82.4/100 — City".
-    # The node KEY is what the real narrative agent is asked to answer with, and
-    # what the handler looks the annotation up by.
+    # Mirrors _render_row:
+    #   "- [node_key] Node Name: Vendor (vendor_id=ven_x) — 82.4/100 — City"
+    # The node KEY is what the handler looks the annotation up by, and the
+    # vendor id is what lets it tell a selection from the runner-up. Both are in
+    # the row precisely so the real agent can answer with them rather than guess.
     ranked_row = re.compile(
-        r"- \[(?P<node>[^\]]+)\] (?P<node_name>[^:]+): (?P<name>.+?) — (?P<score>[\d.]+)/100"
+        r"- \[(?P<node>[^\]]+)\] (?P<node_name>[^:]+): (?P<name>.+?) "
+        r"\(vendor_id=(?P<vendor_id>[^)]+)\) — (?P<score>[\d.]+)/100"
     )
+    # Only the SELECTED block. Splitting the prompt on section headers is what
+    # the real agent does by reading them: an entry written about an alternative
+    # is not an annotation of the selection, and treating it as one put a
+    # runner-up's sentence beside the chosen supplier's score.
+    selected_block = prompt.split("\nALTERNATIVES:")[0].split("\nNOT VIABLE:")[0]
     selections = []
-    for line in prompt.splitlines():
+    for line in selected_block.splitlines():
         match = ranked_row.match(line.strip())
-        if match and "SELECTED" in prompt.split(line)[0].split("ALTERNATIVES")[0]:
+        if match:
             selections.append(
                 SelectionNarrative(
-                    node_key=match.group("node"), vendor_id=match.group("name"),
+                    node_key=match.group("node"),
+                    vendor_id=match.group("vendor_id"),
                     why=[f"narrated: scored {match.group('score')}/100 on the mission's weights"],
                 )
             )

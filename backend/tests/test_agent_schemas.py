@@ -79,3 +79,54 @@ def test_a_reply_with_no_prices_maps_to_nothing_rather_than_a_zero():
     from app.agents.schemas import QuoteExtraction
 
     assert QuoteExtraction(not_a_quote=True).price_map() == {}
+
+
+class TestARequiredFieldMustBeAnswerableFromThePrompt:
+    """A schema may only demand what the prompt actually supplies.
+
+    `SelectionNarrative.vendor_id` is required, and for a while the ranking text
+    the agent was shown carried only the vendor's *name* — so the sole way to
+    satisfy the schema was to invent an id. The handler then matched on that id
+    to tell a selection from its runner-up, which is a comparison against a
+    guess. This is the same defect as asking for a mapping the model cannot
+    express, and it fails quietly in the same way: plausible output, wrong
+    provenance.
+    """
+
+    def _row(self):
+        from app.workflow.handlers import _render_row
+
+        return _render_row(
+            {
+                "node_key": "glass_bottle",
+                "node_name": "Glass bottle",
+                "vendor": {"id": "ven_abc123", "name": "PT Example", "city": "Tangerang"},
+                "score": {"total": 82.4, "components": []},
+                "quote": None,
+            }
+        )
+
+    def test_the_rendered_ranking_row_carries_the_vendor_id(self):
+        assert "vendor_id=ven_abc123" in self._row()
+
+    def test_it_still_carries_the_node_key_the_annotation_is_looked_up_by(self):
+        assert "[glass_bottle]" in self._row()
+
+    def test_every_required_field_of_the_narrative_schema_is_present_in_a_row(self):
+        """Read the schema, not a remembered list of its fields."""
+        from app.agents.schemas import SelectionNarrative
+
+        row = self._row()
+        required = [
+            name
+            for name, field in SelectionNarrative.model_fields.items()
+            if field.is_required()
+        ]
+        assert "vendor_id" in required, "the test is guarding a field that is no longer required"
+        # `why` is what the agent writes; the rest it must read off the row.
+        for name in (f for f in required if f != "why"):
+            token = "[" if name == "node_key" else f"{name}="
+            assert token in row, (
+                f"SelectionNarrative requires `{name}` but a ranking row contains "
+                f"nothing the model could read it from"
+            )

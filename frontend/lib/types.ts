@@ -32,11 +32,13 @@ export type Conflict = {
   values: { value: unknown; source_type: string; source_url: string | null; excerpt: string }[];
 };
 
+//: Same rule again. The API also returns address, lat, lng and capabilities;
+//: the console renders none of them, and coordinates have their own endpoint
+//: (`/api/missions/{id}/map`) with no control behind it.
 export type Vendor = {
   id: string; name: string; city: string | null; country: string | null;
   website: string | null; email: string | null; phone: string | null;
-  address: string | null; lat: number | null; lng: number | null;
-  status: string; node_keys: string[]; capabilities: string[];
+  status: string; node_keys: string[];
   moq: Fact; unit_price: Fact; lead_time_days: Fact;
   sample_lead_time_days: Fact; customization: Fact; payment_terms: Fact;
   currency: string | null; missing_fields: string[]; rejection_reasons: string[];
@@ -53,16 +55,20 @@ export type SupplyChainNode = {
 
 export type SearchScope = "city" | "country" | "global";
 
+//: Only the fields the console renders — the same rule as SupplyChainNode
+//: above. The API returns more (priorities, success_criteria, weights, and the
+//: per-mission spend counters, which are also served as their own `spend`
+//: block); declaring one here without using it makes this file a description of
+//: the API rather than of the console, and the two then drift.
 export type Mission = {
   id: string; objective: string; status: string; product: string | null;
   quantity: number | null; unit_spec: string | null; market: string | null;
   location: string | null; search_scope: SearchScope;
-  priorities: string[]; success_criteria: string[];
   emails_sent: number; created_at: string;
-  weights: Record<string, number>; failure_reason: string | null;
-  estimated_cost_usd?: number | null;
-  model_calls?: number | null;
-  vendors_admitted?: number | null;
+  //: Rendered on a stopped mission. The backend records why it stopped — a
+  //: spend cap, a plan it could not act on — and a status chip alone says only
+  //: "Stopped".
+  failure_reason: string | null;
 };
 
 
@@ -103,7 +109,17 @@ export type Selection = {
 export type Recommendation = {
   id: string; selections: Selection[]; alternatives: Selection[]; rejected: Selection[];
   risks: string[]; unknowns: string[]; next_actions: string[]; narrative: string;
-  estimated_unit_cost: number | null; currency: string; open_conflicts: string[];
+  //: null when nothing was priced, or when the priced quotes are in more than
+  //: one currency — the API refuses to add across currencies without an FX rate.
+  estimated_unit_cost: number | null;
+  //: The currency the suppliers quoted in, not the one the market implies.
+  currency: string;
+  //: How many of the selections `estimated_unit_cost` covers. A total over two
+  //: priced components out of seven is not the unit cost of the product.
+  //: Optional because the console and the API are two Cloud Run services and
+  //: either can be a revision ahead of the other.
+  priced_selections?: number;
+  open_conflicts: string[];
 };
 
 export type Thread = {

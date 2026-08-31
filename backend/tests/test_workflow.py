@@ -236,10 +236,9 @@ class TestAPlanThatCannotBeActedOn:
         providers.llm.register("supply_chain", lambda prompt, untrusted: plan)
         runtime = Runtime(providers)
         await runtime.start(concurrency=8)
-        try:
-            return runtime, await run_to_completion(runtime, OBJECTIVE, max_polls=300)
-        finally:
-            pass
+        # Returned rather than stopped here: each caller asserts against this
+        # runtime and stops it in its own finally.
+        return runtime, await run_to_completion(runtime, OBJECTIVE, max_polls=300)
 
     async def test_a_plan_with_no_nodes_fails_with_a_reason(self):
         from app.agents.schemas import SupplyChainPlan
@@ -541,3 +540,111 @@ class TestResolvedConflictsAffectTheOutcome:
         )
         assert "fits" in moq_component["explanation"]
         assert moq_component["raw"] == 1.0
+
+
+class TestTheReportedCurrencyIsTheOneTheSuppliersQuoted:
+    """A total labelled in a currency nobody quoted is an invented number.
+
+    Found in a browser run: a mission whose market read "United States" summed
+    two IDR line items to 9,250 and the console rendered `USD 9,250` — because
+    the recommendation's currency was derived from the market string while the
+    figure came from the quotes. Everything else in this system refuses to guess
+    a magnitude; this one label was doing it in the most visible place on screen.
+    """
+
+    def test_the_currency_comes_from_the_quotes_not_from_the_market(self):
+        from app.workflow.handlers import _report_currency
+
+        selections = [
+            {"quote": {"unit_price": 1850.0, "currency": "IDR"}},
+            {"quote": {"unit_price": 7400.0, "currency": "IDR"}},
+        ]
+        assert _report_currency(selections, market_default="USD") == "IDR"
+
+    def test_an_unpriced_mission_falls_back_to_the_market_default(self):
+        from app.workflow.handlers import _report_currency
+
+        assert _report_currency([{"quote": None}], market_default="GBP") == "GBP"
+        assert _report_currency([], market_default="GBP") == "GBP"
+
+    def test_mixed_currencies_are_never_summed(self):
+        """quotes.comparable_set refuses to compare across currencies within a
+        node. Adding across nodes is the same error with a wider blast radius."""
+        from app.workflow.handlers import _estimated_unit_cost
+
+        mixed = [
+            {"quote": {"unit_price": 1850.0, "currency": "IDR"}},
+            {"quote": {"unit_price": 12.0, "currency": "USD"}},
+        ]
+        assert _estimated_unit_cost(mixed) is None
+
+    def test_a_single_currency_still_sums(self):
+        from app.workflow.handlers import _estimated_unit_cost
+
+        same = [
+            {"quote": {"unit_price": 1850.0, "currency": "IDR"}},
+            {"quote": {"unit_price": 7400.0, "currency": "IDR"}},
+        ]
+        assert _estimated_unit_cost(same) == 9250.0
+
+    async def test_end_to_end_the_recommendation_never_relabels_a_quote(self, runtime):
+        """The whole workflow, on a mission whose market implies USD while the
+        scripted suppliers quote IDR."""
+        from app.domain.models import Recommendation
+
+        from .conftest import run_to_completion
+
+        mission = await run_to_completion(
+            runtime,
+            "Launch a 12oz canned cold-brew coffee in the United States. 5,000 units to start.",
+        )
+        rec = (await runtime.repo.list(Recommendation, mission_id=mission.id))[-1]
+        quoted = {
+            s["quote"]["currency"]
+            for s in rec.selections
+            if s.get("quote") and s["quote"].get("unit_price") is not None
+        }
+        if not quoted:
+            pytest.skip("nothing was priced in this run, so there is no label to check")
+        assert rec.currency in quoted, (
+            f"the report is labelled {rec.currency} but the suppliers quoted {quoted}"
+        )
+
+
+class TestAnAlternativesNarrationCannotOverwriteTheSelection:
+    """The agent is shown SELECTED and ALTERNATIVES rows and answers per node.
+
+    Both sections carry the same node key, so an entry written about the runner-up
+    used to overwrite the chosen supplier's reasons — the last one in the list
+    won. The score stayed correct and the sentence beside it described a
+    different company, which is worse than no sentence at all.
+    """
+
+    def test_the_reasons_kept_are_the_ones_naming_the_chosen_vendor(self):
+        from app.agents.schemas import SelectionNarrative
+        from app.workflow.handlers import _reasons_by_node
+
+        selections = [{"node_key": "bottle", "vendor": {"id": "ven_chosen"}}]
+        narrated = [
+            SelectionNarrative(node_key="bottle", vendor_id="ven_chosen", why=["chosen"]),
+            SelectionNarrative(node_key="bottle", vendor_id="ven_runner_up", why=["runner up"]),
+        ]
+        assert _reasons_by_node(selections, narrated) == {"bottle": ["chosen"]}
+
+    def test_an_entry_for_a_vendor_that_was_not_selected_is_dropped(self):
+        from app.agents.schemas import SelectionNarrative
+        from app.workflow.handlers import _reasons_by_node
+
+        selections = [{"node_key": "bottle", "vendor": {"id": "ven_chosen"}}]
+        narrated = [SelectionNarrative(node_key="bottle", vendor_id="ven_other", why=["wrong"])]
+        assert _reasons_by_node(selections, narrated) == {}
+
+    def test_an_entry_that_names_no_vendor_is_still_accepted_for_its_node(self):
+        """The agent is asked for a vendor_id but must not lose its reasoning
+        over an empty one — the node key is what the annotation is looked up by."""
+        from app.agents.schemas import SelectionNarrative
+        from app.workflow.handlers import _reasons_by_node
+
+        selections = [{"node_key": "bottle", "vendor": {"id": "ven_chosen"}}]
+        narrated = [SelectionNarrative(node_key="bottle", vendor_id="", why=["fine"])]
+        assert _reasons_by_node(selections, narrated) == {"bottle": ["fine"]}

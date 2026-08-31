@@ -1461,8 +1461,9 @@ async def handle_recommendation_ready(orc: Orchestrator, event: Event) -> list[E
         mission_id=mission.id,
     )
 
-    # The narrative may only annotate the computed selection, never reorder it.
-    why_by_node = {s.node_key: s.why for s in narrative.selections}
+    # The narrative may only annotate the computed selection, never reorder it —
+    # and never annotate it with reasons written about a different supplier.
+    why_by_node = _reasons_by_node(selections, narrative.selections)
     for selection in selections:
         selection["why"] = why_by_node.get(selection["node_key"]) or _fallback_why(selection)
 
@@ -1472,8 +1473,16 @@ async def handle_recommendation_ready(orc: Orchestrator, event: Event) -> list[E
         rejected=rejected, risks=narrative.risks, unknowns=narrative.unknowns,
         next_actions=narrative.next_actions, narrative=narrative.summary,
         open_conflicts=[c.id for c in open_conflicts],
-        currency=_currency_for(mission.market),
+        # The suppliers' own currency, falling back to the market's only when
+        # nothing was priced. See _report_currency.
+        currency=_report_currency(
+            selections, market_default=_currency_for(mission.market)
+        ),
         estimated_unit_cost=_estimated_unit_cost(selections),
+        # How much of the plan that total actually covers. A figure summing two
+        # priced components out of seven is not the unit cost of the product,
+        # and the console said "Quoted cost per unit" as though it were.
+        priced_selections=len(_priced_quotes(selections)),
     )
     await orc.repo.save(recommendation)
 
@@ -1602,13 +1611,91 @@ def _quote_dict(package: Any) -> dict[str, Any] | None:
     }
 
 
-def _estimated_unit_cost(selections: list[dict[str, Any]]) -> float | None:
-    prices = [
-        s["quote"]["unit_price"]
+def _priced_quotes(selections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The selected quotes that actually carry a price."""
+    return [
+        s["quote"]
         for s in selections
-        if s.get("quote") and s["quote"].get("unit_price")
+        if s.get("quote") and s["quote"].get("unit_price") is not None
     ]
-    return round(sum(prices), 2) if prices else None
+
+
+def _report_currency(selections: list[dict[str, Any]], *, market_default: str) -> str:
+    """The currency the suppliers actually quoted in.
+
+    Derived from the selected quotes rather than from the market, because those
+    are two different questions and the answers diverge. A mission whose market
+    read "United States" summed two IDR line items and the console rendered
+    `USD 9,250`: the figure came from the quotes and the label came from
+    `_currency_for(mission.market)`, so the one number on the Recommendation tab
+    was denominated in a currency nobody had quoted. Everything else here
+    refuses to guess a magnitude, and a wrong unit is a wrong magnitude.
+
+    The market default survives for a mission that priced nothing — there is no
+    quote to read a currency off — and for one whose quotes disagree, where no
+    single label is right for all of them and `_estimated_unit_cost` therefore
+    declines to produce a total at all.
+    """
+    quoted = {q.get("currency") for q in _priced_quotes(selections) if q.get("currency")}
+    return quoted.pop() if len(quoted) == 1 else market_default
+
+
+def _estimated_unit_cost(selections: list[dict[str, Any]]) -> float | None:
+    """What one unit costs across the selected suppliers, or None.
+
+    None rather than a number in three cases: nothing was priced, the priced
+    quotes are in more than one currency, or a price carries no currency at all.
+    `quotes.comparable_set` already refuses to compare across currencies within
+    one node without an FX rate; adding across nodes is the same error with a
+    wider blast radius, and this system invents a rate nowhere else.
+    """
+    priced = _priced_quotes(selections)
+    if not priced:
+        return None
+    currencies = {q.get("currency") for q in priced}
+    if len(currencies) != 1 or None in currencies:
+        return None
+    return round(sum(q["unit_price"] for q in priced), 2)
+
+
+def _reasons_by_node(
+    selections: list[dict[str, Any]], narrated: Sequence[Any]
+) -> dict[str, list[str]]:
+    """Map each selection to the reasons written about *that* supplier.
+
+    The agent is shown the SELECTED rows and the ALTERNATIVES rows, and both
+    carry the same node key. Keying a plain dict on `node_key` alone let an
+    entry written about the runner-up overwrite the chosen supplier's reasons,
+    because the last one in the list won — leaving a correct score beside a
+    sentence describing a different company, which is worse than no sentence.
+
+    Two rules, and the order matters. First wins, because `_render_ranking`
+    prints SELECTED before ALTERNATIVES, so the first entry for a node is the
+    one written about the chosen supplier. And an entry is rejected when it
+    *positively* identifies somebody else — its `vendor_id` matching the id or
+    the name of a different candidate — rather than whenever it fails to match
+    the selection, because an id the model got wrong should cost that one
+    annotation and not every annotation.
+    """
+    chosen: dict[str, dict[str, str]] = {
+        s["node_key"]: {
+            "id": (s.get("vendor") or {}).get("id") or "",
+            "name": ((s.get("vendor") or {}).get("name") or "").strip().lower(),
+        }
+        for s in selections
+    }
+    reasons: dict[str, list[str]] = {}
+    for entry in narrated:
+        node = chosen.get(entry.node_key)
+        if node is None or entry.node_key in reasons:
+            continue
+        named = (entry.vendor_id or "").strip().lower()
+        if named and named not in (node["id"].lower(), node["name"]):
+            # It names a vendor, and not this one. Whether that is the runner-up
+            # or a mangled id, it is not evidence about the selection.
+            continue
+        reasons[entry.node_key] = entry.why
+    return reasons
 
 
 def _fallback_why(selection: dict[str, Any]) -> list[str]:
@@ -1661,12 +1748,22 @@ def _render_ranking(
 
 def _render_row(row: dict[str, Any]) -> str:
     vendor, score, quote = row["vendor"], row["score"], row["quote"]
-    # The node KEY, not just its name: the narrative agent answers with whatever
-    # identifier it was shown, and the selection it annotates is looked up by key.
-    # Showing only the name meant every `why` missed its selection and silently
+    # Both identifiers the narrative schema asks for, because the agent can only
+    # answer with what it was shown.
+    #
+    # The node KEY, not just its name: the annotation is looked up by key, and
+    # showing only the name meant every `why` missed its selection and silently
     # fell back to the raw score explanations.
+    #
+    # And the vendor id. `SelectionNarrative.vendor_id` is a required field, and
+    # for a while nothing in this prompt contained one — so the only way to
+    # satisfy the schema was to invent it, and `_reasons_by_node` then compared
+    # against the invention. That is the same defect as asking for a mapping the
+    # model cannot express (see tests/test_agent_schemas.py): a field the prompt
+    # cannot answer is a field the model guesses.
     head = (
         f"- [{row['node_key']}] {row['node_name']}: {vendor['name']} "
+        f"(vendor_id={vendor['id']}) "
         f"— {score['total']:.1f}/100 — {vendor['city'] or 'location unknown'}"
     )
     detail = [f"    {c['name']}: {c['explanation']}" for c in score["components"]]

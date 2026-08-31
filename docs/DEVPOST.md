@@ -289,7 +289,7 @@ wall-clock time is a human not replying yet. Our suite drives whole missions
 against test doubles that live in `tests/` and are **reachable from nowhere in
 `app/`** — so we can provoke a supplier who never answers, or one whose site
 contradicts their quote, while the product itself has nothing to fall back to.
-400 tests, ~59 seconds, no network.
+446 tests, ~60 seconds, no network.
 
 ## Accomplishments that we're proud of
 
@@ -368,7 +368,9 @@ checked on them:
   run has gone through Gemini search grounding. `/api/health` says which is
   bound.
 * **Currencies are never converted.** Quotes in different currencies are shown
-  side by side and excluded from the price comparison rather than guessed at.
+  side by side, excluded from the price comparison, and excluded from the
+  report's total rather than guessed at — the headline figure carries the
+  currency the suppliers quoted, and is withheld when they disagree.
 * **Cost scales with the shortlist, not the ambition.** Eight suppliers is $0.29;
   twelve is $0.78 and, in the run we measured, did not reach a recommendation.
   The lever is `SUPPLYME_MAX_VENDORS_PER_MISSION`, and we would rather say so than

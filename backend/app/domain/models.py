@@ -468,7 +468,15 @@ class Recommendation(Base):
     unknowns: list[str] = Field(default_factory=list)
     open_conflicts: list[str] = Field(default_factory=list)
     next_actions: list[str] = Field(default_factory=list)
+    #: Sum of the selected quotes, or None when nothing was priced or the prices
+    #: are in more than one currency. See handlers._estimated_unit_cost.
     estimated_unit_cost: float | None = None
+    #: How many selections that total actually covers. A sum over two priced
+    #: components out of seven is not the unit cost of the product, and reporting
+    #: it without saying so reads as though it were.
+    priced_selections: int = 0
+    #: The currency the suppliers quoted in, not the one the market implies —
+    #: those diverge, and labelling an IDR total "USD" is an invented number.
     currency: str = "USD"
     narrative: str = ""
 

@@ -1,7 +1,7 @@
 "use client";
 
 import type { Recommendation, Selection } from "@/lib/types";
-import { ConfidenceMeter, humanLabel } from "./primitives";
+import { ConfidenceMeter, formatMoney, humanLabel } from "./primitives";
 
 /*
  * The finished report: which supplier was chosen for each component line, why,
@@ -15,11 +15,9 @@ import { ConfidenceMeter, humanLabel } from "./primitives";
 export function RecommendationPanel({
   recommendation,
   live,
-  currencyFormat,
 }: {
   recommendation: Recommendation | null;
   live: boolean;
-  currencyFormat: (value: number) => string;
 }) {
   if (!recommendation) {
     return (
@@ -69,11 +67,23 @@ export function RecommendationPanel({
           </div>
 
           {recommendation.estimated_unit_cost !== null && (
-            <div className="flex items-baseline gap-2 rounded-lg bg-emerald-50 px-3.5 py-1.5 border border-emerald-200">
-              <span className="text-xs font-medium text-emerald-800">Quoted cost per unit:</span>
-              <span className="text-base font-bold text-emerald-800 font-mono">
-                {currencyFormat(recommendation.estimated_unit_cost)}
-              </span>
+            <div className="rounded-lg bg-emerald-50 px-3.5 py-1.5 border border-emerald-200">
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-medium text-emerald-800">
+                  Quoted so far, per unit:
+                </span>
+                <span className="text-base font-bold text-emerald-800 font-mono">
+                  {formatMoney(recommendation.estimated_unit_cost, recommendation.currency)}
+                </span>
+              </div>
+              {/* A sum over some of the components is not the unit cost of the
+                  product. Saying which is which is the difference between a
+                  figure and a claim. */}
+              <p className="mt-0.5 text-xs text-emerald-900/70">
+                {priced(recommendation)} of {recommendation.selections.length} selected
+                {" "}
+                {recommendation.selections.length === 1 ? "component" : "components"} priced
+              </p>
             </div>
           )}
         </div>
@@ -83,7 +93,6 @@ export function RecommendationPanel({
             <SelectionCard
               key={`${selection.node_key}-${selection.vendor.id}`}
               selection={selection}
-              currencyFormat={currencyFormat}
             />
           ))}
         </div>
@@ -153,13 +162,15 @@ Ruled out for this batch — usually a minimum order far above what is being bou
   );
 }
 
-function SelectionCard({
-  selection,
-  currencyFormat,
-}: {
-  selection: Selection;
-  currencyFormat: (value: number) => string;
-}) {
+/** How many selections the headline total actually covers. */
+function priced(recommendation: Recommendation): number {
+  return (
+    recommendation.priced_selections ??
+    recommendation.selections.filter((s) => s.quote?.unit_price != null).length
+  );
+}
+
+function SelectionCard({ selection }: { selection: Selection }) {
   const place = [selection.vendor.city, selection.vendor.country].filter(Boolean).join(", ");
   const scoreTotal = Math.round(selection.score.total);
 
@@ -184,8 +195,11 @@ function SelectionCard({
           {selection.quote?.unit_price != null && (
             <div className="text-right">
               <span className="text-xs text-slate-500 block">Unit Quote</span>
+              {/* This quote's own currency, not the report's. A supplier who
+                  quoted IDR must not be rendered in USD because the mission's
+                  market implied one. */}
               <span className="text-base font-bold text-slate-900 font-mono">
-                {currencyFormat(selection.quote.unit_price)}
+                {formatMoney(selection.quote.unit_price, selection.quote.currency)}
               </span>
             </div>
           )}
