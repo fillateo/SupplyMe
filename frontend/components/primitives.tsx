@@ -332,10 +332,26 @@ export function humanLabel(name: string): string {
     .join(" ");
 }
 
+// Currencies with no minor unit, where a decimal place is noise rather than
+// precision. Kept in step with ZERO_DECIMAL_CURRENCIES in app/domain/scoring.py.
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  "IDR", "VND", "JPY", "KRW", "CLP", "ISK", "PYG", "XAF", "XOF", "RWF", "UGX",
+]);
+
 export function formatMoney(value: number | string, currency = "USD"): string {
   const amount = typeof value === "number" ? value : Number(value);
   if (Number.isNaN(amount)) return String(value);
-  return `${currency} ${amount.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  // maximumFractionDigits: 0 was right while every quote arrived in rupiah. It
+  // rendered a carton quoted at $0.48/unit as "USD 0", which is the one number
+  // on the card a buyer would act on.
+  const digits =
+    ZERO_DECIMAL_CURRENCIES.has(currency.trim().toUpperCase()) || Math.abs(amount) >= 1000
+      ? 0
+      : 2;
+  return `${currency} ${amount.toLocaleString("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })}`;
 }
 
 export function formatDays(value: number | string): string {

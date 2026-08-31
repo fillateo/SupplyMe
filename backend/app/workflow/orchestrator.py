@@ -389,11 +389,46 @@ class Orchestrator:
         mission.status = MissionStatus.FAILED
         mission.failure_reason = reason
         await self.repo.save(mission)
+        await self._reap_stranded_vendors(mission_id, reason)
         # So the terminal state actually appears on the activity timeline —
         # ARCHITECTURE.md documents mission.failed as a first-class event.
         await self.emit(
             Event(type=EventType.MISSION_FAILED, mission_id=mission_id, payload={"reason": reason})
         )
+
+    async def _reap_stranded_vendors(self, mission_id: str, reason: str) -> None:
+        """Give every supplier a verdict, including the ones we stopped paying for.
+
+        A budget stop is deliberately not retried, which is right: the whole
+        point of a ceiling is that reaching it ends the spending. But the
+        vendors whose research was mid-flight when it fired were left in
+        `researching`, and `_maybe_finish` will not produce a recommendation
+        while any vendor is still in play. Nothing else ever moved them, so the
+        mission could not finish even after the cap was raised — a live mission
+        sat with four suppliers stuck that way and no recommendation reachable.
+
+        Stopping work on a supplier is a verdict about that supplier, so it is
+        recorded as one, with the reason on the record rather than implied by a
+        status nobody will revisit.
+        """
+        from ..domain.models import Vendor, VendorStatus
+
+        terminal = (VendorStatus.QUALIFIED, VendorStatus.REJECTED)
+        stranded = [
+            v for v in await self.repo.list(Vendor, mission_id=mission_id)
+            if v.status not in terminal
+        ]
+        for vendor in stranded:
+            def _reject(record: Vendor) -> None:
+                record.status = VendorStatus.REJECTED
+                record.rejection_reasons.append(f"research stopped: {reason}")
+
+            await self.repo.mutate(Vendor, vendor.id, _reject)
+        if stranded:
+            log.info(
+                "vendors_reaped",
+                extra={"mission_id": mission_id, "status": f"{len(stranded)} stranded"},
+            )
 
     # -- observability ------------------------------------------------------
 

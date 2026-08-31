@@ -587,6 +587,50 @@ class TestSpendGuard:
         finally:
             await runtime.stop()
 
+    async def test_a_budget_stop_leaves_no_vendor_without_a_verdict(self):
+        """A stranded vendor is a recommendation that can never be produced.
+
+        `_maybe_finish` will not rank while any vendor is still in play, and a
+        budget stop is deliberately not retried, so a vendor caught mid-research
+        used to sit in `researching` with nothing left to move it. A live mission
+        held four suppliers that way and could not finish even after its cap was
+        raised.
+        """
+        from app.domain.models import Vendor, VendorStatus
+
+        runtime = build()
+        await runtime.start(concurrency=4)
+        try:
+            mission = await runtime.create_mission(OBJECTIVE)
+            await runtime.drain(timeout=60)
+
+            vendors = await runtime.orchestrator.repo.list(Vendor, mission_id=mission.id)
+            assert vendors, "no vendors discovered, so this asserts nothing"
+            # Put one back in play, as a budget stop mid-research would leave it.
+            await runtime.orchestrator.repo.mutate(
+                Vendor, vendors[0].id,
+                lambda v: setattr(v, "status", VendorStatus.RESEARCHING),
+            )
+
+            await runtime.orchestrator._fail_mission(
+                mission.id, "stopped on cost: mission reached its $1.00 cap"
+            )
+            await runtime.drain(timeout=60)
+
+            after = await runtime.orchestrator.repo.list(Vendor, mission_id=mission.id)
+            in_play = [
+                v for v in after
+                if v.status not in (VendorStatus.QUALIFIED, VendorStatus.REJECTED)
+            ]
+            assert not in_play, f"stranded: {[(v.name, v.status.value) for v in in_play]}"
+
+            reaped = next(v for v in after if v.id == vendors[0].id)
+            assert any("stopped on cost" in r for r in reaped.rejection_reasons), (
+                "a rejection with no reason is a shrug"
+            )
+        finally:
+            await runtime.stop()
+
     async def test_a_budget_stop_is_not_retried(self):
         """Retrying is precisely what the cap exists to prevent."""
         from app.domain.cost import BudgetExceeded
