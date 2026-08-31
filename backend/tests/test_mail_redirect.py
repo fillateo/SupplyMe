@@ -114,4 +114,24 @@ class TestItIsOnlyBoundWhenItDoesSomething:
         notes: list[str] = []
         wrapped = _redirected(FakeMail(), Settings(mail_redirect_to=TESTER), notes)
         assert isinstance(wrapped, RedirectingMailProvider)
-        assert any(TESTER in note and "rather than to the supplier" in note for note in notes)
+        assert any("rather than to the supplier" in note for note in notes)
+
+    def test_the_note_does_not_publish_the_address_it_diverts_to(self):
+        """These notes are served by `/api/health`, and a deployed console is public.
+
+        The note has to say mail is being diverted, because an operator who
+        cannot tell that from outside eventually writes to a stranger. Saying it
+        does not require handing out the mailbox: the domain and the first two
+        characters identify it to whoever owns it and to nobody else. The full
+        address here published the operator's own inbox to every reader of the
+        submission page that links the health endpoint.
+        """
+        from app.adapters.registry import _redirected
+        from app.config import Settings
+
+        notes: list[str] = []
+        _redirected(FakeMail(), Settings(mail_redirect_to=TESTER), notes)
+
+        note = " ".join(notes)
+        assert TESTER not in note
+        assert "op***@example.com" in note

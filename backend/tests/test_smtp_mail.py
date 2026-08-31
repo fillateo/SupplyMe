@@ -116,3 +116,4 @@ class TestTheSafetyValveStillStandsInFront:
             SmtpMailProvider(settings()), settings(mail_redirect_to=TESTER), notes
         )
         assert isinstance(wrapped, RedirectingMailProvider)
+

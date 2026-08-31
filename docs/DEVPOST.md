@@ -67,7 +67,7 @@ came from.
 - 1 persisted event loop, so a restart mid-mission loses nothing and a reply three days later resumes the same work
 - 4 deterministic engines for evidence, quotes, conflicts and scoring, holding every number the model may not produce
 - 6 ports and adapters, each bound to a live service, with no demo mode anywhere in the system
-- 483 tests covering duplicate delivery, provider outages, restarts and prompt injection
+- 484 tests covering duplicate delivery, provider outages, restarts and prompt injection
 
 **🛡️ Security Boundary**
 - Every agent carries a tool allowlist, enforced on each call rather than described in a prompt

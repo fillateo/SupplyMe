@@ -44,9 +44,17 @@ curl -s localhost:8080/api/health | jq '.providers, .notes'
 # notes -> "SUPPLYME_MOCK is on: missions are replayed from a recording..."
 ```
 
-Press **Start sourcing** and the console fills in over about 90 seconds.
-`SUPPLYME_MOCK_DURATION_SECONDS=45` shortens it natively; under Docker the knob
-is `MOCK_DURATION=45`.
+Press **Start sourcing** and the console fills in over about 25 seconds.
+
+Two knobs, and the second matters more than it sounds. `MOCK_DURATION` (90) is
+the budget the recorded run is scaled into. `MOCK_MAX_GAP` (3 seconds) is the
+longest the screen may sit still: most of a real mission is waiting for a
+supplier to answer, and played back proportionally that wait is most of the
+demo, so gaps longer than the cap are shortened to it. The order and the pacing
+of everything that actually happened are untouched — only the silence goes,
+which is why a 90-second budget finishes in 25. Raise the cap to play the
+waiting out. Natively the names are `SUPPLYME_MOCK_DURATION_SECONDS` and
+`SUPPLYME_MOCK_MAX_GAP_SECONDS`.
 
 **It does need a recording, and the recording is not in the repository.** A
 snapshot holds real supplier names, addresses, email addresses and

@@ -187,11 +187,11 @@ class TestAdoptingTheSiteAVendorWasFoundOn:
 
 
 class TestAddressesThatWillNotAnswerASourcingEnquiry:
-    """Real addresses at the right company, wrong desk."""
+    """Addresses at the right company, wrong desk."""
 
     @pytest.mark.parametrize(
         "low_value",
-        ["data.privacy@iberchem.com", "legal@factory.co.id", "careers@factory.co.id",
+        ["data.privacy@iberchem.example", "legal@factory.co.id", "careers@factory.co.id",
          "hrd@factory.co.id", "webmaster@factory.co.id"],
     )
     def test_the_sales_desk_is_preferred_over_them(self, low_value):
@@ -200,4 +200,4 @@ class TestAddressesThatWillNotAnswerASourcingEnquiry:
 
     def test_but_they_are_still_a_way_in_when_nothing_else_is_published(self):
         """A privacy desk beats no contact route at all."""
-        assert emails_in("data.privacy@iberchem.com") == ["data.privacy@iberchem.com"]
+        assert emails_in("data.privacy@iberchem.example") == ["data.privacy@iberchem.example"]

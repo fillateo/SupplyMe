@@ -185,6 +185,26 @@ def build(settings: Settings, *, llm: Any | None = None) -> Providers:
     )
 
 
+def _masked(address: str) -> str:
+    """An address an operator can recognise but a stranger cannot harvest.
+
+    These notes are surfaced by `/api/health`, which is reachable by anyone the
+    deployment is public for — and it has to be, because it is the answer to "is
+    this thing actually wired to anything". The notes exist so that whoever runs
+    it can tell at a glance where the next email lands, and the first two
+    characters plus the domain answer that as well as the whole address does.
+
+    Printing it in full published the operator's own mailbox instead: the
+    redirect address, and the sending one, which is the worse of the two to hand
+    out because it is a live SMTP account. A demo console linked from a public
+    submission page should not also be an address book.
+    """
+    local, _, domain = address.strip().partition("@")
+    if not domain:
+        return "(set)"
+    return f"{local[:2]}***@{domain}" if local else f"***@{domain}"
+
+
 def _require(value: str, variable: str, what: str) -> None:
     """Refuse to start rather than quietly substituting something invented."""
     if not value:
@@ -226,8 +246,8 @@ def _real_mail(settings: Settings, notes: list[str]) -> Any:
         "the mailbox",
     )
     notes.append(
-        f"mail: SMTP out and IMAP in as {settings.smtp_user}; replies are read on a poll "
-        "rather than pushed"
+        f"mail: SMTP out and IMAP in as {_masked(settings.smtp_user)}; replies are read on a "
+        "poll rather than pushed"
     )
     return provider
 
@@ -248,6 +268,6 @@ def _redirected(provider: Any, settings: Settings, notes: list[str]) -> Any:
 
     notes.append(
         f"SUPPLYME_MAIL_REDIRECT_TO is set: every outbound email really sends, but to "
-        f"{target} rather than to the supplier"
+        f"{_masked(target)} rather than to the supplier"
     )
     return RedirectingMailProvider(provider, target)

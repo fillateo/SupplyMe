@@ -69,7 +69,7 @@ cd backend
 .venv/bin/python -m pytest -q
 ```
 
-483 tests, about 60 seconds. They cover the whole workflow end to end,
+484 tests, about 60 seconds. They cover the whole workflow end to end,
 including every message being delivered twice, a search outage, a model
 timeout, a mid-mission restart, and a supplier reply containing a
 prompt-injection payload.
@@ -268,7 +268,7 @@ only reliable way to tell them apart from outside.
 MOCK=true docker compose up --build      # or: MOCK=true ./run.sh
 ```
 
-Press *Start sourcing* and the console fills in over roughly half a minute — the
+Press *Start sourcing* and the console fills in over about 25 seconds — the
 supply chain, twelve suppliers, sixty-one pieces of evidence, the email threads,
 the contradictions, the ranked recommendation — with no model call, no search,
 no Places lookup and no mail.
@@ -278,7 +278,8 @@ seconds) is the longest the screen may sit still. That second one matters more
 than it sounds: most of a real mission is waiting for a supplier to answer, and
 played back proportionally that wait is most of the demo. Capping it keeps the
 order and the pacing of everything that actually happened and drops only the
-silence, which is why a 90-second budget finishes in about 35.
+silence, which is why the default 90-second budget finishes in about 25.
+Measured, not estimated: raise `MOCK_MAX_GAP` to play the waiting out.
 
 **This is a playback, not a simulation, and the difference is the only reason it
 is allowed to exist here.** A fixture world was deleted from this codebase once
