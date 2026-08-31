@@ -19,6 +19,28 @@ from .trust import TrustProfile
 #: A vendor missing this many priced components cannot be ranked on price.
 UNPRICED_PENALTY_NOTE = "no comparable quote; price component scored 0"
 
+#: Currencies with no minor unit, where a decimal place would be noise rather
+#: than precision. Everything else is written to the cent when the figure is
+#: small enough for the cents to be the whole story.
+ZERO_DECIMAL_CURRENCIES = frozenset(
+    {"IDR", "VND", "JPY", "KRW", "CLP", "ISK", "PYG", "XAF", "XOF", "RWF", "UGX"}
+)
+
+
+def money(currency: str | None, value: float) -> str:
+    """Write a price at a precision that does not destroy it.
+
+    This used to be `f"{value:,.0f}"` throughout, which was right when every
+    quote arrived in rupiah and `Rp 12.000,50` would have been absurd. Against a
+    US market it rounded a folding carton quoted at $0.48 to "USD 0" and its
+    rival at $0.94 to "USD 1", so the sentence explaining a price component
+    reported that the cheapest supplier and the dearest both cost nothing.
+    """
+    code = (currency or "").strip().upper()
+    if code in ZERO_DECIMAL_CURRENCIES or abs(value) >= 1000:
+        return f"{currency} {value:,.0f}"
+    return f"{currency} {value:,.2f}"
+
 
 @dataclass
 class Component:
@@ -76,7 +98,7 @@ def _price_component(
         "price",
         weight,
         round(min(ratio, 1.0), 4),
-        f"{quote.currency} {quote.unit_price:,.0f}/unit vs best {quote.currency} {cheapest:,.0f}",
+        f"{money(quote.currency, quote.unit_price)}/unit vs best {money(quote.currency, cheapest)}",
     )
 
 
@@ -171,11 +193,25 @@ def _logistics_component(
     in_market = bool(market) and vendor.country.strip().lower() == market.strip().lower()
     in_city = bool(location) and _same_place(vendor.city, location)
 
+    # A city-scoped mission usually carries that same city as its market, and a
+    # city is not a country: comparing "USA" to "Los Angeles" is false for every
+    # supplier alive. Left alone it sent the 0.7 rung unreachable and told the
+    # buyer that a factory in Vernon, five miles from downtown, was an import.
+    market_names_a_country = not (
+        bool(location) and bool(market)
+        and market.strip().lower() == location.strip().lower()
+    )
+
     if scope is SearchScope.CITY:
         if in_city:
             raw, detail = 1.0, f"in {vendor.city} — the city you asked for"
         elif in_market:
             raw, detail = 0.7, f"in {vendor.country}, outside {location}"
+        elif not market_names_a_country:
+            # Say only what is known: they are not in the city that was asked
+            # for. Whether that means a truck or a container cannot be told from
+            # a mission whose market is a city name.
+            raw, detail = 0.7, f"outside {location}"
         else:
             raw, detail = 0.35, f"located in {vendor.country}; import required"
     elif scope is SearchScope.GLOBAL:

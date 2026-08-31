@@ -13,12 +13,13 @@ from app.domain.models import (
     Provenance,
     Quote,
     ScoringWeights,
+    SearchScope,
     SourceType,
     SupplyChainNode,
     Vendor,
 )
 from app.domain.quotes import ComponentVocabulary, comparable_set, normalize
-from app.domain.scoring import apply_priorities, score_vendor
+from app.domain.scoring import apply_priorities, money, score_vendor
 from app.domain.trust import profile
 
 
@@ -430,6 +431,59 @@ class TestScoring:
         subject = self._scored()
         args = dict(weights=ScoringWeights(), trust=profile(subject, []), quantity=500)
         assert score_vendor(subject, **args).total == score_vendor(subject, **args).total
+
+    # --- Prices below a whole unit -------------------------------------
+    # `:,.0f` was right while every quote arrived in rupiah. Against USD it
+    # rounded a carton at $0.48 and its rival at $0.94 into "USD 0" and
+    # "USD 1", so the sentence explaining the price said the cheapest and the
+    # dearest supplier both cost nothing.
+
+    @pytest.mark.parametrize(
+        "currency,value,expected",
+        [
+            ("USD", 0.48, "USD 0.48"),
+            ("USD", 0.94, "USD 0.94"),
+            ("USD", 3.85, "USD 3.85"),
+            ("EUR", 150.5, "EUR 150.50"),
+            ("USD", 1250.0, "USD 1,250"),
+            ("IDR", 12000.0, "IDR 12,000"),
+            ("IDR", 500.0, "IDR 500"),
+            ("VND", 25000.0, "VND 25,000"),
+        ],
+    )
+    def test_money_keeps_the_cents_that_carry_the_meaning(self, currency, value, expected):
+        assert money(currency, value) == expected
+
+    # --- A city is not a country ---------------------------------------
+
+    def test_a_domestic_supplier_outside_the_city_is_not_called_an_import(self):
+        """market is the city on a city-scoped mission, so no country match exists."""
+        subject = vendor(
+            website="https://a.example.com", email="a@a.example.com",
+            country="USA", city="Vernon", node_keys=["carton"],
+        )
+        result = score_vendor(
+            subject, weights=ScoringWeights(), trust=profile(subject, []),
+            quantity=1000, required_nodes=["carton"],
+            market="Los Angeles", location="Los Angeles", scope=SearchScope.CITY,
+        )
+        logistics = next(c for c in result.components if c.name == "logistics")
+        assert "import required" not in logistics.explanation
+        assert logistics.raw == 0.7
+
+    def test_a_genuine_import_is_still_called_one(self):
+        subject = vendor(
+            website="https://a.example.com", email="a@a.example.com",
+            country="Indonesia", city="Tangerang", node_keys=["carton"],
+        )
+        result = score_vendor(
+            subject, weights=ScoringWeights(), trust=profile(subject, []),
+            quantity=1000, required_nodes=["carton"],
+            market="United States", location="Los Angeles", scope=SearchScope.CITY,
+        )
+        logistics = next(c for c in result.components if c.name == "logistics")
+        assert "import required" in logistics.explanation
+        assert logistics.raw == 0.35
 
     def test_priorities_move_weight_off_price(self):
         base = ScoringWeights().as_dict()
