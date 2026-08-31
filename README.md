@@ -621,3 +621,7 @@ are reachable from nowhere in `app/`. That distinction is the point: a double
 lets failures be provoked on demand, a supplier who never answers, one whose
 site contradicts their quote, while the product itself has nothing to fall back
 to.
+
+## 🏁 Hackathon
+
+SupplyMe was built for the [All Things Agentic hackathon](https://allthingsagentichackathon.devpost.com/).
