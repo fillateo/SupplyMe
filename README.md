@@ -229,7 +229,9 @@ later causes the system to email and ask.
 
 ## 📋 Prerequisites
 
-- **Python 3.12 or 3.13** and **Node 20+**, and nothing else for local runs
+- **Docker** with Compose v2 — the shortest path, and the only one that needs
+  nothing else installed
+- Or, to run it natively: **Python 3.12 or 3.13** and **Node 20+**
 - **Google Cloud project** with Vertex AI enabled, plus `gcloud auth application-default login`
 - **API Keys**:
   - Google Cloud project ID for Vertex AI (or a Gemini Developer API key)
@@ -237,10 +239,14 @@ later causes the system to email and ask.
   - Gmail app password for SMTP + IMAP, which sends and reads on one credential
   - Optional: Programmable Search key + engine ID; without one, search falls back to Gemini grounding
 
-> **There is one mode and it is the real one.** Every provider is the live
-> service or the process refuses to start, naming the variable that is missing.
-> A mission either read the real web, queried real business listings, called
-> Gemini and wrote to a real mailbox, or it never began.
+> **No provider is ever simulated.** Each is the live service or the process
+> refuses to start, naming the variable that is missing. A mission either read
+> the real web, queried real business listings, called Gemini and wrote to a real
+> mailbox, or it never began.
+>
+> `MOCK=true` is the one way to see it without credentials, and it runs no
+> mission at all — it replays a recording of one that did, with no provider bound
+> and nothing generated. It cannot be turned on in the deployment.
 
 ## 🚀 Quick Start
 
@@ -304,15 +310,68 @@ cd backend && .venv/bin/python scripts/check_models.py --project YOUR_PROJECT --
 
 ### 4. Run the System
 
+**With Docker — the whole system, including its database:**
+
+```bash
+docker compose up --build      # console on :3000, API on :8080, Firestore on :8085
+docker compose down
+```
+
+Three services in the images the deployment runs: Google's **Firestore
+emulator**, the API, and the console. The API reaches the emulator through the
+same `FirestoreStore`, the same client library and the same transactions it
+uses on Cloud Run, so the local data path is the deployed one rather than a
+stand-in — and no Java, Python or Node is needed on the host.
+
+The emulator starts empty and forgets everything when it stops, so `up` seeds it
+first from the newest file in `~/supplyme-firestore-backups`. With no backups
+there yet it comes up empty and says so; `backend/scripts/export_firestore.py`
+writes one from a real Firestore, and [docs/LOCAL.md](docs/LOCAL.md) covers the
+whole loop. What Docker does **not** change: the model, search, Places and the
+mailbox are still the live services. Browsing seeded missions is free; starting
+a new one spends money.
+
+**Demonstrating it without spending anything:**
+
+```bash
+MOCK=true docker compose up --build      # or: MOCK=true ./run.sh
+```
+
+Missions are then **replayed from a recording** rather than run. Press *Start
+sourcing* and the console fills in — suppliers, evidence, emails, contradictions,
+a ranked recommendation — in the original order, in well under a minute. No
+model call, no search, no mailbox, and no credentials needed at all.
+`MOCK_DURATION` sets the budget; the long waits for supplier replies are
+shortened rather than played out, so a run finishes inside it.
+
+It is a playback, not a fixture world. Every supplier, price, excerpt and source
+URL came out of a mission that really ran against the live web; the only thing
+mock mode adds is a shorter clock. **No provider is bound** — the ones in
+`app/adapters/inert.py` raise if anything reaches for them, so nothing can
+quietly invent a supplier when the recording runs out. The replayed mission
+records which recording it came from in `replay_of`, and `/api/health` says the
+mode is on.
+
+What it cannot do is answer a new brief: a replay of a fragrance mission is a
+fragrance mission whatever you type. And it is **refused outright** when
+`SUPPLYME_USE_CLOUD_INFRA` is on, so it cannot run in the deployment.
+
+**Natively, with `run.sh`:**
+
 ```bash
 ./run.sh            # API on :8080, console on :3000
+./run.sh emulator   # start the Firestore emulator and seed it from a backup
 ./run.sh mission    # one whole mission in the terminal, start to finish
 ./run.sh mail       # read the mailbox now instead of waiting for the poll
-./run.sh test       # 463 tests, ~60s, no network
+./run.sh test       # 483 tests, ~60s, no network
 ./run.sh status     # what is running, and what it has spent
 ./run.sh stop
 ./run.sh clean      # build caches only, never source or .env
 ```
+
+Without `SUPPLYME_FIRESTORE_EMULATOR_HOST` or `SUPPLYME_LOCAL_STORE_PATH` set,
+`./run.sh` keeps state in process and missions do not survive a restart —
+`/api/health` says which of the three it got.
 
 ### 5. Access the Dashboard
 
@@ -336,7 +395,7 @@ Each area has its own document with the detail this file summarises:
 - **[💰 Cost](./docs/COST.md)** - measured spend per mission and where every dollar goes
 - **[🖥️ Local development](./docs/LOCAL.md)** - running without cloud infrastructure
 - **[🔐 Secrets](./docs/SECRETS.md)** - what is stored where, and what never reaches the browser
-- **[🎬 Demo](./docs/DEMO.md)** - the scripted run, timed
+- **[🎬 Demo](./docs/DEMO.md)** - both demo paths, timed, with the narration to read
 - **[📝 Devpost](./docs/DEVPOST.md)** - the submission write-up
 
 ## 🔧 Environment Variables
@@ -418,6 +477,19 @@ memory.
 Set `SUPPLYME_USE_CLOUD_INFRA=false` and the same shapes are held in an
 in-process store instead, which is what the test suite and a laptop run use.
 Missions then do not survive a restart, and `/api/health` says so.
+
+Locally there are two ways to keep them. `SUPPLYME_FIRESTORE_EMULATOR_HOST`
+binds the real `FirestoreStore` to Google's emulator, which is what
+`docker compose up` runs and what makes the local data path identical to the
+deployed one. `SUPPLYME_LOCAL_STORE_PATH` instead points the in-process store at
+a JSON file it loads at startup and writes every change back to, for when
+running a container is more than the job needs.
+
+Both read the same file: a straight export of Firestore, keyed by document path.
+`backend/scripts/export_firestore.py` writes one, `restore_local_db.py` installs
+it as the file store and `seed_emulator.py` loads it into the emulator — which is
+how the console can be shown on the missions that really ran, offline and
+without a Google Cloud project. See [docs/LOCAL.md](docs/LOCAL.md).
 
 ## 💰 Cost
 
@@ -530,7 +602,7 @@ rather than long-horizon reasoning. Pin `SUPPLYME_REASONING_MODEL` and
 ```bash
 ./run.sh test
 # or
-cd backend && .venv/bin/python -m pytest -q     # 463 tests, ~60 seconds, no network
+cd backend && .venv/bin/python -m pytest -q     # 483 tests, ~60 seconds, no network
 ```
 
 - **Unit** - evidence classification, identity resolution, quote normalisation, conflict detection, scoring, number parsing, policy, injection defence, and the ADK tool guard

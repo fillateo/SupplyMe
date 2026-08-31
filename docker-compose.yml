@@ -1,0 +1,110 @@
+# The whole system on a laptop: the Firestore emulator, the API, and the
+# console, in the same images the deployment runs.
+#
+#   docker compose up --build          start everything, seeded from a backup
+#   docker compose down                stop it
+#
+# What this buys over `./run.sh dev` is the data path. `firestore` is Google's
+# own emulator, so the API talks to it through the same `FirestoreStore`, the
+# same client library and the same transactions it uses on Cloud Run — nothing
+# is stubbed, nothing reaches Google, and nothing is billed for storage.
+#
+# What it does not change: the model, search, Places and the mailbox are still
+# the real services, because there is no offline mode. Browsing seeded missions
+# costs nothing. Starting a new one spends money.
+
+name: supplyme
+
+services:
+  firestore:
+    # Google's emulator image, which carries the emulator and its JRE, so
+    # running this needs no Java on the host.
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    command: >
+      gcloud emulators firestore start
+      --host-port=0.0.0.0:8085
+    ports:
+      - "${SUPPLYME_EMULATOR_PORT:-8085}:8085"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8085/"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  # Runs once per `up`, then exits. The emulator holds everything in memory and
+  # starts empty every time, so seeding is part of starting rather than a thing
+  # you remember to do. Writing the same document ids again is a no-op, so
+  # re-running it is safe.
+  seed:
+    build: ./backend
+    depends_on:
+      firestore:
+        condition: service_healthy
+    env_file: ./backend/.env
+    environment:
+      HOME: /home/appuser
+      FIRESTORE_EMULATOR_HOST: firestore:8085
+      SUPPLYME_FIRESTORE_EMULATOR_HOST: firestore:8085
+    volumes:
+      # scripts/ is not in the image — the deployed API has no use for it — so
+      # it is mounted for this one job.
+      - ./backend/scripts:/app/scripts:ro
+      - ${SUPPLYME_BACKUP_DIR:-${HOME}/supplyme-firestore-backups}:/snapshots:ro
+    command: ["python", "scripts/seed_emulator.py", "--from", "/snapshots"]
+    restart: "no"
+
+  api:
+    build: ./backend
+    depends_on:
+      firestore:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    env_file: ./backend/.env
+    environment:
+      HOME: /home/appuser
+      PORT: 8080
+      FIRESTORE_EMULATOR_HOST: firestore:8085
+      SUPPLYME_FIRESTORE_EMULATOR_HOST: firestore:8085
+      # Explicitly off: the emulator is the database here, and leaving this set
+      # from backend/.env would make which store is bound a question about
+      # precedence rather than a statement.
+      SUPPLYME_LOCAL_STORE_PATH: ""
+      SUPPLYME_PUBLIC_BASE_URL: http://localhost:8080
+      SUPPLYME_CORS_ORIGINS: http://localhost:3000
+      # MOCK=true docker compose up — replays a recorded mission instead of
+      # running one, so a demo needs no model, no mailbox and no hour to spare.
+      # Nothing is invented: see backend/app/adapters/replay.py.
+      MOCK: ${MOCK:-false}
+      SUPPLYME_MOCK_RECORDING: /snapshots
+      SUPPLYME_MOCK_DURATION_SECONDS: ${MOCK_DURATION:-90}
+      SUPPLYME_MOCK_MAX_GAP_SECONDS: ${MOCK_MAX_GAP:-3}
+    volumes:
+      # Application default credentials, for Vertex AI. Read-only, and the only
+      # host path the API can see.
+      - ${HOME}/.config/gcloud:/home/appuser/.config/gcloud:ro
+      # The recording a mock run replays, and the snapshot the emulator is
+      # seeded from: the same file.
+      - ${SUPPLYME_BACKUP_DIR:-${HOME}/supplyme-firestore-backups}:/snapshots:ro
+    ports:
+      - "${SUPPLYME_API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  console:
+    build: ./frontend
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      # Service name, not localhost: the proxy runs inside this container, and
+      # localhost there is the console itself.
+      API_BASE_URL: http://api:8080
+      PORT: 8080
+    ports:
+      - "${SUPPLYME_WEB_PORT:-3000}:8080"

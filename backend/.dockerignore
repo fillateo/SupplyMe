@@ -1,0 +1,18 @@
+# The image copies pyproject.toml, README.md and app/ — everything else here is
+# build context sent to the daemon for nothing. .venv alone is hundreds of
+# megabytes and would be the slowest part of every local build.
+.venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+tests
+scripts
+secrets
+
+# Never in an image: credentials, and a local database of real supplier contacts.
+.env
+.env.*
+!.env.example
+local-db.json
+local-db.replaced-*.json

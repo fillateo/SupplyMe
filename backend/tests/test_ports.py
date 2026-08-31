@@ -61,6 +61,7 @@ def _adapters() -> list[tuple[type, type, str]]:
     from app.adapters.pubsub_bus import PubSubBus
     from app.adapters.scheduler import CloudTasksScheduler, LocalScheduler
     from app.adapters.smtp_mail import SmtpMailProvider
+    from app.adapters.snapshot_store import SnapshotStore
 
     from .doubles_providers import MockMailProvider, MockMapsProvider, MockSearchProvider
     from .scripted_llm import ScriptedLLM
@@ -83,6 +84,7 @@ def _adapters() -> list[tuple[type, type, str]]:
         (MailProvider, MockMailProvider, "mail/double"),
         # Store
         (Store, MemoryStore, "store/memory"),
+        (Store, SnapshotStore, "store/snapshot-file"),
         (Store, FirestoreStore, "store/firestore"),
         # Bus
         (EventBus, LocalBus, "bus/local"),

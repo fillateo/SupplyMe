@@ -33,6 +33,8 @@ class Runtime:
         )
         self.orchestrator = Orchestrator(providers, self.agents)
         self.repo = Repo(providers.store)
+        self.replay = _replay(providers)
+        self._replays: set[Any] = set()
         if hasattr(providers.bus, "subscribe"):
             providers.bus.subscribe(self.handle)
 
@@ -213,6 +215,9 @@ class Runtime:
         location: str | None = None,
         scope: SearchScope = SearchScope.COUNTRY,
     ) -> Mission:
+        if self.replay is not None:
+            return await self._replay_mission(user_id=user_id)
+
         mission = Mission(
             objective=objective.strip(), user_id=user_id,
             status=MissionStatus.CREATED,
@@ -224,10 +229,64 @@ class Runtime:
         )
         return mission
 
+    async def _replay_mission(self, *, user_id: str) -> Mission:
+        """Play a recorded mission back under a new id.
+
+        The objective returned is the recorded one, not the one that was typed.
+        A replay can only show the mission it has, and saying so through the
+        mission itself is better than accepting a brief it will not work on.
+        """
+        import asyncio
+
+        from .domain.ids import new_id
+
+        mission_id = new_id("msn")
+        opening = self.replay.opening_mission(mission_id, user_id=user_id)
+        await self.providers.store.put("missions", mission_id, opening)
+
+        task = asyncio.create_task(self.replay.play(mission_id, user_id=user_id))
+        # Held so the loop cannot garbage-collect a running replay mid-mission.
+        self._replays.add(task)
+        task.add_done_callback(self._replays.discard)
+
+        return Mission.model_validate(opening)
+
     async def drain(self, timeout: float = 300.0) -> None:
         """Wait for the local bus to go idle. Only meaningful for LocalBus."""
         if hasattr(self.providers.bus, "drain"):
             await self.providers.bus.drain(timeout=timeout)
+
+
+def _replay(providers: Any) -> Any:
+    """The recording `SUPPLYME_MOCK` replays, or None when it is off.
+
+    A mock run with no recording to play is a dead end that would only be found
+    by pressing the button, so it fails here, naming the file it looked for.
+    """
+    settings: Settings = providers.settings
+    if not settings.mock:
+        return None
+
+    from .adapters.replay import Recording, Replay, find_recording
+
+    source = find_recording(settings)
+    if source is None:
+        raise RuntimeError(
+            "SUPPLYME_MOCK is on but there is no recording to replay. Export one "
+            "with scripts/export_firestore.py, or set SUPPLYME_MOCK_RECORDING to a "
+            "snapshot file."
+        )
+    recording = Recording.load(source)
+    if recording is None:
+        raise RuntimeError(f"{source} holds no mission timeline to replay")
+
+    log.info("mock mode: replaying %s from %s", recording.mission_id, source)
+    return Replay(
+        recording,
+        providers.store,
+        duration_seconds=settings.mock_duration_seconds,
+        max_gap_seconds=settings.mock_max_gap_seconds,
+    )
 
 
 def _research_agent(providers: Any) -> Any:

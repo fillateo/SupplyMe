@@ -2,8 +2,9 @@
 
 Every setting is read here and nowhere else: the agents, the workflow and the
 adapters are handed a `Settings` and never reach for the environment themselves.
-There is no mode switch — a provider is bound to the real service or the process
-refuses to start (see app/adapters/registry.py).
+A provider is bound to the real service or the process refuses to start (see
+app/adapters/registry.py); none is ever simulated. `mock` below is not an
+exception to that — it binds no provider at all and replays a recorded mission.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from __future__ import annotations
 from enum import StrEnum
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -61,6 +62,38 @@ class Settings(BaseSettings):
     #: is the moment to choose `external` instead.
     approval_policy: ApprovalPolicy = ApprovalPolicy.AUTONOMOUS
 
+    #: Replay a recorded mission instead of running one. For demonstrating the
+    #: system without a model bill, a mailbox, or an hour of wall clock.
+    #:
+    #: This is not a fixture world. No provider is bound at all — the ones in
+    #: `adapters/inert.py` raise if anything reaches them — and every supplier,
+    #: price and source URL on screen came out of a mission that really ran
+    #: against the live web. The only thing added is a shorter clock.
+    #:
+    #: Refused when `use_cloud_infra` is on, so it cannot be turned on in the
+    #: deployment: a replayed mission in the real Firestore would be
+    #: indistinguishable from a real one to anybody reading the console.
+    #: `MOCK` as well as the prefixed name, because this is the one setting a
+    #: person types on the command line in front of an audience.
+    mock: bool = Field(
+        default=False, validation_alias=AliasChoices("SUPPLYME_MOCK", "MOCK")
+    )
+
+    #: Snapshot to replay. Empty means: the local store file if there is one,
+    #: else the newest export in ~/supplyme-firestore-backups.
+    mock_recording: str = ""
+
+    #: How long a replayed mission takes end to end. The recorded run took
+    #: about an hour and three quarters; 90 seconds is a demo.
+    mock_duration_seconds: float = Field(default=90.0, ge=0.0, le=3600.0)
+
+    #: The longest the console may sit still during a replay. Most of a real
+    #: mission is waiting for a supplier to answer, and compressing an hour
+    #: faithfully puts that whole wait on screen as a dead minute. Gaps longer
+    #: than this are shortened to it, which keeps the order and the relative
+    #: pacing of everything that actually happened and drops only the silence.
+    mock_max_gap_seconds: float = Field(default=3.0, ge=0.0, le=600.0)
+
     #: Whether to use Firestore, Pub/Sub and Cloud Tasks instead of the
     #: in-process store, bus and scheduler.
     #:
@@ -70,6 +103,15 @@ class Settings(BaseSettings):
     #: Firestore just to try the thing out is a tax on curiosity. Terraform sets
     #: this true on Cloud Run.
     use_cloud_infra: bool = False
+
+    #: Path to a JSON file the in-process store reads at startup and writes
+    #: every change back to. Empty means the store is memory only.
+    #:
+    #: This is how a local run is driven by real data: point it at a snapshot
+    #: from `scripts/export_firestore.py` and the console shows the missions
+    #: that actually ran, offline and at no cost. Ignored when
+    #: `use_cloud_infra` is on, because Firestore is then the database.
+    local_store_path: str = ""
 
     # --- Google Cloud -------------------------------------------------------
     project_id: str = ""
@@ -97,6 +139,23 @@ class Settings(BaseSettings):
 
     # --- Infrastructure -----------------------------------------------------
     firestore_database: str = "(default)"
+
+    #: `host:port` of a running Firestore emulator. Set it and the store is the
+    #: real `FirestoreStore` — the same client, the same transactions, the same
+    #: subcollections — talking to a local process instead of Google, while the
+    #: bus and scheduler stay in-process. This is the closest a laptop gets to
+    #: the deployed data path, and it costs nothing.
+    #:
+    #: Read from `FIRESTORE_EMULATOR_HOST` as well as the prefixed name, because
+    #: that is the variable the Google client libraries themselves look at: a
+    #: shell that has one set and the other not would otherwise have the client
+    #: and this file disagreeing about which database is in use.
+    firestore_emulator_host: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "SUPPLYME_FIRESTORE_EMULATOR_HOST", "FIRESTORE_EMULATOR_HOST"
+        ),
+    )
     #: Terraform sets both from `var.service_name`; these defaults only matter
     #: to a local run that has turned cloud infrastructure on by hand.
     pubsub_topic: str = "supply-me-workflow"

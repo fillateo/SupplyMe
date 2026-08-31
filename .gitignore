@@ -39,3 +39,7 @@ secrets/
 prompt.md
 RENAME-CLOUD-STEPS.sh
 
+# Local database: a restored Firestore snapshot, holding real supplier contacts
+# and correspondence. Backups live outside the repo, in ~/supplyme-firestore-backups.
+backend/local-db.json
+backend/local-db.replaced-*.json

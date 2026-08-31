@@ -6,14 +6,18 @@
 #   ./run.sh mission      run one whole mission in the terminal, no servers
 #   ./run.sh test         the test suite
 #   ./run.sh mail         read the mailbox now instead of waiting for the poll
+#   ./run.sh emulator     start the Firestore emulator and seed it from a backup
+#
+#   MOCK=true ./run.sh    replay a recorded mission instead of running one
 #   ./run.sh stop         stop whatever this script started
 #   ./run.sh status       what is running, and what it has spent
 #   ./run.sh setup        install dependencies only
 #   ./run.sh clean        remove build caches (never touches source or .env)
 #
-# There is one mode and it is the real one: real Gemini, the live web, Google
-# Places, and a mailbox that actually sends. Credentials are not
-# optional — a missing one stops the process and names itself. Set
+# No provider is ever simulated: real Gemini, the live web, Google Places, and a
+# mailbox that actually sends. Credentials are not optional — a missing one
+# stops the process and names itself, unless MOCK=true, which runs no mission at
+# all and replays a recording of one. Set
 # SUPPLYME_MAIL_REDIRECT_TO in backend/.env before running this against suppliers
 # you have not agreed to contact.
 
@@ -28,6 +32,9 @@ PY="$VENV/bin/python"
 
 API_PORT="${SUPPLYME_API_PORT:-8080}"
 WEB_PORT="${SUPPLYME_WEB_PORT:-3000}"
+# Not the emulator's own default of 8080: that is the API's port.
+EMULATOR_PORT="${SUPPLYME_EMULATOR_PORT:-8085}"
+EMULATOR_STARTED=0
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   BOLD=$'\033[1m'; DIM=$'\033[2m'; RED=$'\033[31m'; GREEN=$'\033[32m'
@@ -103,10 +110,23 @@ pid_on_port() {
   fi
 }
 
+port_busy() {
+  ss -ltnH "sport = :$1" 2>/dev/null | grep -q .
+}
+
 free_port() {
   local port="$1" label="$2" pid
   pid="$(pid_on_port "$port" || true)"
-  [ -n "$pid" ] || return 0
+  if [ -z "$pid" ]; then
+    # Listening, but owned by a process this user cannot see. That is almost
+    # always a published container port, since Docker forwards them as root,
+    # and no amount of kill from here will move it.
+    if port_busy "$port"; then
+      warn "port $port is in use by a process this user cannot see ($label)"
+      info "if that is the Docker stack, stop it with: docker compose down"
+    fi
+    return 0
+  fi
   warn "port $port is in use by pid $pid; stopping it ($label)"
   kill "$pid" 2>/dev/null || true
   for _ in $(seq 1 20); do
@@ -128,7 +148,7 @@ wait_for_http() {
 
 stop_all() {
   local stopped=0
-  for name in api web; do
+  for name in api web emulator; do
     local file="$RUNDIR/$name.pid"
     [ -f "$file" ] || continue
     local pid; pid="$(cat "$file")"
@@ -139,7 +159,7 @@ stop_all() {
     rm -f "$file"
   done
   # Anything still holding the ports, whether this script started it or not.
-  for port in "$API_PORT" "$WEB_PORT"; do
+  for port in "$API_PORT" "$WEB_PORT" "$EMULATOR_PORT"; do
     local pid; pid="$(pid_on_port "$port" || true)"
     if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; stopped=1; fi
   done
@@ -318,8 +338,126 @@ print(', '.join(f'{k}={p[k]}' for k in ('search','maps','mail') if k in p))
   echo
 }
 
+# --------------------------------------------------------------------------
+# Firestore emulator
+#
+# The closest a laptop gets to the deployed data path: the same store adapter
+# and the same client library, talking to a local process. Nothing reaches
+# Google and nothing is billed, so a demo can be rehearsed as often as it needs
+# to be.
+
+# The emulator is a Java program. A system JRE is the normal answer; a JDK
+# unpacked into ~/.local/jdk is the one that needs no root, and gcloud will not
+# look there on its own.
+find_java() {
+  if command -v java >/dev/null 2>&1; then command -v java; return 0; fi
+  local candidate
+  for candidate in "$HOME/.local/jdk/bin/java" /usr/lib/jvm/*/bin/java; do
+    [ -x "$candidate" ] && { printf '%s\n' "$candidate"; return 0; }
+  done
+  return 1
+}
+
+# MOCK=true ./run.sh — replays a recorded mission instead of running one, and
+# therefore needs none of the credentials a real run cannot start without.
+mock_on() {
+  [ "${MOCK:-}" = "true" ] || [ "${SUPPLYME_MOCK:-}" = "true" ] \
+    || grep -qE '^SUPPLYME_MOCK=true' "$BACKEND/.env" 2>/dev/null
+}
+
+emulator_configured() {
+  grep -qE '^SUPPLYME_FIRESTORE_EMULATOR_HOST=.+' "$BACKEND/.env" 2>/dev/null
+}
+
+emulator_up() {
+  curl -fsS -o /dev/null --max-time 2 "http://127.0.0.1:$EMULATOR_PORT/" 2>/dev/null
+}
+
+start_emulator() {
+  if emulator_up; then
+    info "the Firestore emulator is already up on :$EMULATOR_PORT"
+    return 0
+  fi
+
+  local gcloud_bin
+  gcloud_bin="$(find_gcloud || true)"
+  [ -n "$gcloud_bin" ] || die "gcloud is not on PATH, and the emulator ships with it"
+  local java_bin
+  java_bin="$(find_java || true)"
+  if [ -z "$java_bin" ]; then
+    warn "the Firestore emulator needs Java, and none was found"
+    info "either install one (sudo apt install default-jre), unpack a JRE into ~/.local/jdk,"
+    info "or skip the host entirely and run: docker compose up --build"
+    die "cannot start the emulator"
+  fi
+  JAVA_HOME="$(dirname "$(dirname "$java_bin")")"
+  export JAVA_HOME
+  export PATH="$JAVA_HOME/bin:$PATH"
+  "$gcloud_bin" components list --format='value(id,state.name)' 2>/dev/null \
+    | grep -q '^cloud-firestore-emulator.Installed$' \
+    || die "run: gcloud components install cloud-firestore-emulator"
+
+  free_port "$EMULATOR_PORT" "firestore emulator"
+  mkdir -p "$RUNDIR"
+  say "starting the Firestore emulator on :$EMULATOR_PORT"
+  (
+    nohup "$gcloud_bin" emulators firestore start \
+      --host-port="127.0.0.1:$EMULATOR_PORT" > "$RUNDIR/emulator.log" 2>&1 &
+    echo $! > "$RUNDIR/emulator.pid"
+  )
+  if ! wait_for_http "http://127.0.0.1:$EMULATOR_PORT/" emulator 60; then
+    warn "the emulator did not come up. Last lines of $RUNDIR/emulator.log:"
+    tail -15 "$RUNDIR/emulator.log" | sed 's/^/      /'
+    die "startup failed"
+  fi
+  EMULATOR_STARTED=1
+}
+
+# The emulator holds everything in memory and starts empty every time, so this
+# is part of starting it rather than a thing to remember. Writing the same
+# document ids again is a no-op, so running it twice costs nothing.
+seed_emulator() {
+  (
+    cd "$BACKEND"
+    FIRESTORE_EMULATOR_HOST="127.0.0.1:$EMULATOR_PORT" \
+      "$PY" scripts/seed_emulator.py "$@"
+  )
+}
+
+cmd_emulator() {
+  check_prereqs; setup_backend
+  start_emulator
+  say "seeding it from the newest snapshot"
+  seed_emulator "$@"
+  echo
+  info "set this in backend/.env, then ./run.sh dev:"
+  printf '%s\n' "      SUPPLYME_FIRESTORE_EMULATOR_HOST=127.0.0.1:$EMULATOR_PORT"
+}
+
 cmd_dev() {
   check_prereqs; setup_backend; setup_frontend
+
+  # Started before the API, because the API builds its store at startup and a
+  # Firestore client pointed at nothing is a slow, confusing failure.
+  if emulator_configured; then
+    EMULATOR_STARTED=0
+    start_emulator
+    # Only when this script started it. One that was already running has data
+    # in it, possibly newer than any snapshot on disk.
+    if [ "$EMULATOR_STARTED" = 1 ]; then
+      say "seeding the emulator from the newest snapshot"
+      seed_emulator
+    fi
+  fi
+
+  if mock_on; then
+    export MOCK=true
+    warn "MOCK=true: missions are replayed from a recording, not run"
+    info "no model, search, Places or mail provider is bound — see docs/LOCAL.md"
+    start_services
+    print_banner
+    return 0
+  fi
 
   # Every one of these is required to start. There is nothing to fall back to,
   # so failing here with the name of the missing variable beats failing four
@@ -382,6 +520,11 @@ cmd_status() {
   [ -n "$web_pid" ] \
     && printf '%s\n' "  console  ${GREEN}up${OFF}   pid $web_pid   :$WEB_PORT" \
     || printf '%s\n' "  console  ${DIM}down${OFF}"
+  if emulator_configured || emulator_up; then
+    emulator_up \
+      && printf '%s\n' "  firestore${GREEN}up${OFF}   emulator     :$EMULATOR_PORT" \
+      || printf '%s\n' "  firestore${DIM}down${OFF} ${DIM}emulator${OFF}"
+  fi
 
   [ -n "$api_pid" ] || return 0
   echo
@@ -440,6 +583,7 @@ case "${1:-dev}" in
   ""|dev|start|up) shift || true; cmd_dev ;;
   mission)         shift || true; cmd_mission "$@" ;;
   mail)            shift || true; cmd_mail ;;
+  emulator)        shift || true; cmd_emulator "$@" ;;
   test|tests)      shift || true; cmd_test "$@" ;;
   setup|install)   shift || true; cmd_setup ;;
   stop|down)       shift || true; stop_all ;;

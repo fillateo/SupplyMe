@@ -3,6 +3,17 @@
 ## The short version
 
 ```bash
+docker compose up --build
+```
+
+Console on :3000, API on :8080, and a Firestore emulator on :8085 holding the
+missions, seeded from your newest backup. Nothing but Docker needs to be
+installed. `docker compose down` stops it.
+
+Or natively, which is faster to iterate on and what the rest of this page
+assumes:
+
+```bash
 ./run.sh
 ```
 
@@ -11,6 +22,8 @@ console, and prints the URLs.
 
 ```
 ./run.sh            start the API and the console
+./run.sh emulator   start the Firestore emulator and seed it from a backup
+MOCK=true ./run.sh  replay a recorded mission instead of running one
 ./run.sh mission    one whole mission in the terminal, no servers
 ./run.sh test       the test suite
 ./run.sh mail       read the mailbox now instead of waiting for the poll
@@ -19,10 +32,12 @@ console, and prints the URLs.
 ./run.sh clean      remove build caches; never touches source or .env
 ```
 
-**There is no offline mode.** Every provider is the real service or the process
+**No provider is ever simulated.** Each is the real service or the process
 refuses to start and names the variable that is missing, so a mission either
 read the live web and wrote to a real mailbox or it never began. Filling in
-`backend/.env` is the first step, not an optional one.
+`backend/.env` is the first step, not an optional one — unless you only want to
+*watch* a mission, in which case see `MOCK=true` in section 3e, which runs none
+and replays a recording instead.
 
 The one safety valve is `SUPPLYME_MAIL_REDIRECT_TO`: set it to a mailbox you own and
 every outbound message goes there instead of to the supplier, with a banner
@@ -54,7 +69,7 @@ cd backend
 .venv/bin/python -m pytest -q
 ```
 
-446 tests, about 60 seconds. They cover the whole workflow end to end,
+483 tests, about 60 seconds. They cover the whole workflow end to end,
 including every message being delivered twice, a search outage, a model
 timeout, a mid-mission restart, and a supplier reply containing a
 prompt-injection payload.
@@ -143,11 +158,160 @@ curl -s localhost:8080/api/health | jq           which providers are actually bo
 Locally you usually want it off: real Gemini and the real Google APIs against
 in-process state, because provisioning Firestore just to try the thing out is a
 tax on curiosity. Missions then do not survive a restart, and `/api/health` says
-so. Terraform sets it on Cloud Run.
+so — unless you give the store a file to keep them in, which is the next
+section. Terraform sets it on Cloud Run.
 
 There used to be two more switches here — one for a scripted model and one for
 mock integrations. Both are gone. What they bought was a demonstration that
 looked exactly like the real thing while proving nothing about it.
+
+## 3c. Running on a snapshot of real data
+
+A mission costs money and an hour of wall clock. Demonstrating one should cost
+neither, and showing an empty console instead is not a demonstration. So the
+in-process store can be given a file to load at startup and write every change
+back to, and the file it reads is a straight export of Firestore:
+
+```bash
+cd backend
+
+# read the live database — reads only, it writes nothing back
+.venv/bin/python scripts/export_firestore.py
+# -> ~/supplyme-firestore-backups/firestore-snapshot-<timestamp>.json
+
+# install the newest snapshot as the local database
+.venv/bin/python scripts/restore_local_db.py
+```
+
+Then set the path in `backend/.env` and start as usual:
+
+```bash
+SUPPLYME_LOCAL_STORE_PATH=local-db.json
+```
+
+```bash
+./run.sh dev
+```
+
+The console now serves the missions that really ran — the same vendors, the
+same evidence with the same source URLs, the same email threads, and the full
+activity timeline — with nothing read from or written to Firestore. `/api/health`
+names the file rather than claiming state is ephemeral, so what you are looking
+at is answerable without reading code.
+
+Two things this is not. It is not a mock: every document was produced by a real
+mission against the live web, and no provider has been swapped for a fixture —
+starting a *new* mission from this console still calls Gemini, Places and the
+mailbox, and still costs money. And it is not a second format: the snapshot and
+the local database are the same file, keyed by Firestore document path, so a
+backup can be opened as a database with no conversion and a local database can
+be diffed against the live one.
+
+The export walks every collection and subcollection it finds rather than a list
+someone maintained, which is the only version of a backup worth having; the
+collection set has already changed twice. Snapshots hold real supplier contacts
+and correspondence, so they are written outside the repository and
+`backend/local-db.json` is in `.gitignore`.
+
+`restore_local_db.py --merge` adds a snapshot to what is already there instead
+of replacing it, and a replaced database is kept beside the new one as
+`local-db.replaced-<timestamp>.json` rather than deleted.
+
+## 3d. A real Firestore, locally
+
+Section 3c gives the console real data out of a file. This gives it real data
+out of **Firestore** — Google's emulator, which is the actual Firestore service
+running as a local process. The store is then `FirestoreStore`, unchanged: the
+same client library, the same transactions, the same `workflow_events`
+subcollections, the same `reserve` that stops a supplier being emailed twice.
+Nothing reaches Google and nothing is billed.
+
+It is the honest way to rehearse a demo, because the thing you rehearse against
+is the thing that runs in production.
+
+**With Docker** — no Java, no gcloud, nothing else installed:
+
+```bash
+docker compose up --build
+```
+
+Three services: `firestore` (Google's emulator image), `api` and `console`. The
+emulator holds everything in memory and starts empty, so a one-shot `seed`
+service loads your newest snapshot before the API comes up. Re-running is safe:
+documents go back to the same ids.
+
+**Without Docker**, if you already have gcloud and a JRE:
+
+```bash
+gcloud components install cloud-firestore-emulator   # once
+./run.sh emulator                                    # starts it, then seeds it
+```
+
+It prints the line to add to `backend/.env`:
+
+```bash
+SUPPLYME_FIRESTORE_EMULATOR_HOST=127.0.0.1:8085
+```
+
+Then `./run.sh dev` as usual. Port 8085 rather than the emulator's own default
+of 8080, which is the API's.
+
+**Which of the two to use.** The emulator is the real data path and costs a
+container; the file store from 3c is a single JSON file and costs nothing at
+all. Both are seeded from the same export, so the console shows the same
+missions either way. `/api/health` names the one that is bound, which is the
+only reliable way to tell them apart from outside.
+
+## 3e. Demonstrating it without spending anything
+
+```bash
+MOCK=true docker compose up --build      # or: MOCK=true ./run.sh
+```
+
+Press *Start sourcing* and the console fills in over roughly half a minute — the
+supply chain, twelve suppliers, sixty-one pieces of evidence, the email threads,
+the contradictions, the ranked recommendation — with no model call, no search,
+no Places lookup and no mail.
+
+`MOCK_DURATION` is the budget the run is scaled into, and `MOCK_MAX_GAP` (3
+seconds) is the longest the screen may sit still. That second one matters more
+than it sounds: most of a real mission is waiting for a supplier to answer, and
+played back proportionally that wait is most of the demo. Capping it keeps the
+order and the pacing of everything that actually happened and drops only the
+silence, which is why a 90-second budget finishes in about 35.
+
+**This is a playback, not a simulation, and the difference is the only reason it
+is allowed to exist here.** A fixture world was deleted from this codebase once
+already ("There is no simulated mode"), because a system whose most convincing
+demonstration is of suppliers that do not exist is worse than one that cannot be
+demonstrated. So mock mode does not invent anything:
+
+- Every supplier, price, excerpt and source URL comes from a mission that really
+  ran against the live web. The recording is the same snapshot file everything
+  else on this page uses.
+- **No provider is bound at all.** `SUPPLYME_MOCK` binds the inert providers in
+  `app/adapters/inert.py`, which raise on any call and name themselves. If the
+  replay ever reached for a model, it would fail loudly rather than fill the gap.
+- The replayed mission carries `replay_of`, the id of the recording it came from,
+  and `/api/health` reports the mode. A replay is indistinguishable from a real
+  run by eye, so it says which it is in the record.
+- It is **refused when `SUPPLYME_USE_CLOUD_INFRA` is on**. A replayed mission in
+  the real Firestore would be indistinguishable from a real one to anyone reading
+  the console, so the process will not start rather than allow it.
+
+The honest limits, worth saying out loud if you demo this:
+
+- **It cannot answer a new objective.** Whatever you type, it replays the mission
+  it has, and the objective shown is the recorded one.
+- **The spend it displays is the recorded spend** — $1.03 over 216 model calls
+  for the run in the recording. That is what that mission cost, not what the
+  replay cost, which is nothing.
+- Timing is compressed but the *order* is real, including the parts that
+  overlapped, because each document and event is placed by its own timestamp.
+
+Where the recording comes from: `SUPPLYME_MOCK_RECORDING`, else the local store
+file, else the newest export in `~/supplyme-firestore-backups`. Under Docker the
+backups directory is mounted at `/snapshots` and used automatically.
 
 ## 4. Use real Gemini
 

@@ -3,14 +3,19 @@
 The one place that decides what the agent is actually talking to. Everything
 downstream receives ports and cannot tell how they were built.
 
-There is no simulated mode. A provider is either configured against the real
-service or the process refuses to start, and the reason names the variable that
-is missing. This used to degrade to a fixture dataset instead, on the argument
-that a missing Maps key should cost a mission its geographic evidence rather
-than the whole run — which is true, and still produced a system whose most
-convincing demonstration was of suppliers that do not exist. Failing at startup
-is the only version of this that cannot mislead: a mission either read the real
-web or never began.
+No provider is ever simulated. One is either configured against the real service
+or the process refuses to start, and the reason names the variable that is
+missing. This used to degrade to a fixture dataset instead, on the argument that
+a missing Maps key should cost a mission its geographic evidence rather than the
+whole run — which is true, and still produced a system whose most convincing
+demonstration was of suppliers that do not exist. Failing at startup is the only
+version of this that cannot mislead: a mission either read the real web or never
+began.
+
+`SUPPLYME_MOCK` is the one path that does not run a mission, and it does not
+weaken that. It binds *nothing* — the inert providers below raise on any call —
+and replays a recording of a mission that really ran. There is still no fixture
+supplier anywhere in `app/`, and a replay cannot be turned on in the deployment.
 
 `Providers.notes` still reports every choice that was made, and `/api/health`
 surfaces it, so what a mission is bound to is answerable without reading code.
@@ -19,6 +24,7 @@ surfaces it, so what a mission is bound to is answerable without reading code.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -58,6 +64,12 @@ class Providers:
 
 def build(settings: Settings, *, llm: Any | None = None) -> Providers:
     notes: list[str] = []
+    if settings.mock and settings.use_cloud_infra:
+        raise RuntimeError(
+            "SUPPLYME_MOCK cannot be used with SUPPLYME_USE_CLOUD_INFRA. A replayed "
+            "mission written into the real Firestore would be indistinguishable from "
+            "one that actually ran."
+        )
     meter = CostMeter(
         max_calls_per_mission=settings.max_model_calls_per_mission,
         max_usd_per_mission=settings.max_usd_per_mission,
@@ -66,11 +78,25 @@ def build(settings: Settings, *, llm: Any | None = None) -> Providers:
     bus = LocalBus()
     scheduler = LocalScheduler(bus)
 
-    if settings.use_cloud_infra and settings.project_id:
+    if settings.firestore_emulator_host:
+        # The Google client libraries route to the emulator off this variable,
+        # so export it rather than passing a host down: a client built anywhere
+        # else in the process then reaches the same database this one does.
+        os.environ["FIRESTORE_EMULATOR_HOST"] = settings.firestore_emulator_host
+        from .firestore_store import FirestoreStore
+
+        project = settings.project_id or "supplyme-local"
+        store: Any = FirestoreStore(project, settings.firestore_database)
+        notes.append(
+            f"store: Firestore emulator at {settings.firestore_emulator_host}, project "
+            f"{project} — the deployed store adapter against a local process, so nothing "
+            "reaches Google and nothing is billed. The bus and scheduler stay in-process."
+        )
+    elif settings.use_cloud_infra and settings.project_id:
         from .firestore_store import FirestoreStore
         from .pubsub_bus import PubSubBus
 
-        store: Any = FirestoreStore(settings.project_id, settings.firestore_database)
+        store = FirestoreStore(settings.project_id, settings.firestore_database)
         bus = PubSubBus(settings.project_id, settings.pubsub_topic)
         if settings.tasks_queue:
             from .scheduler import CloudTasksScheduler
@@ -82,6 +108,14 @@ def build(settings: Settings, *, llm: Any | None = None) -> Providers:
                 f"{settings.public_base_url.rstrip('/')}/events/task",
                 settings.pubsub_push_token,
             )
+    elif settings.local_store_path:
+        from .snapshot_store import SnapshotStore
+
+        store = SnapshotStore(settings.local_store_path)
+        notes.append(
+            f"state is a local file at {settings.local_store_path}: missions survive a restart "
+            "and nothing is read from or written to Firestore"
+        )
     else:
         store = MemoryStore()
         if settings.use_cloud_infra:
@@ -92,8 +126,30 @@ def build(settings: Settings, *, llm: Any | None = None) -> Providers:
         else:
             notes.append(
                 "state is in-process: missions do not survive a restart. Set "
-                "SUPPLYME_USE_CLOUD_INFRA=true with a Firestore database to persist them."
+                "SUPPLYME_FIRESTORE_EMULATOR_HOST for a local Firestore, "
+                "SUPPLYME_LOCAL_STORE_PATH for a snapshot file, or "
+                "SUPPLYME_USE_CLOUD_INFRA=true for the real one."
             )
+
+    if settings.mock:
+        # Nothing is bound. `runtime.create_mission` replays a recording instead
+        # of running the workflow, so no provider should ever be reached — and
+        # if one is, these say so rather than answering.
+        from .inert import InertProvider
+
+        notes.append(
+            "SUPPLYME_MOCK is on: missions are replayed from a recording of a run that "
+            "really happened. No model, search, Places or mail provider is bound, and "
+            "nothing here can start a new investigation."
+        )
+        return Providers(
+            settings=settings, store=store, bus=bus, scheduler=scheduler,
+            llm=InertProvider("model"), meter=meter,
+            search=InertProvider("search provider"),
+            maps=InertProvider("maps provider"),
+            mail=InertProvider("mail provider"),
+            notes=notes,
+        )
 
     if llm is None:
         if not (settings.project_id or settings.gemini_api_key):

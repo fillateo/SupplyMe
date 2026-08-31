@@ -222,6 +222,12 @@ class Mission(Base):
     vendors_admitted: int = 0
     failure_reason: str | None = None
 
+    #: Set only by `SUPPLYME_MOCK`: the id of the recorded mission this one is a
+    #: playback of. A replay is indistinguishable from a real run by eye —
+    #: same suppliers, same evidence, same timeline — so it says which it is in
+    #: the record itself rather than only in a startup note nobody re-reads.
+    replay_of: str | None = None
+
     #: What this mission has actually spent on model calls, from the API's own
     #: token counts. Persisted so a restart does not reset the budget guard.
     model_calls: int = 0
